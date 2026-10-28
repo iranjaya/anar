@@ -1,0 +1,13 @@
+*.[cC][sS][vV]
+node_modules/
+.next/
+.cache/
+out/
+coverage/
+test-results/
+playwright-report/
+blob-report/
+*.tsbuildinfo
+.env*
+!.env.example
+.DS_Store

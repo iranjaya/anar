@@ -1,0 +1,46 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.6.3/schema.json",
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "files": {
+    "includes": [
+      "**",
+      "!!docs",
+      "!!ANAR-System-Design.md",
+      "!!next-env.d.ts",
+      "!!pnpm-lock.yaml"
+    ]
+  },
+  "formatter": { "indentStyle": "space" },
+  "css": { "parser": { "tailwindDirectives": true } },
+  "linter": {
+    "rules": {
+      "preset": "recommended",
+      "style": {
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "patterns": [
+              {
+                "group": [
+                  "@/mock",
+                  "@/mock/**",
+                  "mock",
+                  "mock/**",
+                  "**/mock",
+                  "**/mock/**"
+                ],
+                "message": "Only modules may import mock data."
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["modules/**"],
+      "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
+    }
+  ]
+}

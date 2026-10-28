@@ -1,0 +1,57 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-body);
+  --font-display: var(--font-title);
+  --font-mono: var(--font-code);
+}
+
+@theme {
+  --color-bg: #f3f5f4;
+  --color-surface: #ffffff;
+  --color-line: #dee3e1;
+  --color-line-strong: #c9d0cd;
+  --color-ink: #15191b;
+  --color-ink-2: #2e3639;
+  --color-muted: #4a5458;
+  --color-faint: #8b9592;
+  --color-brand: #7a1438;
+  --color-brand-soft: #f1e4e9;
+  --color-call: #0b6e4f;
+  --color-call-soft: #e3f2ea;
+  --color-overdue: #b42318;
+  --color-overdue-soft: #fdecea;
+  --color-due: #7a4a00;
+  --color-due-soft: #fff3d1;
+  --color-due-edge: #d99a06;
+  --color-new: #1e4fc2;
+  --color-new-soft: #e6eefc;
+  --color-hot: #b93a0b;
+  --color-hot-soft: #ffe9dc;
+  --color-warm: #7a5000;
+  --color-warm-soft: #fff1c7;
+  --color-cold: #2650a8;
+  --color-cold-soft: #e4ecfa;
+  --color-compare-a: #1e4fc2;
+  --color-compare-b: #c2410c;
+}
+
+@layer base {
+  :root {
+    color-scheme: light;
+    accent-color: var(--color-brand);
+  }
+
+  body {
+    background: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-body), sans-serif;
+    font-size: 16px;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
