@@ -29,7 +29,16 @@
                   "**/mock",
                   "**/mock/**"
                 ],
-                "message": "Only modules may import mock data."
+                "message": "Only module data files may import mock data."
+              },
+              {
+                "group": [
+                  "@/modules/*/data",
+                  "@/modules/*/data/**",
+                  "@/modules/*/ui",
+                  "@/modules/*/ui/**"
+                ],
+                "message": "Use the module's public entry files."
               }
             ]
           }
@@ -39,8 +48,66 @@
   },
   "overrides": [
     {
-      "includes": ["modules/**"],
-      "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
+      "includes": [
+        "modules/*/server.ts",
+        "modules/*/components.ts",
+        "modules/*/pages.ts"
+      ],
+      "assist": { "actions": { "source": { "organizeImports": "off" } } }
+    },
+    {
+      "includes": ["modules/*/data/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "@/modules/*/data",
+                      "@/modules/*/data/**",
+                      "@/modules/*/ui",
+                      "@/modules/*/ui/**"
+                    ],
+                    "message": "Use the module's public entry files."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["components/**", "lib/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "@/mock",
+                      "@/mock/**",
+                      "mock",
+                      "mock/**",
+                      "**/mock",
+                      "**/mock/**",
+                      "@/modules",
+                      "@/modules/**"
+                    ],
+                    "message": "Shared code must not import modules or mock data."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
     }
   ]
 }
