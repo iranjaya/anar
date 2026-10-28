@@ -14,7 +14,7 @@ Base: `docs/developer-design.md` (the doc), `docs/design-brief.md` (the brief), 
 - On a phone, an Admin opens Today, taps Call, logs No Answer with "Tomorrow" in under 15 seconds, and the lead leaves Overdue.
 - DNA uploads the same company's file twice: first time maps columns, second time is one tap to "Check rows" and reads "374 already in, 38 new".
 - The manager bulk assigns 3 leads, the Unassigned tile drops by 3, and the Admin sees them under New after switching role.
-- Every page fits 390 px with no sideways scroll. The 4 design bugs are gone.
+- Every page has a real layout at 390 px and at 1440 px, with no sideways scroll at either. The 4 design bugs are gone.
 - When S6 (say) lands, it rewrites `modules/leads/data/list.ts` and `detail.ts`. No page, component or action changes.
 
 ## 2. Architecture: one seam
@@ -65,17 +65,17 @@ Pure functions built real now because the clicks need them, each with its table 
 | Route | Screen (design board) | Who | Phone | Desktop (≥1024 px) |
 | --- | --- | --- | --- | --- |
 | `/` | redirect to role home | all | | |
-| `/companies` | company list, plain, not designed | DNA | yes | same |
-| `/[slug]/today` | 1 My Leads Today, Good day state | `reports.view_own` | designed | phone column, centred |
-| `/[slug]/leads/[id]` | 2 Lead detail; `?log=1` opens the Log a call sheet, Lost reason inside it | `leads.view` on that lead | designed | phone column, centred |
-| `/[slug]/leads` | 4 Unassigned queue (default filter `unassigned`) and bulk assign | `leads.assign` | designed | phone column, centred |
+| `/companies` | company list, plain, not designed | DNA | cards | table: company, status, members, leads, last import, Open |
+| `/[slug]/today` | 1 My Leads Today, Good day state | `reports.view_own` | designed | filter column, bucket list, selected lead detail (`?lead=`) |
+| `/[slug]/leads/[id]` | 2 Lead detail; `?log=1` opens the Log a call sheet, Lost reason inside it | `leads.view` on that lead | designed | lead facts left, timeline right; the sheet opens from the right |
+| `/[slug]/leads` | 4 Unassigned queue (default filter `unassigned`) and bulk assign | `leads.assign` | designed | filter column, lead table, assign panel |
 | `/[slug]/dashboard` | 4 Manager dashboard | `reports.view_all` | designed | designed, queue as the right aside |
-| `/[slug]/imports/new` | 3 step 1 File | `imports.upload` | designed | step rail + the phone card |
-| `/[slug]/imports/[batchId]/map` | 3 steps 2 Columns and 3 Check, one client component | `imports.upload` | designed | step 2 designed table, step 3 rail + card |
-| `/[slug]/imports/[batchId]` | 3 step 4 Done | `imports.upload` | designed | rail + card |
+| `/[slug]/imports/new` | 3 step 1 File | `imports.upload` | designed | step rail, company and file left, what the file holds right |
+| `/[slug]/imports/[batchId]/map` | 3 steps 2 Columns and 3 Check, one client component | `imports.upload` | designed | step 2 designed table; step 3 counts left, row tables right |
+| `/[slug]/imports/[batchId]` | 3 step 4 Done | `imports.upload` | designed | summary left, affected-row tables right |
 | `POST /api/imports` | upload (route handler, as in the doc) | `imports.upload` | | |
 
-Route files only re-export the module page named in section 4. Role homes: Admin `today`, Super Admin `dashboard`, DNA `imports/new` of the acting company, else `/companies`. A page the role cannot open redirects to its home; a lead the Admin does not own is `notFound()` (doc: foreign and missing look the same).
+Desktop is the `lg` breakpoint (1024 px and up, drawn at 1440); below it the phone layout stretches. Route files only re-export the module page named in section 4. Role homes: Admin `today`, Super Admin `dashboard`, DNA `imports/new` of the acting company, else `/companies`. A page the role cannot open redirects to its home; a lead the Admin does not own is `notFound()` (doc: foreign and missing look the same).
 
 Steps 2 and 3 share one route because the doc's `commitImport({ batchId, mapping, saveTemplate, newFields })` takes the mapping at commit. The mapping stays in client state between the two steps; no draft-save call is needed.
 
@@ -296,6 +296,7 @@ type Metrics = { calls; medianResponseHours: number | null; siteVisits; bookings
 
 From `docs/design-principles.md` 7 to 12. Each one has a proof in the slice that owns the screen (section 10).
 
+- **Responsive from the start.** Every screen gets a real layout at 390 px and at 1440 px from its first slice; a phone column centred on a wide screen does not count. On desktop use the width: a list beside the selected item's detail, filters in a side column, tables where the phone shows cards, sheets from the right instead of the bottom. Where the design has no desktop board, the slice says the layout. Every screen slice proves its desktop layout in the `desktop` Playwright project by role (the `table`, the filter `complementary`, the detail `region`), checks the main content is wider than 1000 px, and checks no sideways scroll at 1440. `PageShell` sets the outer width only; each screen owns its desktop grid.
 - **One filled button per decision.** Today row: Call. Lead page: Call (question 1 in section 13). Lost banner: Mark as Lost, with Keep trying as outline. Call sheet: Save (red "Mark as Lost" when the stage is Lost). Queue: Assign. Import step 1: Check rows or Match columns, with "Review columns" as a link. Step 2: Check rows. Step 3: Import. Step 4: Open queue, with Import another as outline. Labels say what happens next: "Save and next lead", "Import 38 leads", "Assign 3 leads".
 - **Hidden when the role can never do it, disabled with the reason beside it when it can't right now.** Hidden from the Admin: the lost banner, the queue, assign, the dashboard. Hidden from the Super Admin: Import. Disabled with a reason: Call with "Phone needs review", Save with "Pick an outcome" or "Pick why it was lost", Assign with "Select leads to assign". No Email button when there is no email. The second compare picker leaves out the first person. Server functions still check every one.
 - **Failed, empty and no match are three different screens.** A failed load shows `LoadError` with Retry inside the shell. Empty says what is missing ("No leads assigned to you yet", "No unassigned leads"). No match says the filter is why ("No hot leads match"). A failure never shows zeros, the Good day card or "Nothing overdue".
@@ -335,10 +336,11 @@ Auth (invite, OTP, sessions, step-up), Postgres, Drizzle, RLS, the worker and jo
 U0 and U1 are built. **One module, one helper at a time**: a module's entry files and `data/` are edited only by the slice that owns that module in the plan below, so parallel helpers never touch the same file. Shared files (`components/`, `lib/`, `mock/store.ts`, `mock/seed.ts`, `mock/names.ts`, every `types.ts`) are frozen after U5; a slice that needs a change there stops and asks. Every slice has two stops: source, then tests after review. Tests find things by role, label and visible text (`getByRole`, `getByLabel`), not by class or test id.
 
 ```
-U0 ✓ → U1 ✓ → U2 → U3 → U5 ─┬─ lane A, leads then followups: U6 → U7 → U8 → U9
-          └─ U4 (beside U2)  │                                    └─ lane C, reports: U10 (after U8, beside U9)
-                             └─ lane B, imports: U11 → U12 (beside lane A)
-                                                              all in → U13
+U0 ✓ → U1 ✓ → U2 ✓ → U3 ✓ → U5 ✓ ─┬─ lane A, leads then followups: U6 ✓ → U7 → U6b → U8 → U9
+          └─ U4 ✓ (beside U2)      │                                        └─ lane C, reports: U10 (after U8, beside U9)
+                                   ├─ lane B, imports: U11 → U12 (beside lane A)
+                                   └─ U3b (companies, beside any lane)
+                                                                     all in → U13
 ```
 
 U4 lands before U3 (the shell uses `LoadError`).
@@ -357,10 +359,15 @@ Files: `biome.json` (narrow the mock override, add the module rules), `package.j
 Gives: `requireContext(slug): Promise<Ctx>` (reads the cookie, then calls `resolveContext(demo, slug): Promise<Ctx>`, which tests use without a request), `can(ctx, perm, res?: { assignedTo: string | null }): boolean`, `homeFor(ctx): string`, `AppError`, `ActionResult<T>`, `store(): Promise<MockStore>`, `setDemoFailure(on): Promise<void>`, `switchDemoUserAction`, `resetDemoAction`, `setDemoFailureAction`.
 Proof: `permissions.test.ts`, every permission × role × own/foreign per doc 5.1; `context.test.ts` on `resolveContext`, Admin on the other company → `not_found`, DNA on a company not entered → `forbidden`; `access.test.ts`, `store()` rejects while failure is on. Lint probes piped through `biome lint --stdin-file-path`, not committed: `import { db } from "@/mock/store"` fails as `components/Probe.tsx` and `modules/leads/ui/Probe.tsx` and passes as `modules/leads/data/probe.ts`; `@/modules/leads/data/x` fails as `app/Probe.tsx`; `@/modules/leads/server` passes.
 
-**U3. Shell** (~200). Uses U2, U4.
+**U3. Shell** (built; the companies list is phone only, U3b gives it its desktop layout). Uses U2, U4.
 Files: `modules/tenant/{pages.ts,ui/{CompanyShell,DemoBar,DnaBanner,TopNav}.tsx}`, `modules/companies/{server,actions,pages}.ts` with `data/companies.ts` and `ui/CompaniesPage.tsx`, `modules/members/{server.ts,data/members.ts}`, `modules/settings/{server.ts,data/schema.ts}`, `app/{layout,page,error}.tsx`, `app/companies/page.tsx`, `app/(company)/[slug]/{layout,error}.tsx`, `e2e/shell.spec.ts`.
 Gives: `CompanyShell`, `DemoBar`, `CompaniesPage`, `listCompanies`, `enterCompany`, `leaveCompany`, `enterCompanyAction`, `leaveCompanyAction`, `listMembers(ctx)`, `loadSchema(ctx)`, `createFields(ctx, fields: NewField[]): Promise<Field[]>`.
 Proof: e2e: each role lands on its home; DNA sees the banner and Leave goes to `/companies`; the desktop nav shows only built routes for the role; with Simulate failure on, a company page shows "Couldn't load this page" with Retry inside the shell; failure off and Retry loads it.
+
+**U3b. Companies on desktop** (~50). Uses U3. Runs beside any lane.
+Files: `modules/companies/ui/CompaniesPage.tsx`, `e2e/shell.spec.ts`.
+Desktop: a table with company, status, members, leads, last import and an Open button per row; phone keeps the cards.
+Proof: desktop e2e finds the table with both companies and Open enters one; phone e2e still shows cards; no sideways scroll at either width.
 
 **U4. Shared primitives and dates** (~150). Uses U1. Runs beside U2.
 Files: `components/{ui/sheet,Chip,BottomBar,PageShell,LoadError,EmptyState}.tsx`, `lib/{dates,phone}.ts`, `modules/scoring/{components.ts,ui/{ScoreBadge,WhyScore}.tsx}`.
@@ -374,7 +381,7 @@ Proof: `buckets.test.ts`: due 23:50 Kathmandu is due today at 00:10 Kathmandu bu
 
 **Lane A, leads then followups**
 
-**U6. My Leads Today** (~180). Uses U3, U4, U5.
+**U6. My Leads Today** (built, phone only; U6b gives it its desktop layout). Uses U3, U4, U5.
 Files: `modules/leads/{pages.ts,data/today.ts,ui/{TodayPage,TodaySection,LeadRowCard,CallButton}.tsx}`, `app/(company)/[slug]/today/page.tsx`, `e2e/today.spec.ts`; adds `getMyToday` and `getBucketCounts` to `leads/server.ts`.
 Gives: `getMyToday(ctx): Promise<{ overdue: LeadRow[]; dueToday: LeadRow[]; newLeads: LeadRow[]; counts: TodayCounts }>`, `getBucketCounts(ctx, memberId): Promise<Pick<TodayCounts, 'overdue' | 'dueToday' | 'newLeads'>>`, `TodayPage`.
 Screen: calls strip against target, search by name or phone (client-side over the buckets), score chips, stage select, three sections, row Call, "N tries, no answer" when `failedAttempts > 0`, Good day card when Overdue is empty with "Next one is due tomorrow at 10:00". The design's "See tomorrow's calls" button is dropped (no screen behind it).
@@ -382,43 +389,54 @@ Proof: `today.test.ts`, Sunaina gets 3/3/4 and never another Admin's lead. e2e p
 
 **U7. Lead detail and the lost banner** (~200). Uses U6.
 Files: `modules/leads/{components.ts,actions.ts,data/{detail,update}.ts,ui/{LeadDetailPage,LeadHeader,Facts,Timeline,ReasonChips,LostSuggestion}.tsx}`, `app/(company)/[slug]/leads/[id]/page.tsx`, `e2e/lead.spec.ts`; adds `getLead`, `changeStage`, `dismissLostSuggestion` to `leads/server.ts`, `LeadDetailPage` to `leads/pages.ts`.
-Gives: `getLead(ctx, leadId): Promise<LeadDetail>`, `changeStage(ctx, { leadId, stageId, lostReasonId? })`, `dismissLostSuggestion(ctx, { leadId })`, `changeStageAction`, `dismissLostSuggestionAction`, `ReasonChips({ reasons, value, onPick })`, `LeadDetailPage({ params, callSheet?: ReactNode })`.
-Screen: name, score badge with points, stage, due line; Call (`tel:`), WhatsApp (`https://wa.me/<digits>`), Email (`mailto:`); Why Hot; facts; form answers as option labels, only fields with data; timeline from events, newest first; the lost banner for Super Admin and DNA (section 6). "Log a call" opens `?log=1`; the sheet arrives in U9.
-Proof: `detail.test.ts`: Admin on a foreign lead → `not_found`; fields with null left out. `update.test.ts`: Lost without a reason → `validation`; Admin dismiss → `forbidden`. e2e: Bikash shows "Hot · 10"; the invalid-phone lead shows Call disabled with "Phone needs review" beside it and no `tel:` link; no Email button without an email; Nirmal shows the banner to Prakash and not to Sunaina; Keep trying hides it; with Simulate failure on, Mark as Lost keeps the picked reason and shows the error.
+Gives: `getLead(ctx, leadId): Promise<LeadDetail>`, `LeadDetailView({ detail, schema, ctx })`, `changeStage(ctx, { leadId, stageId, lostReasonId? })`, `dismissLostSuggestion(ctx, { leadId })`, `changeStageAction`, `dismissLostSuggestionAction`, `ReasonChips({ reasons, value, onPick })`, `LeadDetailPage({ params, callSheet?: ReactNode })`.
+Screen: name, score badge with points, stage, due line; Call (`tel:`), WhatsApp (`https://wa.me/<digits>`), Email (`mailto:`); Why Hot; facts; form answers as option labels, only fields with data; timeline from events, newest first; the lost banner for Super Admin and DNA (section 6). "Log a call" opens `?log=1`; the sheet arrives in U9. The body is `LeadDetailView`, so U6b can show it beside the Today list.
+Desktop: header across the top with Call, WhatsApp, Email and Log a call in one row; left column Why Hot, facts and form answers; right column the lost banner and the timeline. No bottom bar.
+Proof: `detail.test.ts`: Admin on a foreign lead → `not_found`; fields with null left out. `update.test.ts`: Lost without a reason → `validation`; Admin dismiss → `forbidden`. e2e: Bikash shows "Hot · 10"; the invalid-phone lead shows Call disabled with "Phone needs review" beside it and no `tel:` link; no Email button without an email; Nirmal shows the banner to Prakash and not to Sunaina; Keep trying hides it; with Simulate failure on, Mark as Lost keeps the picked reason and shows the error. Desktop e2e: facts and timeline side by side, Log a call in the header row, no bottom bar, main content wider than 1000 px, no sideways scroll.
+
+**U6b. Today on desktop** (~90). Uses U6, U7. After U7, because the right pane is the lead detail.
+Files: `modules/leads/ui/{TodayPage,TodaySection}.tsx`, `modules/leads/ui/TodayFilters.tsx`, `components/PageShell.tsx` (drop the `max-w-lg` default so no page sits in a phone column; a shared-file change this rule approves), `e2e/today.spec.ts`.
+Desktop: left column with the calls strip, search, score chips and stage select; middle the three bucket sections as rows; right the selected lead's detail from U7's `LeadDetailView`, picked with `?lead=<id>` and defaulting to the first overdue lead. A row tap selects instead of navigating; row Call selects the lead and opens `?log=1` there. Phone stays as built.
+Proof: desktop e2e: filters sit in the `complementary` column, the bucket list and the detail `region` side by side, clicking the second overdue row shows that lead's detail without leaving Today, main content wider than 1000 px, no sideways scroll; the empty, no-match and failed states fill the list column, never the detail. Phone e2e from U6 still passes.
 
 **U8. Unassigned queue and bulk assign** (~180). Uses U7.
 Files: `modules/leads/{data/{list,assign}.ts,ui/{UnassignedPage,AssignList}.tsx}`, `app/(company)/[slug]/leads/page.tsx`, `e2e/queue.spec.ts`; adds `listLeads`, `assignLeads` to `server.ts`, `assignLeadsAction` to `actions.ts`, `AssignList` to `components.ts`, `UnassignedPage` to `pages.ts`.
 Gives: `listLeads(ctx, { assignedTo?, priority?, q?, cursor? }): Promise<{ items: LeadRow[]; nextCursor; total }>`, `assignLeads(ctx, { leadIds, memberId }): Promise<{ updated }>`, `assignLeadsAction`, `AssignList({ items, members, onAssigned? })`.
-Proof: `list.test.ts`: an Admin passing another member's id still gets only own. `assign.test.ts`: 3 ids → 3 `assigned` events; an assignee outside the company → `validation`. e2e: pick 3, assign to Sunaina, the count drops 45 → 42 and the status line names her; Assign stays disabled with "Select leads to assign" until one is picked; "Select all 45 shown"; with Simulate failure on, the 3 stay picked and the error shows; "No unassigned leads" at 0 vs "No hot leads waiting" under a filter; Sunaina never reaches the queue.
+Desktop: left column with search and score chips; middle a table (checkbox, name, score, apartment, buying when, platform, time) with select all in the header; right an assign panel with the picked count, Assign to, and the Assign button. Phone keeps the cards and the bottom bar.
+Proof: `list.test.ts`: an Admin passing another member's id still gets only own. `assign.test.ts`: 3 ids → 3 `assigned` events; an assignee outside the company → `validation`. e2e: pick 3, assign to Sunaina, the count drops 45 → 42 and the status line names her; Assign stays disabled with "Select leads to assign" until one is picked; "Select all 45 shown"; with Simulate failure on, the 3 stay picked and the error shows; "No unassigned leads" at 0 vs "No hot leads waiting" under a filter; Sunaina never reaches the queue. Desktop e2e: the `table` with 45 rows, filters in the `complementary` column, assign from the right panel drops the count, no sideways scroll.
 
 **U9. Log a call** (~190). Uses U7. Runs beside U10.
 Files: `modules/followups/{server,actions,pages}.ts`, `modules/followups/{data/log.ts,ui/{LogCallSheet,LogCallForm}.tsx}`, `app/(company)/[slug]/leads/[id]/page.tsx` (fills the `callSheet` slot), `e2e/log-call.spec.ts`; adds `applyFollowUp` to `leads/server.ts` and `leads/data/write.ts`.
 Gives: `logFollowUp(ctx, { leadId, outcomeId, notes?, nextActionAt?, stageId?, lostReasonId? }): Promise<{ lead, followUp, lostSuggested }>`, `logFollowUpAction`, `applyFollowUp(ctx, change): Promise<Lead>`, `LogCallSheet({ leadId })`.
-Proof: `log.test.ts`: Lost without a reason → `validation`; an Admin on a foreign lead → `not_found`; the lead gets `lastContactedAt`, `nextActionAt` and a `follow_up_logged` event. e2e: No Answer + Tomorrow on Bikash, back on Today, Bikash is gone from Overdue; Save is the one filled button and stays disabled with "Pick an outcome" until one is picked, no red text before that; Lost says "Pick why it was lost" until a reason, all 7 chips inside 390 px; with Simulate failure on, Save shows the error above the button and outcome, note, next date and stage are kept.
+Desktop: the sheet opens from the right, 480 px, with the lead still visible beside it; outcomes in two columns, quick picks in one row. On Today (U6b), saving selects the next lead in the same bucket in the detail pane instead of navigating.
+Proof: `log.test.ts`: Lost without a reason → `validation`; an Admin on a foreign lead → `not_found`; the lead gets `lastContactedAt`, `nextActionAt` and a `follow_up_logged` event. e2e: No Answer + Tomorrow on Bikash, back on Today, Bikash is gone from Overdue; Save is the one filled button and stays disabled with "Pick an outcome" until one is picked, no red text before that; Lost says "Pick why it was lost" until a reason, all 7 chips inside 390 px; with Simulate failure on, Save shows the error above the button and outcome, note, next date and stage are kept. Desktop e2e: the sheet opens on the right with the lead visible beside it; on Today, saving Bikash selects the next overdue lead in the pane.
 
 **Lane C, reports**
 
 **U10. Dashboard, phone and desktop** (~200). Uses U8. Runs beside U9.
 Files: `modules/reports/{server,pages}.ts`, `modules/reports/{data/{queries,targets}.ts,ui/{DashboardPage,Tiles,Funnel,TeamTable,MemberPanel,Compare,RangePicker}.tsx}`, `app/(company)/[slug]/dashboard/page.tsx`, `e2e/dashboard.spec.ts`.
 Gives: `getTeamOverview(ctx, range): Promise<TeamOverview>`, `getMemberDashboard(ctx, { memberId, ...range }): Promise<MemberDashboard>`, `compareMembers(ctx, { a, b, ...range }): Promise<{ a: Metrics; b: Metrics }>`, `DashboardPage`.
+Desktop (designed board): tiles in one row; team table, then funnel and compare side by side; the unassigned `AssignList` as the right aside; a team row expands its member panel under it.
 Screen: tiles (Unassigned links to the queue on phone, the `AssignList` aside on desktop), funnel, team table sortable by every column both ways, tap a person for the expand panel, compare two, ranges Today, This week, This month, Custom. Each tile names its period, table headers name the range.
-Proof: `queries.test.ts` against seed numbers: tiles, per-member calls for today and the week, funnel sums to the lead count, `hotIdle2d`, compare of a person with themself → `validation`. e2e: the compare selects show the two people compared and the second leaves out the first; sort by Overdue puts Rojina first; Custom with "to" before "from" keeps both dates and shows the message at "to"; desktop assign from the aside updates the tile; Pahad shows empty states, not an error; with Simulate failure on, the load error shows, never zero tiles.
+Proof: `queries.test.ts` against seed numbers: tiles, per-member calls for today and the week, funnel sums to the lead count, `hotIdle2d`, compare of a person with themself → `validation`. e2e: the compare selects show the two people compared and the second leaves out the first; sort by Overdue puts Rojina first; Custom with "to" before "from" keeps both dates and shows the message at "to"; desktop assign from the aside updates the tile; Pahad shows empty states, not an error; with Simulate failure on, the load error shows, never zero tiles. Desktop e2e: five tiles in one row, the team `table` sortable by its headers, the aside beside it, main content wider than 1000 px, no sideways scroll.
 
 **Lane B, imports**
 
 **U11. Import file and columns** (~200). Uses U3, U4, U5.
 Files: `mock/metaExport.ts`, `modules/imports/{server,actions,pages,templates}.ts`, `modules/imports/{data/{upload,templates}.ts,ui/{ImportFilePage,ImportMapPage,StepBar,ImportRail,FileCard,MappingRows,MappingTable}.tsx}`, `app/api/imports/route.ts`, `app/(company)/[slug]/imports/{new,[batchId]/map}/page.tsx`, `e2e/import-columns.spec.ts`.
 Gives: `createImportBatch(ctx, { fileName, fileSize }): Promise<UploadResult>`, `getUploadResult(ctx, batchId): Promise<UploadResult>`, `templateNameFromFile(name): string`, `ImportFilePage`, `ImportMapPage` (step 2).
-Proof: `templates.test.ts`: `Sundar Heights 2 3 BHK October_Leads_2026-10-14_2026-10-28.csv` → `Sundar Heights 2 3 BHK October`; a name without the tail stays as it is. e2e: Pahad, no template: six system columns matched, four new fields proposed, each select shows its own target, the timeline column remapped to `purchase_timeline`. Sundar: "Saved mapping found", one filled button "Check 412 rows", "Review columns" as a link. With Simulate failure on, the upload keeps the picked company and shows the error on the file card. Desktop: mapping table, no sideways scroll at 1440.
+Desktop: step rail left. Step 1: company select and file drop on the left, what the file holds on the right (name, rows, columns, date range, format, saved mapping notice) with the step's button under it. Step 2: the designed mapping table.
+Proof: `templates.test.ts`: `Sundar Heights 2 3 BHK October_Leads_2026-10-14_2026-10-28.csv` → `Sundar Heights 2 3 BHK October`; a name without the tail stays as it is. e2e: Pahad, no template: six system columns matched, four new fields proposed, each select shows its own target, the timeline column remapped to `purchase_timeline`. Sundar: "Saved mapping found", one filled button "Check 412 rows", "Review columns" as a link. With Simulate failure on, the upload keeps the picked company and shows the error on the file card. Desktop e2e: step 1 shows the rail, the file column and the details column side by side; step 2 shows the mapping `table` with one row per header; main content wider than 1000 px; no sideways scroll at 1440.
 
 **U12. Import check and result** (~190). Uses U11.
 Files: `modules/imports/{data/{commit,batches}.ts,ui/{CheckStep,ImportResultPage}.tsx}`, `ui/ImportMapPage.tsx` (adds step 3), `app/(company)/[slug]/imports/[batchId]/page.tsx`, `e2e/import-commit.spec.ts`; adds `dryRunImport`, `commitImport`, `getImportBatch`, `listImportRows` to `server.ts`, `dryRunImportAction`, `commitImportAction` to `actions.ts`, `ImportResultPage` to `pages.ts`.
 Gives: `dryRunImport(ctx, { batchId, mapping }): Promise<DryRun>`, `commitImport(ctx, { batchId, mapping, saveTemplate?, newFields? }): Promise<{ jobId }>`, `getImportBatch(ctx, batchId): Promise<ImportBatch>`, `listImportRows(ctx, { batchId, result? }): Promise<ImportRow[]>`.
-Proof: `commit.test.ts`: the Sundar file adds 38 leads and its summary reads needPhoneReview 2, duplicateDb 374 (371 same submission, 3 resubmitted); committing it again adds nothing; the Pahad commit creates the 4 fields and the template. e2e: Sundar one tap from step 1 to "374 already in, 38 new", import, the result reads "38 added" and its links open the resubmitted leads; Back from step 3 keeps every target and edited label; with Simulate failure on, Import shows the error at the button and step 3 stays; on the result, "Open queue" is the one filled button.
+Desktop: step rail left. Step 3: the counts and the bar on the left; resubmitted and phone-review rows as tables on the right (row, name, why, link). Step 4: the summary and both buttons on the left; tables of the added leads that need phone review and of the resubmitted leads on the right.
+Proof: `commit.test.ts`: the Sundar file adds 38 leads and its summary reads needPhoneReview 2, duplicateDb 374 (371 same submission, 3 resubmitted); committing it again adds nothing; the Pahad commit creates the 4 fields and the template. e2e: Sundar one tap from step 1 to "374 already in, 38 new", import, the result reads "38 added" and its links open the resubmitted leads; Back from step 3 keeps every target and edited label; with Simulate failure on, Import shows the error at the button and step 3 stays; on the result, "Open queue" is the one filled button. Desktop e2e: steps 3 and 4 show counts beside the row tables, each table links to its leads, no sideways scroll.
 
 **U13. Day story across roles** (~80). Uses everything.
 Files: `e2e/story.spec.ts`.
-Proof: DNA imports Sundar's file → Prakash's Unassigned tile reads 83 → he assigns 3 new leads to Sunaina → Sunaina sees them under New, calls one, logs Callback Requested → Prakash's dashboard shows her calls today +1. Every route checked for no sideways scroll at 390. The Simulate failure specs run in their own Playwright project after the rest, because the switch is one per process.
+Proof: DNA imports Sundar's file → Prakash's Unassigned tile reads 83 → he assigns 3 new leads to Sunaina → Sunaina sees them under New, calls one, logs Callback Requested → Prakash's dashboard shows her calls today +1. The story runs in both Playwright projects, and every route is checked for no sideways scroll at 390 and 1440. The Simulate failure specs run in their own Playwright project after the rest, because the switch is one per process.
 
 ## 11. Review focus
 
