@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Bricolage_Grotesque, Figtree, JetBrains_Mono } from "next/font/google";
+import { DemoBar } from "@/modules/tenant/pages";
+import { getDemoControls } from "@/modules/tenant/server";
 import "./globals.css";
 
 const title = Bricolage_Grotesque({
@@ -20,14 +22,16 @@ const mono = JetBrains_Mono({
 
 export const metadata: Metadata = { title: "Anar" };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const controls = await getDemoControls();
   return (
     <html lang="en">
       <body className={`${title.variable} ${body.variable} ${mono.variable}`}>
+        <DemoBar {...controls} />
         {children}
       </body>
     </html>
