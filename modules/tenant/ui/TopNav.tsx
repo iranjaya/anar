@@ -22,12 +22,18 @@ export function TopNav({
         </div>
         <div className="flex items-center gap-4">
           {ctx.role === "dna" && (
-            <nav aria-label="Main navigation" className="hidden lg:block">
+            <nav aria-label="Main navigation" className="hidden gap-4 lg:flex">
               <Link
                 href="/companies"
                 className="inline-flex min-h-11 items-center font-semibold text-brand"
               >
                 Companies
+              </Link>
+              <Link
+                href={`/${ctx.companyId}/imports/new`}
+                className="inline-flex min-h-11 items-center font-semibold text-brand"
+              >
+                Import
               </Link>
             </nav>
           )}
