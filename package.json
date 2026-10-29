@@ -2,15 +2,19 @@
   "name": "anar",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "packageManager": "pnpm@11.28.2",
   "scripts": {
-    "dev": "pnpm --filter @anar/web dev",
-    "build": "pnpm --filter @anar/web build",
-    "start": "pnpm --filter @anar/web start",
+    "dev": "pnpm --filter @anar/domain build && pnpm --filter @anar/web dev",
+    "dev:stack": "docker compose -f compose.yml -f compose.dev.yml run --build --rm migrate && docker compose -f compose.yml -f compose.dev.yml up --build -d api worker web proxy",
+    "build": "pnpm -r build",
+    "start": "pnpm --filter @anar/domain build && pnpm --filter @anar/web start",
     "typecheck": "pnpm --filter @anar/web typecheck",
     "lint": "biome check .",
     "test": "pnpm --filter @anar/web test",
-    "e2e": "pnpm --filter @anar/web e2e"
+    "e2e": "pnpm --filter @anar/domain build && pnpm --filter @anar/web e2e",
+    "smoke:compose": "pnpm --filter @anar/domain build && node scripts/smoke-compose.ts",
+    "db:migrate": "docker compose run --rm migrate"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.3",

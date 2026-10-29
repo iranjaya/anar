@@ -1,0 +1,81 @@
+name: anar
+
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-anar}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-anar_bootstrap_local}
+      APP_DATABASE_PASSWORD: ${APP_DATABASE_PASSWORD:-anar_app_local}
+      MIGRATION_DATABASE_PASSWORD: ${MIGRATION_DATABASE_PASSWORD:-anar_migrate_local}
+      BOOTSTRAP_ROLES_SQL: /opt/anar-postgres/roles.sql
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./ops/postgres/bootstrap.sh:/docker-entrypoint-initdb.d/10-anar-bootstrap.sh:ro
+      - ./ops/postgres/roles.sql:/opt/anar-postgres/roles.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  migrate:
+    image: anar-migrate:local
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: migrate
+    environment:
+      MIGRATION_DATABASE_URL: ${MIGRATION_DATABASE_URL:-postgresql://anar_migrate:anar_migrate_local@db:5432/anar}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    image: anar-api:runtime
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: runtime
+    environment:
+      HOST: 0.0.0.0
+      PORT: "3001"
+      DATABASE_URL: ${DATABASE_URL:-postgresql://anar_app:anar_app_local@db:5432/anar}
+    init: true
+
+  worker:
+    image: anar-worker:runtime
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+      target: runtime
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://anar_app:anar_app_local@db:5432/anar}
+    init: true
+
+  web:
+    image: anar-web:runtime
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: runtime
+    environment:
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+      API_INTERNAL_URL: http://api:3001
+    init: true
+
+  proxy:
+    image: caddy:2-alpine
+    ports:
+      - "127.0.0.1:8080:80"
+    volumes:
+      - ./ops/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - web
+      - api
+
+volumes:
+  postgres_data:
