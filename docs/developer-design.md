@@ -1,7 +1,7 @@
 # Anar developer design
 
 Date: 2026-10-27
-Architecture revision: 2026-10-29, pnpm monorepo. Implementation starts with [S0](specs/s0-monorepo.md); this revision is docs only.
+Architecture revision: 2026-10-29, pnpm monorepo and owner/agency hierarchy. Implementation starts with [S0](specs/s0-monorepo.md); this revision is docs only.
 Base: `ANAR-System-Design.md` in `iranjaya/anar` (dated 2026-10-27). That doc is the product. This one is what a dev team needs to build it.
 
 How to read the marks:
@@ -9,43 +9,32 @@ How to read the marks:
 - `[base]` taken from the base doc as it is. Product decisions in it are not changed here.
 - `[new]` added in this doc.
 - `[default]` the base is silent and it is a business call. I picked a default so work can start. Every one of these is repeated in section 11.
-- `[verified on real export]` checked on one real Meta lead export DNA gave us (appendix A). Facts, not guesses.
+- `[verified on real export]` checked on one real Meta lead export the first agency gave us (appendix A). Facts, not guesses.
+- `[agency]` changes roles/access for the 2026-10-29 decision: owner → agencies → client companies. A heading mark covers its section; detailed contracts and steps are in [S1–S2](specs/s1-s2-foundation.md). DNA is only the first agency's example/seed name.
 - `[monorepo]` changed ownership, transport, paths or delivery order in the 2026-10-29 revision. A mark on a heading covers that section.
 
-Short version of the big calls: one Postgres, `company_id` on every tenant table plus row level security. `[monorepo]` One pnpm workspace: Next.js screens in `apps/web`, Fastify HTTP service in `apps/api`, a separate pg-boss process in `apps/worker`, Drizzle and RLS in `packages/db`, shared contracts in `packages/domain`. The API owns all business logic; Next actions are UI transport adapters only. PWA, not native. Web Push with our own VAPID keys, no OneSignal. Custom fields in one JSONB column per lead with a fields table as the schema. CSV import is a background job with a saved mapping per form. Scoring is a config row per company, never code.
+Short version of the big calls: `[agency]` one owner, many agencies, each company in exactly one agency. Agency-scoped company/staff rows and company-scoped feature rows have RLS at both boundaries. `[monorepo]` One pnpm workspace: Next.js screens in `apps/web`, Fastify HTTP service in `apps/api`, a separate pg-boss process in `apps/worker`, Drizzle and RLS in `packages/db`, shared contracts in `packages/domain`. The API owns all business logic; Next actions are UI transport adapters only. PWA, not native. Web Push with our own VAPID keys, no OneSignal. Custom fields in one JSONB column per lead with a fields table as the schema. CSV import is a background job with a saved mapping per form. Scoring is a config row per company, never code.
 
 ---
 
 ## 1. Product recap `[base]`
 
-Everything in this section is from the base doc, sections 1 to 8. One page, nothing new.
+Base sections 1 to 8 still define company work. `[agency]` The owner/agency hierarchy below supersedes the original single-agency roles and commercial scope.
 
-**What it is.** A lead management system DNA (the agency) runs for its client companies. It replaces per-salesperson Excel trackers. Leads come from Facebook and Instagram CSV exports, events and web forms. Each client company is its own isolated workspace. Anar is part of DNA's service, not a separate paid product. Branding is Anar only.
+**What it is.** `[agency]` Anar is sold to many agencies; DNA is the first. Agencies run isolated workspaces for their client companies. Sishir and his company own the platform. It replaces per-salesperson Excel trackers; leads come from CSV exports, events and web forms. Branding stays Anar.
 
-**Roles.**
+**Roles and access.** `[agency]`
 
-| Role | Who | Scope |
-| --- | --- | --- |
-| Platform Owner (DNA) | the agency | all companies, creates workspaces, uploads CSVs, assigns Super Admins, can access any company for support |
-| Super Admin | 1 to 2 managers per company | all leads in their company, creates Admins, assigns leads, reports, configures stages and fields, exports |
-| Admin | sales staff (Sarina) | own leads only, logs follow-ups, own dashboard, no settings, no users |
+| Role | Scope |
+| --- | --- |
+| Owner | Sishir and his company; creates agencies by inviting their first staff; lists agencies/status; no company or lead work |
+| Agency staff | Own agency's staff and client companies; invite staff and Super Admins, create companies; enter an own-agency company with a reason before lead/settings/member work |
+| Super Admin | Own company, all leads/settings/reports; invites and manages Admins |
+| Admin | Own assigned leads, follow-ups and own reports; no settings or user management |
 
-**Access matrix.**
+Company roles stay unchanged. Every company has one immutable agency in this foundation. Staff cannot create/invite another agency. Staff invitations/removal require fresh OTP; never remove the last active staff member. Owner has no implicit company access. See §5.1 for the full permission table.
 
-| Feature | DNA | Super Admin | Admin |
-| --- | --- | --- | --- |
-| Create company | Yes | No | No |
-| Upload CSV leads | Yes | No | No |
-| Create users | Yes (Super Admin) | Yes (Admin) | No |
-| Assign leads | Yes | Yes | No |
-| View all leads | Yes | Yes | No (own only) |
-| Update lead status | Yes | Yes | Yes (own only) |
-| View all reports | Yes | Yes | No |
-| View own report | Yes | Yes | Yes |
-| Export data | Yes | Yes | No |
-| Configure pipeline/fields | Yes | Yes | No |
-
-**Lead data.** Fixed fields: full name, phone, email, lead source, lead date, campaign name, assigned to. Custom fields per company, created by DNA in settings or on the fly during upload. Types: dropdown, text, number, date. Only fields with data are shown on a lead.
+**Lead data.** Fixed fields: full name, phone, email, lead source, lead date, campaign name, assigned to. Custom fields per company, created by agency staff in settings or on the fly during upload. Types: dropdown, text, number, date. Only fields with data are shown on a lead.
 
 **Pipeline.** Default stages: New Lead, Contacted, Qualified, Follow-up, Site Visit, Negotiation, Booked, Lost. Super Admin can rename, add, remove. Booked leads stay in the list. Lost needs a reason (Too Expensive, Wrong Location, Bought from Competitor, Not Responding, Not Genuine Lead, Changed Mind, Other), configurable.
 
@@ -59,14 +48,14 @@ Everything in this section is from the base doc, sections 1 to 8. One page, noth
 
 **Flows.**
 
-1. DNA signs a client, creates the company, invites 1 to 2 Super Admins.
+1. `[agency]` Owner invites an agency's first staff member; that staff invites colleagues, signs a client, creates its company and invites 1 to 2 Super Admins.
 2. Super Admin creates Admin accounts.
-3. DNA downloads the CSV from Ads Manager each morning, uploads it to the company, saved mapping applies, leads land unassigned.
+3. Agency staff download the CSV from Ads Manager each morning, uploads it to the company, saved mapping applies, leads land unassigned.
 4. Super Admin assigns leads, one by one or in bulk, reassigns when someone is sick or leaves.
 5. Admin opens Anar on the phone, sees Overdue / Due Today / New, taps a lead, taps Call (tel: link), then fills the quick form: outcome, notes, next date, stage change. Site Visit Done and Booked are marked the same way.
 6. Super Admin watches the dashboard, pulls daily and weekly reports, compares Admins.
 
-**Technical decisions already taken.** Web app, phone first. English. Email invitation plus OTP on email. Stay logged in 30 days, auto logout after 30 days of no use. Self-hosted. Manual daily CSV upload by DNA, Facebook API sync later. Duplicate detection by phone. No manual lead entry by Admins. Click-to-call.
+**Technical decisions already taken.** Web app, phone first. English. Email invitation plus OTP on email. Stay logged in 30 days, auto logout after 30 days of no use. Self-hosted. Manual daily CSV upload by agency staff, Facebook API sync later. Duplicate detection by phone. No manual lead entry by Admins. Click-to-call.
 
 ---
 
@@ -77,7 +66,7 @@ Everything in this section is from the base doc, sections 1 to 8. One page, noth
 ```mermaid
 flowchart LR
   Phone[Admin phone, PWA] --> Caddy
-  Desk[Super Admin / DNA browser] --> Caddy
+  Desk[Owner / agency staff / Super Admin browser] --> Caddy
   Caddy[Caddy, TLS] -->|pages and Next actions| Web[apps/web, Next.js screens]
   Caddy -->|/api/*| API[apps/api, Fastify]
   Web -->|typed HTTP, session cookie| API
@@ -111,27 +100,19 @@ One server, Docker Compose, five long-running containers: `db`, `api`, `worker`,
 
 Production and local Compose use one browser origin. Caddy sends `/api/*` unchanged to API and everything else to web. S0 temporarily routes `/api/imports` to the relocated mock web handler; S4 removes that exception when the real upload endpoint and file transport land together.
 
-### 2.2 Multi-tenancy model
+### 2.2 Multi-tenancy model `[agency]`
 
-**Pick: one Postgres, one application schema, `company_id` on every tenant table, Postgres row level security (RLS) on every tenant table, plus a tenant-scoped DB client in API and worker.** `[monorepo]` Web has no DB credentials or DB imports. pg-boss has its own internal schema in that same database.
+One Postgres/application schema; `companies.agency_id NOT NULL` references `agencies`. Agency staff are `agency_members`, not a global platform role. `users.platform_role` is `owner | null`. Proposed MVP pick: one agency per staff user; owner/staff do not also hold company memberships.
 
-Why this and not the others:
+`anar_migrate` owns schema; `anar_app` is non-owner with no BYPASSRLS/DDL/TRUNCATE. Web has no DB access. Agency/company tables use ENABLE + FORCE RLS with matching USING/WITH CHECK. `agency_members` and `companies` enforce agency scope; company feature rows require company scope **and** a matching parent company's agency. A staff session does not grant all companies' leads.
 
-- Schema per company: every migration runs N times, connection poolers fight with `search_path`, and DNA cross-company views (list all companies with counts) need union queries. Tens of companies, not thousands, so the isolation win is small and the ops cost is daily.
-- Database per company: same problems plus N backups and N restore drills on one self-hosted box.
-- Shared tables without RLS: one forgotten `WHERE company_id` is a cross-company leak. RLS makes the DB refuse it.
+Extend the existing DB scope setter/bridges with `TenantScope = { agencyId, companyId, userId }` and `AgencyScope = { agencyId, userId }`. All scope values come from validated backend context; use transaction-local parameter-bound settings, cleared on commit/rollback. Missing scope gives no rows. An explicit identity-only SELECT policy exposes only the current user's own memberships for bootstrap/discovery. `company_members.agency_id` and a composite company FK avoid recursive RLS lookup. Exact policies and proofs: [S1–S2 §4](specs/s1-s2-foundation.md#4-storage-migrations-and-audit-agency).
 
-How it is enforced:
+Unscoped platform exceptions are exact: users, agency registry metadata, invites, OTP, sessions, append-only audit, auth limits and worker heartbeat. Companies are no longer exempt. Public invite access is token-bound; authenticated invite/audit queries validate agency/company scope. Platform imports are restricted to auth/agencies/companies/tenant and later user/session push storage; members and features use public owner helpers. Queue/vendor schemas have separate grants/checks.
 
-1. `[monorepo]` Two application DB roles, defined in `packages/db`: `anar_migrate` owns tables and runs migrations; `anar_app` is used by API and worker. Both are non-superusers without `BYPASSRLS`; `anar_app` cannot assume the migration role, has no DDL or TRUNCATE grants, and is not a table owner. Tenant tables have `FORCE ROW LEVEL SECURITY`, including for the owner in tests. Postgres bootstrap administration is never an application connection.
-2. `[monorepo]` Every tenant table has `USING` and `WITH CHECK` policies comparing `company_id` to `NULLIF(current_setting('app.company_id', true), '')::uuid` for select, insert, update and delete. Unset or reset-to-empty context gives no rows and refuses writes. This is the same company isolation rule, including after a pooled connection is reused.
-3. `[monorepo]` `packages/db/src/tenant.ts` owns `withTenant(scope, fn)`. It opens a transaction and uses parameterised `set_config('app.company_id', companyId, true)` and `set_config('app.user_id', userId, true)` (the parameter-safe equivalent of `SET LOCAL`). Feature functions receive `tx`, never the pool. API supplies server-resolved context; worker supplies a validated persisted job's company and actor. Context never comes from a browser-provided role or member object.
-4. `[monorepo]` Platform tables (`companies`, `users`, `invites`, `otp_codes`, `sessions`, `push_subscriptions`, `audit_log`) have no tenant policy. `@anar/db/platform` is restricted to API `auth`, `companies`, `tenant`, and the `notifications/subscriptions` repository for user/session-scoped push storage. Workers call these owners for platform retention and company enumeration. Biome plus the resolved-import boundary check enforce this allowlist, including relative imports. There is no web access to either DB entry.
-5. `[monorepo]` CI checks policy coverage, `ENABLE` and `FORCE RLS`, `USING` and `WITH CHECK`, ownership and grants. The exact platform-table allowlist above exempts `invites` and `audit_log` despite their nullable `company_id`; a new tenant table cannot silently become exempt. See [Postgres row security](https://www.postgresql.org/docs/17/ddl-rowsecurity.html).
+`requireAgencyContext` resolves active own-agency staff; `requireContext` resolves active agency/company plus company membership or valid staff entry, then returns both IDs. `withContext` rechecks under locks in the write transaction. Owner may list agency metadata/status but cannot enter companies. Staff call `enterCompany(companyId, reason)` only for their own agency; existing session acting triplet expires after eight hours and does not extend with refresh. Leave clears it; the banner shows company/reason/expiry. No global lead query exists.
 
-`[monorepo]` Context bootstrapping is explicit: API loads the session and candidate company via platform owners, opens a scoped transaction to read only that user's membership, then constructs `Ctx`. No feature runs before membership or DNA acting access is verified. DNA company-list counts use one authorised scoped query per company, never an unscoped tenant query.
-
-DNA is a platform role, not a company member. To see a company DNA calls `enterCompany(companyId, reason)`. That writes `acting_company_id`, `acting_reason` and `acting_until` (8 hours) on the DNA session row and one audit row. From then on `requireContext()` builds the context with that company id and RLS applies to DNA exactly as it does to a Super Admin. There is no "see all companies' leads" query anywhere. A banner at the top says which company DNA is in and a "leave" button clears it.
+CI proves two agencies with two companies each: foreign IDs and mismatched agency/company pairs fail, owner tenant access fails, self-membership bootstrap exposes only self, and pooled connections retain no scope. All future endpoints and jobs extend this matrix.
 
 ### 2.3 Auth
 
@@ -139,13 +120,15 @@ DNA is a platform role, not a company member. To see a company DNA calls `enterC
 
 `[new]` How it works:
 
-**Invite.** DNA or Super Admin enters an email and a role. We store a row in `invites` with a random token (hashed) and a 7 day expiry, and send an email with the link. Opening the link shows the email, asks for a name, then goes to OTP. Accepting creates the `users` row if the email is new and the `company_members` row. An email that already exists as a user in another company just gets a second membership.
+**Invite.** `[agency]` Owner creates a pending agency and its first staff invite atomically. Acceptance creates staff membership and activates the agency. Active staff invite their own staff or their companies' Super Admins; Super Admin invites Admins. Each path chooses role/scope server-side and needs fresh OTP. Seven-day hashed tokens, email jobs and audit share one transaction. Acceptance grants only the invited membership, checks target/issuer authority and issues no session; email OTP follows. Company users may accept another company's invite, including across agencies; owner/staff mixed roles and inactive-user revival are refused.
 
 **OTP.** User enters email. If the email is a known active user we create an `otp_codes` row: 6 digits, hashed, expires in 10 minutes, max 5 verify attempts, one active code per user (new request replaces the old). The response is the same whether the email exists or not. Rate limits are in section 8.5.
 
-**Session.** On verify we create a `sessions` row with a random 32 byte token, store its hash, and set an `httpOnly`, `Secure`, `SameSite=Lax` cookie. `expires_at = last_seen_at + 30 days`, sliding, updated at most once per hour. Deactivating a member or changing a role revokes all sessions of that user in that company. A user can see their sessions (device, last seen) and revoke any. Settings, user management and export ask for a fresh OTP if the session's last OTP is older than 15 minutes (step-up). That is the main defence for shared phones, see risk 7.4.
+**Session.** On verify we create a `sessions` row with a random 32 byte token, store its hash, and set an `httpOnly`, `Secure`, `SameSite=Lax` cookie. `expires_at = last_seen_at + 30 days`, sliding, updated at most once per hour. `[agency]` Deactivating agency staff or a company member, or changing a role, revokes all sessions of that user atomically. A user can see their sessions (device, last seen) and revoke any. Settings, user management and export ask for a fresh OTP if the session's last OTP is older than 15 minutes (step-up). That is the main defence for shared phones, see risk 7.4.
 
-**Context.** `[monorepo]` Every protected company API endpoint starts with `requireContext(request, companySlug)`: cookie to session to user to membership (or DNA acting company), returning backend-only `{ user, companyId, member, role, session }`. Then `can(ctx, permission, resource?)` against section 5.1 and `withTenant`. Login, OTP and health are explicitly public; own-session and DNA platform endpoints require a session without requiring an entered company. The web `requireContext(slug)` seam becomes an HTTP adapter returning a safe context view, never a session validator. Cookie forwarding and expiry are in section 5.3.
+**Context.** `[agency]` Protected company endpoints resolve `requireContext(request, slug)` to backend `{ user, agency, agencyId, company, companyId, member, role, session }`. Owner endpoints use `OwnerCtx`; agency endpoints use `AgencyCtx`. They never invent a company. Web receives safe views/capabilities, not authority. Own-session endpoints remain identity-only. Login redirects to `/workspaces`, then owner/agency/company home according to current persisted access.
+
+**Bootstrap.** `[agency]` Replace the old agency-specific bootstrap with server command `bootstrap:owner`; environment/email/name required, same-email repeat safe, second owner and ordinary-user promotion refused. No public owner signup. Migrations 0000–0003 stay immutable; populated upgrades need a separately approved legacy-user mapping, never automatic promotion to owner.
 
 ```mermaid
 sequenceDiagram
@@ -204,12 +187,12 @@ Jobs are idempotent by key: `import.commit` keyed by batch id, `scoring.recomput
 Three channels, one table. Every notification is first a row in `notifications` (in-app list with a bell). Then:
 
 - **Web Push** (VAPID keys we generate, `web-push` library, service worker in the PWA). Works on Android Chrome, and on iOS 16.4+ only once the PWA is added to the home screen. Onboarding tells Admins to install it.
-- **Email** for invites and OTP always, and as the fallback for the daily and weekly summary when the user has no live push subscription.
+- **Email** for invites and OTP always, and as the fallback for the daily and weekly summary when the user has no live push subscription. Layout, blocks and copy: [specs/email-templates.md](specs/email-templates.md).
 - No SMS in MVP.
 
 ### 2.7 Hosting
 
-`[base]` Self-hosted. `[new]` One VPS (4 vCPU, 8 GB, 80 GB SSD is enough for the first years), Ubuntu LTS, Docker Compose, Caddy with automatic TLS on `anar.<dna-domain>`. Separate from Ekata (section 3). Staging is a second Compose project on the same box with its own DB and subdomain until it gets its own VPS. Backups go off the box every night (section 8.3).
+`[base]` Self-hosted. `[new]` One VPS (4 vCPU, 8 GB, 80 GB SSD is enough for the first years), Ubuntu LTS, Docker Compose, Caddy with automatic TLS on `anar.<owner-domain>`. Separate from Ekata (section 3). Staging is a second Compose project on the same box with its own DB and subdomain until it gets its own VPS. Backups go off the box every night (section 8.3).
 
 ### 2.8 Repository and module ownership `[monorepo]`
 
@@ -237,7 +220,7 @@ Each feature owns its writes; imports and follow-ups call the leads owner, not i
 
 Dependencies: web → domain; API → domain + db; worker → domain + db + the single API jobs export; db → domain only if a shared type is needed; domain → zod only. The API jobs export is the sole allowed app-to-app import. No cycles, deep package imports, web → db/API source, or domain → server dependencies. Packages use explicit exports and `workspace:*` dependencies. [pnpm workspaces](https://pnpm.io/workspaces).
 
-The existing UI mock spec and design-principles document describe the completed mock. This revision supersedes their future direct-to-Postgres path and one-app recommendation; module ownership, thin routes and the `server.ts` seam stay. S0 moves the mock intact. Each later feature replaces its `data/` body with API calls while keeping page/component contracts. Mock permissions and calculations remain only in the isolated demo until that feature switches; they are not production fallbacks. Production API never reads mock data or accepts `anar_demo` as authentication.
+`[agency]` Keep existing UI mock roles, seeds and pages unchanged; no demo owner is needed. Real owner/agency pages are separate. The existing UI mock spec and design-principles document describe the completed mock. This revision supersedes their future direct-to-Postgres path and one-app recommendation; module ownership, thin routes and the `server.ts` seam stay. S0 moves the mock intact. Each later feature replaces its `data/` body with API calls while keeping page/component contracts. Mock permissions and calculations remain only in the isolated demo until that feature switches; they are not production fallbacks. Production API never reads mock data or accepts `anar_demo` as authentication.
 
 ---
 
@@ -270,7 +253,7 @@ Rest of the stack, same reasoning (small, boring, one box):
 
 ## 4. Data model `[new]`
 
-All ids are UUIDv7. All tables have `created_at`, tenant tables also `updated_at`. Tenant tables have `company_id` with RLS (section 2.2). Soft delete only where listed.
+All ids are UUIDv7. All tables have `created_at`, tenant tables also `updated_at`. `[agency]` Agency rows use agency scope; company rows use company scope plus parent agency validation (§2.2). Soft delete only where listed.
 
 ### 4.1 Custom fields: JSONB, not key-value rows
 
@@ -287,23 +270,25 @@ Cost accepted: renaming a field key is a data migration (we do not allow it; lab
 
 ### 4.2 Tables
 
-**Platform tables** (no `company_id` policy, platform client only)
+**Identity, registry and access tables** `[agency]` (RLS exceptions and scope rules in §2.2)
 
 | Table | Key columns | Keys and indexes |
 | --- | --- | --- |
-| `companies` | `id, name, slug, status (active\|suspended\|closing), default_country (NP), timezone (Asia/Kathmandu), settings jsonb, closing_at` | unique `slug` |
-| `users` | `id, email citext, name, platform_role (null\|dna), deactivated_at` | unique `email` |
-| `invites` | `id, company_id null for DNA, email, role, token_hash, expires_at, accepted_at, created_by` | unique `token_hash`; index `(email)` |
+| `agencies` | `id, name, slug, status (pending\|active\|suspended\|closing), created_by` | unique slug; owner registry metadata only |
+| `agency_members` | `id, agency_id, user_id, status (active\|deactivated), invited_by, deactivated_at` | unique user_id; agency RLS; locked last-active guard |
+| `companies` | `id, agency_id NOT NULL, name, slug, status (active\|suspended\|closing), default_country (NP), timezone (Asia/Kathmandu), settings jsonb, closing_at` | unique slug and `(agency_id,id)`; agency RLS |
+| `users` | `id, email citext, name, platform_role (null\|owner), deactivated_at` | unique email; partial unique index allows one owner |
+| `invites` | `id, agency_id, company_id null for staff, email, role (agency_staff\|super_admin\|admin), token_hash, expires_at, accepted_at, revoked_at, created_by` | unique `token_hash`; index `(email)` |
 | `otp_codes` | `id, user_id, code_hash, expires_at, attempts, consumed_at, ip` | index `(user_id, created_at)` |
 | `sessions` | `id, user_id, token_hash, device_label, user_agent, ip, last_seen_at, expires_at, revoked_at, last_otp_at, acting_company_id, acting_reason, acting_until` | unique `token_hash`; index `(user_id)` |
 | `push_subscriptions` | `id, user_id, session_id, endpoint, p256dh, auth, failed_at` | unique `endpoint` |
-| `audit_log` | `id, company_id null, actor_user_id, actor_role, action, target_type, target_id, data jsonb, ip` | index `(company_id, created_at)`, `(actor_user_id, created_at)`. Append only: `anar_app` has INSERT and SELECT, no UPDATE or DELETE. |
+| `audit_log` | `id, agency_id null, company_id null, actor_user_id, actor_role, action, target_type, target_id, data jsonb, ip` | index `(company_id, created_at)`, `(actor_user_id, created_at)`. Append only: `anar_app` has INSERT and SELECT, no UPDATE or DELETE. |
 
-**Tenant tables** (RLS on `company_id`)
+**Tenant tables** `[agency]` (company RLS plus parent-agency validation)
 
 | Table | Key columns | Keys and indexes |
 | --- | --- | --- |
-| `company_members` | `id, company_id, user_id, role (super_admin\|admin), status (invited\|active\|deactivated), invited_by, deactivated_at` | unique `(company_id, user_id)`; index `(company_id, status)` |
+| `company_members` | `id, agency_id, company_id, user_id, role (super_admin\|admin), status (invited\|active\|deactivated), invited_by, deactivated_at` | unique `(company_id, user_id)`; composite agency/company FK; index `(company_id, status)` |
 | `fields` | `id, company_id, key, label, type (text\|number\|date\|dropdown), options jsonb (dropdown only, [{ value, label }]), is_system, position, archived_at` | unique `(company_id, key)` |
 | `stages` | `id, company_id, name, position, kind (open\|won\|lost), is_default, archived_at` | unique `(company_id, name)`; exactly one `is_default` per company (partial unique) |
 | `outcomes` | `id, company_id, name, counts_as_failed bool, position, archived_at` | unique `(company_id, name)` |
@@ -321,7 +306,7 @@ Cost accepted: renaming a field key is a data migration (we do not allow it; lab
 
 `lead_events.type` values: `imported`, `duplicate_import`, `assigned`, `unassigned`, `stage_changed`, `follow_up_logged`, `fields_updated`, `score_changed`, `lost_suggested`, `lost_suggestion_dismissed`, `merged`, `note_added`, `created_manually`. `data` holds the before and after for the event (old and new stage id, old and new assignee, which keys changed, the merged lead snapshot).
 
-Why `assigned_to` points at `company_members` and not `users`: a user can be a member of two companies (a manager DNA shares, or DNA itself). Assignment is per company, so the member row is the right thing. Reports group by member too.
+Why `assigned_to` points at `company_members` and not `users`: a company user can have explicit memberships in two companies; agency staff support access is separate. Assignment is per company, so the member row is the right thing. Reports group by member too.
 
 `scoring_configs.rules` shape, one entry per scored field:
 
@@ -370,7 +355,7 @@ The timeline column maps onto the seeded `purchase_timeline` field, so one field
 ]
 ```
 
-`header` is the original text, trailing `?_` and all. The field keys are what DNA picked on the mapping page; the default key is the normalised header (6.1 step 3), which is long, so DNA shortens it there. `system:external_id` and `skip` exist for the API path and for other exports; this file has nothing for them.
+`header` is the original text, trailing `?_` and all. The field keys are what agency staff picked on the mapping page; the default key is the normalised header (6.1 step 3), which is long, so staff shorten it there. `system:external_id` and `skip` exist for the API path and for other exports; this file has nothing for them.
 
 ### 4.3 Seed on company creation
 
@@ -382,28 +367,24 @@ Eight default stages, ten default outcomes (`No Answer`, `Not Interested` and `C
 
 Reads and mutations are Fastify HTTP endpoints in `apps/api`. Protected company operations resolve `requireContext(request, slug)`, check `can()`, then run inside `withTenant()`; resource-specific permission checks use rows loaded in that transaction. zod validates every input. Errors keep the existing typed `AppError` codes and never leak another company's existence (`not_found` for missing and foreign ids). API decides auth, permissions, tenancy, validation, writes, queueing and audit. Web actions only adapt the UI call to HTTP and refresh the screen.
 
-### 5.1 Permissions
+### 5.1 Permissions `[agency]`
 
-One authoritative table in `apps/api/src/modules/tenant/permissions.ts`, mirror of the base access matrix. Web may hide controls using API-supplied capabilities; it does not grant access. The mock's `can` stays for S0 demo tests only.
+One API code table; web capabilities only hide/show controls. Entered means active staff in that company's agency, with valid reason and eight-hour expiry. Every sensitive mutation also requires OTP age at most 15 minutes, including owner and staff.
 
-| Permission | DNA (in a company) | Super Admin | Admin |
-| --- | --- | --- | --- |
-| `company.create`, `company.list`, `company.enter` | yes (platform) | no | no |
-| `members.invite_super_admin` | yes | no | no |
-| `members.invite_admin`, `members.deactivate`, `members.list` | yes | yes | no |
-| `settings.manage` (fields, stages, outcomes, lost reasons, scoring, targets) | yes | yes (step-up) | no |
-| `imports.upload`, `imports.commit` | yes | no (flag `company.settings.super_admin_can_import`, off `[default]`) | no |
-| `leads.view` | all | all | own (`assigned_to = ctx.member.id`) |
-| `leads.assign`, `leads.bulk` | yes | yes | no |
-| `leads.update` (fields, stage, notes) | all | all | own |
-| `leads.merge` | yes | yes | no |
-| `leads.export` | yes | yes (step-up) | no |
-| `followups.log` | all | all | own |
-| `reports.view_all`, `reports.compare` | yes | yes | no |
-| `reports.view_own` | yes | yes | yes |
-| `sessions.manage_own` | yes | yes | yes |
+| Permission | Owner | Agency staff | Super Admin | Admin |
+| --- | --- | --- | --- | --- |
+| Agency create/list/initial-invite resend | Yes; initial pending agency only for resend | No | No | No |
+| Staff list/invite/resend/deactivate | No | Own agency; never last active staff | No | No |
+| Company create/list/enter; invite Super Admin | No | Own agency only; SA invitation needs no entry | No | No |
+| Members list/invite Admin/deactivate | No | Entered company; never last SA | Own company; Admin targets only | No |
+| Settings, assignment, bulk, merge, export | No | Entered company | Own company | No |
+| Upload/commit | No | Entered company | Only if company import flag is true | No |
+| Lead view/update, follow-ups | No | All in entered company | All in own company | Own assigned member ID only |
+| Reports all/compare | No | Entered company | Own company | No |
+| Reports own | No | Entered company | Own company | Own member only |
+| Own sessions | Yes | Yes | Yes | Yes |
 
-"own" is checked by `can(ctx, 'leads.update', lead)` which compares `lead.assigned_to` with `ctx.member.id`. The list queries add the same filter so an Admin never gets a foreign id back to probe with.
+No own-resource grant without a matching resource; Admin lists constrain assigned member ID in SQL too. Only entered own-agency staff may deactivate a Super Admin. Pending invitations never count toward last-active safeguards. Full permission identifiers and current contracts are in [S1–S2 §2](specs/s1-s2-foundation.md#2-architecture-and-trust-boundaries-agency).
 
 ### 5.2 HTTP endpoints and operation contracts
 
@@ -424,16 +405,18 @@ Named auth operations use `/api/auth/<name>`; platform company operations use `/
 | `listSessions` | GET | none | `{ id, deviceLabel, lastSeenAt, current }[]` | own |
 | `POST /api/push/subscribe` | API route | `PushSubscriptionJSON` | 204 | active session; ties subscription to `session_id` so revoke kills push too |
 
-**Companies (DNA)**
+**Agencies and companies** `[agency]`
+
+Owner routes: `/api/agencies/{createAgency,listAgencies,resendFirstInvite}`. Staff routes: own-agency `{getAgency,listStaff,listInvites,inviteStaff,resendStaffInvite,deactivateStaff}`. Exact schemas, fresh-OTP rules and pending activation are in S1–S2 §3; no agency selector or role override on staff mutations.
 
 | Name | Input | Output | Check |
 | --- | --- | --- | --- |
-| `createCompany` | `{ name, slug, defaultCountry, timezone }` | `{ companyId }`, seeds defaults (4.3), audit | `platform_role = dna` |
-| `listCompanies` | `{ cursor? }` | `{ id, name, status, memberCount, leadCount, lastImportAt }[]` | dna |
-| `enterCompany` | `{ companyId, reason }` | `{ ok }`, session acting fields, audit `dna.enter_company` | dna; reason min 5 chars |
-| `leaveCompany` | none | `{ ok }` | dna |
-| `inviteSuperAdmin` | `{ companyId, email, name }` | `{ inviteId }`, audit | dna |
-| `closeCompany` | `{ companyId }` | status `closing`, 30 day timer, audit | dna, step-up |
+| `createCompany` | `{ name, slug, defaultCountry, timezone }` | `{ companyId }`, seeds defaults (4.3), audit | active own-agency staff + step-up |
+| `listCompanies` | `{ cursor? }` | `{ id, name, status, memberCount, leadCount, lastImportAt }[]` | own-agency staff |
+| `enterCompany` | `{ companyId, reason }` | `{ ok }`, session acting fields, audit `agency.enter_company` | own-agency staff; reason min 5 chars |
+| `leaveCompany` | none | `{ ok }` | authenticated user's existing staff entry; cleanup allowed after expiry/suspension |
+| `inviteSuperAdmin` | `{ companyId, email, name }` | `{ inviteId }`, audit | own-agency staff, fresh OTP, active own company |
+| `closeCompany` | `{ companyId }` | status `closing`, 30 day timer, audit | own-agency staff, step-up; later close/offboard slice |
 
 **Members**
 
@@ -477,7 +460,7 @@ Named auth operations use `/api/auth/<name>`; platform company operations use `/
 | `changeStage` | `{ leadId, stageId, lostReasonId? }` | `{ lead }`, event | `leads.update`; `lost` kind needs a reason |
 | `assignLeads` | `{ leadIds: uuid[] (≤500), memberId \| null }` | `{ updated }`, events, one notification to the assignee, audit | `leads.assign`; member active in this company |
 | `bulkChangeStage` | `{ leadIds, stageId, lostReasonId? }` | `{ updated }` | `leads.bulk` |
-| `dismissLostSuggestion` | `{ leadId }` | `{ ok }`, resets `failed_attempts` to 0, event | `leads.assign` role (Super Admin or DNA) |
+| `dismissLostSuggestion` | `{ leadId }` | `{ ok }`, resets `failed_attempts` to 0, event | `leads.assign` role (Super Admin or agency staff) |
 | `mergeLeads` | `{ primaryId, duplicateId }` | `{ lead }`, event `merged`, audit | `leads.merge`, both in company, neither already merged |
 | `createLead` (later) | `{ fullName, phone, ... }` | `{ leadId }` | `leads.assign` role; `source_kind = manual` |
 
@@ -573,11 +556,11 @@ The real Meta export is UTF-16 LE with the `FF FE` BOM, CRLF line ends, tab deli
 **4. Mapping.** `fingerprint = sha256(sortedNormalisedHeaders.join('\n'))`. Normalised, so if Meta drops the trailing underscore one day the template still matches.
 
 - Exact match on `mapping_templates.header_fingerprint` → apply it, `matchedTemplate` set.
-- No exact match but a template with the same `form_name` (only if a `form_name` column exists; the Meta export has none `[verified on real export]`, so for it this rule never fires) → apply it and report `newColumns` and `missingColumns` so DNA only maps the difference.
+- No exact match but a template with the same `form_name` (only if a `form_name` column exists; the Meta export has none `[verified on real export]`, so for it this rule never fires) → apply it and report `newColumns` and `missingColumns` so agency staff only map the difference.
 - Else suggest from a synonym list: `full_name, name, full name, lead name` → `system:full_name`; `phone, phone_number, mobile, contact` → `system:phone`; `email, e-mail` → `system:email`; `created_time, created, date, lead date` → `system:lead_date`; `campaign_name` → `system:campaign_name`; `form_name` → `system:form_name`; `platform` → `system:source`; `id` → `system:external_id`; `ad_id, adset_id, adset_name, ad_name, form_id, is_organic` → `skip`. On the real export the hits are `created_time`, `campaign_name`, `platform`, `full_name`, `phone`, `email` `[verified on real export]`; `id`, `form_name` and the ad columns are not in it.
 - `platform` is a system field, not a custom one. Values seen: `fb` and `ig` only `[verified on real export]`. `fb`/`facebook` → `facebook`, `ig`/`instagram` → `instagram`, anything else → `other` with issue `unknown_platform`.
 - Every other header → proposed new custom field. Type guess: all sample values parse as numbers → `number`; as dates → `date`; at most 12 distinct values across the file → `dropdown` with those values as options; else `text`. The user can change any of it. On the real export that gives three dropdowns (the three question columns, 4 values each) and one text (`job_title`, free text, mixed case like `Business` and `business`) `[verified on real export]`.
-- **Answer codes get labels.** Meta exports the answer as a machine code, not the text the lead saw: `within_1_month`, `3_bhk`, `not_sure_yet`, `for_myself/family` `[verified on real export]`. The code is the option `value` and is what we store on the lead, filter on and score on. The `label` is what Admins see. The proposal guesses it (`_` to space, first letter up: `within_1_month` → "Within 1 month", `2_bhk` → "2 bhk") and DNA fixes it on the mapping page. Same for the field label from the header: `when_are_you_planning_to_purchase?_` → "When are you planning to purchase?". One code to label map per question, and it lives on `fields.options`, nowhere else.
+- **Answer codes get labels.** Meta exports the answer as a machine code, not the text the lead saw: `within_1_month`, `3_bhk`, `not_sure_yet`, `for_myself/family` `[verified on real export]`. The code is the option `value` and is what we store on the lead, filter on and score on. The `label` is what Admins see. The proposal guesses it (`_` to space, first letter up: `within_1_month` → "Within 1 month", `2_bhk` → "2 bhk") and staff fix it on the mapping page. Same for the field label from the header: `when_are_you_planning_to_purchase?_` → "When are you planning to purchase?". One code to label map per question, and it lives on `fields.options`, nowhere else.
 - Known Meta export columns are listed in a fixture, not in code, so a renamed column is a fixture update. The fixture is the real header list, appendix A.
 
 **5. Confirm.** The UI shows the mapping, the preview with the mapped values, and counts from a dry run over the whole file (valid phone, invalid phone, duplicate in file, duplicate in DB). Dry run reuses step 6's pure `normaliseRow` and a single `SELECT phone_e164 FROM leads WHERE company_id = ? AND phone_e164 = ANY(?)` in chunks. `commitImport` creates the new fields, saves the template (name = form name, else the file name without its `_Leads_<from>_<to>.csv` tail, which is how Meta names the file `[verified on real export]`, else the campaign name), stores the mapping on the batch, sets `status = mapped`, enqueues the job.
@@ -594,28 +577,28 @@ The real Meta export is UTF-16 LE with the `FF FE` BOM, CRLF line ends, tab deli
 8. New lead: `stage_id = default stage`, `assigned_to = null`, `source_kind = import`, `import_batch_id`, score from the active config (6.4), events `imported`.
 9. Write `import_rows` for every row with the result and the reason. Update `last_row_no`.
 
-Any thrown error marks the chunk failed, the batch `failed` with the error, and the job retries twice. On the third failure the batch stays `failed` with `last_row_no`, DNA sees "stopped at row 1234: <reason>" and can resume.
+Any thrown error marks the chunk failed, the batch `failed` with the error, and the job retries twice. On the third failure the batch stays `failed` with `last_row_no`, staff see "stopped at row 1234: <reason>" and can resume.
 
 **7. Report.** `summary = { imported, needPhoneReview, duplicateDb, duplicateFile, invalid, error, newOptions }`. Status `done`. One notification to the uploader ("Soaltee: 45 new leads imported, 3 duplicates skipped") and one to each active Super Admin ("45 new unassigned leads"). The batch page lists every non-imported row with its reason and a link to the existing lead for duplicates.
 
 ```mermaid
 sequenceDiagram
-  participant DNA
+  participant Agency as Agency staff
   participant Web
   participant API
   participant Worker
   participant DB
-  DNA->>API: POST /api/imports through proxy (file, session)
+  Agency->>API: POST /api/imports through proxy (file, session)
   API->>API: context, permissions, detectEncoding, parse header + sample
   API->>DB: insert import_batches, lookup template by fingerprint
-  API-->>DNA: headers, sample, suggested mapping, new columns
-  DNA->>Web: commitImport(mapping, new fields)
+  API-->>Agency: headers, sample, suggested mapping, new columns
+  Agency->>Web: commitImport(mapping, new fields)
   Web->>API: typed commit request + session cookie
   API->>DB: create fields, save template, status mapped, enqueue import.commit
   Worker->>DB: chunks of 500: normalise, dedupe, insert, events, import_rows
   Worker->>DB: summary, status done
   Worker->>DB: notifications (uploader, super admins)
-  Worker-->>DNA: push "45 imported, 3 duplicates"
+  Worker-->>Agency: push "45 imported, 3 duplicates"
 ```
 
 ### 6.2 Assignment
@@ -686,17 +669,17 @@ One block per risk. Risks 7.1 to 7.9 are the ones the base doc names. 7.10 onwar
 
 ### 7.1 Cross-tenant data leak
 
-- **Mitigation.** RLS on every tenant table, tenant-scoped client, DNA enters one company at a time. Section 2.2.
+- **Mitigation.** RLS on every tenant table, tenant-scoped client, staff enter one own-agency company at a time. Section 2.2.
 - **In code.** `[monorepo]` DB package `withTenant` is the only tenant transaction entry. Feature modules get `tx`, never a pool. Biome and resolved-import checks enforce the platform allowlist in 2.2 and prevent all web DB access. Every list query still filters `company_id`; RLS is the second lock. Error type `not_found` for foreign ids.
-- **Test.** `[monorepo]` API integration suite `tenant-isolation.test.ts`: two companies with leads, members and imports; every endpoint in 5.2 called as company A with B's ids returns `not_found` or zero rows. DB policy checks use 2.2's exact platform exceptions. Unscoped raw SELECT as `anar_app` gives zero; foreign INSERT/UPDATE fails; commit, rollback and pooled reuse do not retain tenant context.
+- **Test.** `[monorepo]` API integration suite `tenant-isolation.test.ts`: two agencies with two companies each, leads, members and imports; every endpoint in 5.2 called as company A with B's ids returns `not_found` or zero rows. DB policy checks use 2.2's exact platform exceptions. Unscoped raw SELECT as `anar_app` gives zero; foreign INSERT/UPDATE fails; commit, rollback and pooled reuse do not retain tenant context.
 
-### 7.2 DNA support access to client data
+### 7.2 Agency staff support access to client data `[agency]`
 
-- **Mitigation.** DNA sees a company only after `enterCompany` with a reason, for at most 8 hours, with a visible banner. Every DNA action in a company is audited with `actor_role = dna`. Super Admins see the last 30 DNA entries in settings.
+- **Mitigation.** Own-agency staff see a company only after `enterCompany` with a reason, for at most 8 hours, with a visible banner. Every staff action in a company is audited with `actor_role = agency_staff`. Super Admins see the last 30 agency staff entries in settings.
 - **In code.** `[monorepo]` API `requireContext` reads `acting_company_id` and refuses if `acting_until` is past. The backend tenant owner writes audit entries for mutations; integration tests cover every endpoint, including direct HTTP calls that bypass web.
-- **Test.** `[monorepo]` For each mutating API operation run as DNA, assert one `audit_log` row with `actor_role = dna`, `company_id` set and `action` matching. An expired acting session gets `forbidden` from API and the company page reflects it.
+- **Test.** `[agency]` For each company mutation by staff, assert one `audit_log` row with `actor_role = agency_staff`, matching agency/company IDs and action. Other-agency entry is refused; an expired entry gets `forbidden` and the company page reflects it.
 
-### 7.3 Manual CSV upload is a bottleneck on DNA
+### 7.3 Manual CSV upload is a bottleneck for agency staff
 
 - **Mitigation.** Mapping templates with fingerprint matching make the daily upload a two-tap job. The import is a background job so a 50k row file does not block anyone. `super_admin_can_import` is a company flag so the business can hand upload to a manager without a code change. Facebook API sync is the real fix, section 10.3.
 - **In code.** Permission `imports.upload` checks the flag. The job resumes from `last_row_no`.
@@ -705,7 +688,7 @@ One block per risk. Risks 7.1 to 7.9 are the ones the base doc names. 7.10 onwar
 ### 7.4 Shared phones with 30-day sessions
 
 - **Mitigation.** Sessions list and revoke, "signed in as" always visible with a one-tap sign out, step-up OTP (15 min) for members, settings and export, revoke all sessions on deactivate or role change, push subscriptions tied to the session so revoke stops notifications on that phone too. Idle expiry stays 30 days `[base]`.
-- **In code.** `[monorepo]` API `requireContext` checks `revoked_at` and `expires_at` on every request, no cached session. `deactivateMember` and role changes call `revokeAllSessions(userId, companyId)`. API `requireFreshOtp(ctx)` guards the operations marked in 5.1, including direct calls without the UI.
+- **In code.** `[monorepo]` API `requireContext` checks `revoked_at` and `expires_at` on every request, no cached session. `deactivateMember` and role changes call `revokeAllSessions(tx, userId)`. API `requireFreshOtp(ctx)` guards the operations marked in 5.1, including direct calls without the UI.
 - **Test.** Deactivate a member, the next request with the old cookie is `unauthorized`. Export with `last_otp_at` 20 minutes old returns `step_up_required`. Session not used for 30 days and 1 minute is rejected.
 
 ### 7.5 Meta changes the CSV format
@@ -781,11 +764,11 @@ One block per risk. Risks 7.1 to 7.9 are the ones the base doc names. 7.10 onwar
 ### 8.1 Personal data handling
 
 - What we store per lead: name, phone, email, lead date, campaign name, platform, the form answers and job title (custom), everything the Admin types in notes. Form name and Meta lead id only from the API later, the CSV has neither `[verified on real export]`. Nothing else from Meta.
-- Who sees it: section 5.1. DNA only inside an entered company.
+- Who sees it: section 5.1. Agency staff only inside an entered company.
 - At rest: full disk encryption on the VPS, backups encrypted with `age` before upload. In transit: TLS only, HSTS.
 - In logs: never. `pino` redact list covers `phone`, `phone_e164`, `phone_raw`, `email`, `custom`, `notes`, `full_name`. Log lead ids and counts.
 - In notifications: counts, campaign names and URLs only.
-- In exports: Super Admin and DNA only, step-up OTP, file link expires in 24 h, audit row with the filters used.
+- In exports: Super Admin and entered own-agency staff only, step-up OTP, file link expires in 24 h, audit row with the filters used.
 
 ### 8.2 Retention and deletion
 
@@ -801,7 +784,7 @@ One block per risk. Risks 7.1 to 7.9 are the ones the base doc names. 7.10 onwar
 | deactivated members | kept for history, name stays on old events | |
 | closed company | `closing` for 30 days with export available, then hard delete of all tenant rows, files and backups older than the close date are left to age out | `retention.purge` after `closing_at + 30d`, audit row kept on the platform |
 
-Per-lead delete request (a person asks to be removed): `deleteLead` sets `deleted_at` and blanks name, phone, email and custom, keeps the events with the id. Super Admin and DNA only, audit. Not in the MVP UI, one small slice when asked.
+Per-lead delete request (a person asks to be removed): `deleteLead` sets `deleted_at` and blanks name, phone, email and custom, keeps the events with the id. Super Admin and entered own-agency staff only, audit. Not in the MVP UI, one small slice when asked.
 
 ### 8.3 Backups and restore drills
 
@@ -813,7 +796,7 @@ Per-lead delete request (a person asks to be removed): `deleteLead` sets `delete
 
 ### 8.4 Monitoring, alerts, logging
 
-- Uptime: external check on `/api/health` every minute (Better Uptime or Uptime Kuma on another box `[default]`), alerts to a DNA Telegram or email.
+- Uptime: external check on `/api/health` every minute (Better Uptime or Uptime Kuma on another box `[default]`), alerts to an owner operations Telegram or email.
 - Errors: Sentry (SaaS, free tier) or self-hosted GlitchTip `[default: Sentry]`, with PII scrubbing on, for web, API and worker `[monorepo]`.
 - Host: Netdata on the VPS for disk, memory, CPU, with alerts at 80% disk.
 - Queue: `/api/health` reports failed jobs; alert when `failed > 0` for 15 minutes or `waiting > 1000`.
@@ -859,7 +842,7 @@ Measured on staging with a seeded company of 100k leads and 20 Admins.
 - **API unit.** Pure functions: encoding, delimiter, header normalisation, fingerprint, mapping/labels, phone/date parsing, row normalisation, scoring, merge and bucket rules, channel choice and permissions. Fastify injection checks HTTP behavior; no listener needed. Table-driven pure tests, no mocks of the subject.
 - **DB and API integration.** Real Postgres 17 and `anar_app`, never an owner connection disguised as the runtime. Roles, tenant isolation (7.1), permission matrix (every endpoint × role × own/foreign), imports, follow-ups, merge, audit, session expiry/revocation, direct calls with forged context, and CSRF/CORS including missing Origin and hostile preflight. No mocking the DB.
 - **Worker.** Process startup/shutdown in S0; from S1 real pg-boss against Postgres, separate from API HTTP tests. Recompute, import retries/crash resume, duplicate delivery, overdue/summary clocks, export and retention. Assert stored outcomes and drained/closed resources, not just enqueue calls.
-- **E2E (web owns Playwright).** Existing mock suite stays directly runnable without API/DB in S0. Full-stack project starts as real features land: invite → OTP → Today → follow-up, DNA upload → mapping → commit, bulk assign → Admin sees it, export download. Test through proxy and built images too, including session Set-Cookie/refresh and stale sessions. Keep 390 px and 1440 px layouts.
+- **E2E (web owns Playwright).** Existing mock suite stays directly runnable without API/DB in S0. Full-stack project starts as real features land: invite → OTP → Today → follow-up, agency upload → mapping → commit, bulk assign → Admin sees it, export download. Test through proxy and built images too, including session Set-Cookie/refresh and stale sessions. Keep 390 px and 1440 px layouts.
 - **Fixtures.** `apps/api/test/fixtures/csv/`: the six encoding files, `meta-v1` (20 made-up rows with the real headers and byte layout, appendix A), `meta-v2`, duplicates, bad phones, generated 50k rows, and an anonymised real-shape fixture generated without committing the source. Worker tests access fixtures through test setup only, not runtime exports. Excel fixture added in S15. No source CSV under `docs/` is opened for the architecture or S0 work.
 - **Rule.** Tests assert what is stored or returned, not internals. No mocking the DB.
 
@@ -875,19 +858,19 @@ Measured on staging with a seeded company of 100k leads and 20 Admins.
 | Env | Where | Data | Who |
 | --- | --- | --- | --- |
 | local | `[monorepo]` Compose on laptop: db, api, worker, web, proxy; Mailpit added with S1, test VAPID with S10 | S0: unchanged web mock, no product DB rows. S1: real company, 2 Super Admins, 3 Admins; S3: settings defaults; S5: scoring defaults and 500 imported fixture leads. Seeds grow with their owning schemas | devs |
-| staging | second Compose project on the VPS, own DB and `staging.anar.<domain>`, real email provider with a test domain | anonymised copy of production refreshed on demand (phones and emails replaced) | devs, DNA for UAT |
-| production | the VPS | real | DNA, clients |
+| staging | second Compose project on the VPS, own DB and `staging.anar.<domain>`, real email provider with a test domain | anonymised copy of production refreshed on demand (phones and emails replaced) | devs, agency for UAT |
+| production | the VPS | real | agency, clients |
 
 ### 9.4 Migration of existing Excel data
 
 The trackers (Sarina's and the others) are the first real data. Same import pipeline, one special mode, no one-off script.
 
-1. DNA sends one tracker per Admin as CSV (Excel "save as CSV UTF-8"). We need one real file to confirm the column layout; it is not in the base doc (section 11).
+1. Agency staff send one tracker per Admin as CSV (Excel "save as CSV UTF-8"). We need one real file to confirm the column layout; it is not in the base doc (section 11).
 2. From the base description the layout is: lead name, phone, source, date, status, up to four follow-ups (date, outcome, notes), remarks, qualification answers (timeline, budget, decision maker). Expect per-tracker differences.
-3. The import mapping gets two extra targets for this mode only: `followup:<n>.date`, `followup:<n>.outcome`, `followup:<n>.notes`, and `system:stage`. A row with follow-up columns creates `follow_ups` rows in order and sets `last_contacted_at`, `failed_attempts` and `next_action_at` from them. `system:stage` maps tracker status text to a stage by a table DNA confirms ("Visited" → Site Visit, "Not interested" → Lost with reason Not Responding, and so on). Unknown status → New Lead and a row issue.
+3. The import mapping gets two extra targets for this mode only: `followup:<n>.date`, `followup:<n>.outcome`, `followup:<n>.notes`, and `system:stage`. A row with follow-up columns creates `follow_ups` rows in order and sets `last_contacted_at`, `failed_attempts` and `next_action_at` from them. `system:stage` maps tracker status text to a stage by a table the agency confirms ("Visited" → Site Visit, "Not interested" → Lost with reason Not Responding, and so on). Unknown status → New Lead and a row issue.
 4. `assigned_to` is set per batch to the tracker's owner (an import option, `assignAllTo`).
 5. Dedupe runs across trackers; the same person in two trackers stays with the first imported and the second shows as a duplicate for the Super Admin to merge or ignore.
-6. Dry run on staging. DNA and the Super Admin check the counts and a sample of 20 leads against the Excel. Then run on production. Keep the CSVs as import batches so the report is there.
+6. Dry run on staging. Agency staff and the Super Admin check the counts and a sample of 20 leads against the Excel. Then run on production. Keep the CSVs as import batches so the report is there.
 7. The follow-up date columns in Excel are the main risk (mixed formats). The date parser order in 6.1 step 3 applies; ambiguous rows are listed in the batch report.
 
 ---
@@ -905,15 +888,15 @@ Files: root workspace/config/CI, `apps/{web,api,worker}`, `packages/{db,domain}`
 Uses: existing `ui-mock` branch. Gives: same mock behavior, `@anar/domain`, `@anar/db/tenant`, build/test entry points and API liveness.
 Proof: all 231 existing web unit and 128 e2e cases pass after the move; new contract/health/DB/lifecycle checks pass; built Compose serves both mock and API. These counts are acceptance requirements, not results of this docs revision.
 
-**S1. Companies, invites, OTP and sessions over HTTP.** Platform tables and minimal membership table/RLS; company shell creation; invite, OTP, rate limits, session/refresh/revoke/step-up; API context resolver. Introduce the typed web client, cookie forwarding, error/status mapping and auth UI. Start pg-boss with migration-owned setup, `notify.email`, Resend/Mailpit and worker heartbeat so OTP has a working delivery path. Settings defaults arrive in S3; scoring config v1 arrives in S5.
-Files: `packages/db/src/schema/{platform,members}.ts`, migrations; `packages/domain/src/{auth,context,jobs}.ts`; `apps/api/src/modules/{auth,companies,tenant}`, `src/lib/email/`, `src/jobs/index.ts`; `apps/worker/src/main.ts`; `apps/web/lib/api/`, auth pages and tenant/companies adapters.
+**S1. Owner, agencies, companies, invites, OTP and sessions over HTTP.** `[agency]` Owner bootstrap, agency onboarding/staff invites and both RLS boundaries; detailed amendment and step order in [S1–S2](specs/s1-s2-foundation.md). Platform tables and minimal membership table/RLS; company shell creation; invite, OTP, rate limits, session/refresh/revoke/step-up; API context resolver. Introduce the typed web client, cookie forwarding, error/status mapping and auth UI. Start pg-boss with migration-owned setup, `notify.email`, Resend/Mailpit and worker heartbeat so OTP has a working delivery path. Settings defaults arrive in S3; scoring config v1 arrives in S5.
+Files: `packages/db/src/schema/{platform,members}.ts`, migrations; `packages/domain/src/{auth,agencies,context,jobs}.ts`; `apps/api/src/modules/{auth,agencies,companies,tenant}`, `src/lib/email/`, `src/jobs/index.ts`; `apps/worker/src/main.ts`; `apps/web/lib/api/`, auth pages and tenant/companies adapters.
 Uses: S0 tenant transaction and shared errors. Gives: `requireContext(request, slug): Promise<Ctx>`, `requireFreshOtp(ctx): void`, `enqueue(job, payload, key)`, `sendEmail(input)`, cookie refresh and real health.
 Proof: invite → queued email in Mailpit → OTP → real company shell; fourth OTP sends nothing; sixth wrong code rejected; revoked/expired cookie fails direct API call; hostile/missing Origin refused; API outage stays `unavailable`; cookies remain isolated across concurrent users. Demo mode remains separately selected until all product adapters are ready, never a runtime fallback.
 
-**S2. Tenant permissions, members, audit and DNA entry.** Full `can` matrix, scoped resource checks, invite/list/deactivate Admins, DNA enter/leave with reason/expiry/banner, audit and platform-access restrictions. Membership bootstrap uses only the scoped membership read described in 2.2.
+**S2. Agency/company permissions, members, audit and staff entry.** `[agency]` Own-agency staff removal with a concurrent last-active guard; owner has no company permissions. Full `can` matrix, scoped resource checks, invite/list/deactivate Admins, agency staff enter/leave with reason/expiry/banner, audit and platform-access restrictions. Membership bootstrap uses only the scoped membership read described in 2.2.
 Files: `apps/api/src/modules/tenant/{context,permissions,audit,stepUp}.ts`, `modules/members/`; `packages/db/` policies/checks; `packages/domain/src/{context,members}.ts`; web tenant/member adapters and member settings UI.
 Uses: S1 verified sessions and S0 `withTenant`. Gives: `can(ctx, permission, resource?): boolean`, `audit(tx, ctx, action, target, data)`, API-computed UI capabilities.
-Proof: full two-company and every-role matrix through HTTP; no context gives zero rows; rejected foreign writes and pool reuse; DNA mutation audited; deactivation invalidates the next request.
+Proof: two agencies/two companies each and every-role matrix through HTTP; no context gives zero rows; rejected foreign writes and pool reuse; staff mutation audited with agency/company IDs; deactivation invalidates the next request.
 
 **S3. Company settings and defaults.** Fields, stages, outcomes, lost reasons, CRUD endpoints, archive/type-change rules and their defaults on company creation. Create the lead table and its reference-count reads now so refusal checks have a real table; no user lead writes yet. Its nullable import-batch column gains its FK in S4 when that table exists. Existing S1 company shells receive settings defaults through an explicitly reviewed migration/seed path; scoring config is deferred to S5.
 Files: `packages/db/src/schema/{settings,leads}.ts`, migrations; domain settings contracts; `apps/api/src/modules/settings/`, `modules/leads/referenceCounts.ts`; web settings adapters and `app/(company)/[slug]/settings/`.
@@ -978,9 +961,9 @@ Proof: real scratch restore and integration smoke; health alert; retention clock
 **S15. Excel migration run.** Extend the API mapping and worker import handler with follow-up/stage targets, `assignAllTo` and confirmed tracker status mapping; matching web import controls. Real stored-data import is its own approval after staging counts.
 Files: API `modules/imports/{mapping,job}.ts`; domain contracts, web import adapters/controls, anonymous status fixture.
 Uses: S5, S8 follow-ups. Gives: reviewed tracker import path.
-Proof: counts match tracker rows minus duplicates, 20 sampled leads match, DNA signs off before production import.
+Proof: counts match tracker rows minus duplicates, 20 sampled leads match, the agency signs off before production import.
 
-S0 to S10 are the MVP a company can go live on. S11 to S15 are needed before DNA hands it to the first client as "done". Before a real deployment, disable the demo entry points and run the full-stack acceptance path for every enabled feature.
+S0 to S10 are the MVP a company can go live on. S11 to S15 are needed before an agency hands it to the first client as "done". Before a real deployment, disable the demo entry points and run the full-stack acceptance path for every enabled feature.
 
 ### 10.2 After launch, small
 
@@ -988,15 +971,15 @@ S0 to S10 are the MVP a company can go live on. S11 to S15 are needed before DNA
 - Round-robin auto-assign on import (company setting, active Admins, skip on leave).
 - Per-lead delete request (8.2).
 - Emailed daily and weekly summary for Super Admins who ask.
-- `super_admin_can_import` flag flipped per company when DNA wants.
+- `super_admin_can_import` flag flipped per company when its agency enables it.
 
 ### 10.3 Facebook API sync, later phase
 
 Design so it drops into the same pipeline:
 
-1. A Meta app owned by DNA, `leads_retrieval` and `pages_manage_ads` permissions, app review. Business owns the app and the review; dev work cannot start before.
-2. Per company: connect a Page (OAuth in settings, DNA does it), store the long-lived Page token encrypted in `companies.settings.meta` (encryption key in env, not in the DB).
-3. `[monorepo]` API webhook `leadgen` endpoint: verify the signature, enqueue `meta.fetch_lead` with `leadgen_id`. Worker fetches the lead from the Graph API, turns `field_data` into a row shaped like a CSV row, runs it through the same API-owned `matchMapping` by `form_id` (templates get a `form_id` column) and `normaliseRow`, inserts through the same code as S5 with `source_kind = api` and `external_id`. Unknown form → park in a `pending_mapping` batch and notify DNA to map it once. This provider-signed endpoint is exempt from browser Origin/session checks, never from signature verification.
+1. A Meta app owned by the agency, `leads_retrieval` and `pages_manage_ads` permissions, app review. Business owns the app and the review; dev work cannot start before.
+2. Per company: connect a Page (OAuth in settings, agency staff do it), store the long-lived Page token encrypted in `companies.settings.meta` (encryption key in env, not in the DB).
+3. `[monorepo]` API webhook `leadgen` endpoint: verify the signature, enqueue `meta.fetch_lead` with `leadgen_id`. Worker fetches the lead from the Graph API, turns `field_data` into a row shaped like a CSV row, runs it through the same API-owned `matchMapping` by `form_id` (templates get a `form_id` column) and `normaliseRow`, inserts through the same code as S5 with `source_kind = api` and `external_id`. Unknown form → park in a `pending_mapping` batch and notify agency staff to map it once. This provider-signed endpoint is exempt from browser Origin/session checks, never from signature verification.
 4. Backfill job on connect: pull the last 90 days of leads per form, dedupe by `external_id` and phone.
 5. Manual CSV upload stays as the fallback.
 
@@ -1009,8 +992,8 @@ Timeline is a business call (section 11).
 Each with the default used in this doc. Changing an answer changes one slice, not the design.
 
 1. **Hosting budget and provider.** Default: one VPS separate from Ekata, same provider, plus a Backblaze B2 bucket for backups.
-2. **Email provider.** Default: Resend on a DNA subdomain (`mail.anar.<domain>`). Who owns the DNS for SPF, DKIM, DMARC?
-3. **Sending domain and app URL.** `anar.<dna-domain>`? Needed before S1.
+2. **Email provider.** `[agency]` Default: Resend on an owner-controlled Anar sending subdomain (`mail.anar.<domain>`). Who owns the DNS for SPF, DKIM, DMARC?
+3. **Sending domain and app URL.** `[agency]` Owner-controlled origin and verified sender; actual domain/DNS owner required before staging.
 4. **Default country for phones.** Default: NP for every company. On the Meta export every phone already carries its country code (1,768 of 1,884 are Nepal, the rest India, UAE, Qatar and a few others) `[verified on real export]`, so this only matters for the Excel trackers. Any tracker with bare local numbers that are not Nepali?
 5. **Invalid phone rows on import.** Default: import and flag. Alternative: skip and list in the report.
 6. **Duplicate on import.** Default: skip, do not overwrite fields; a resubmit (different campaign or time) goes on the existing lead's timeline, the same row coming back in an overlapping daily export does not. There is no lead id in the export `[verified on real export]`, phone is the whole dedupe. Alternative: fill empty fields from the new row.
@@ -1031,7 +1014,7 @@ Each with the default used in this doc. Changing an answer changes one slice, no
 21. **Excel tracker files.** We need one real tracker per Admin and the status wording in them before S15. The Meta side is answered: we have one real export, `p:` prefix, column names and encoding are confirmed, appendix A.
 22. **Facebook API sync timeline** and who owns the Meta app and app review.
 23. **Error monitoring provider.** Default: Sentry SaaS with PII scrubbing. Self-hosted GlitchTip if lead ids in a third party is not acceptable.
-24. **Uptime monitor.** Default: Better Uptime free tier, alerts to a DNA Telegram group.
+24. **Uptime monitor.** Default: Better Uptime free tier, alerts to an owner operations Telegram group.
 25. **Site Visit stage and outcome overlap.** Base has both a `Site Visit` stage and `Site Visit Done` and `Site Visit Scheduled` outcomes. Default: the outcome is what the Admin picks after a call, the stage changes only if they pick it in the same form. Should `Site Visit Done` move the stage automatically?
 26. **Points for the Meta form answers.** The form's buckets do not line up with the base scoring: base scores timeline in days (under 15, 15 to 30, 1 to 3 months, over 3), the form asks within 1, 2, 3 months or just exploring `[verified on real export]`. Default in 4.2: timeline 4/3/2/1 in that order; apartment type 2 for any chosen unit, 0 for not sure; purpose 2 for family or both, 1 for investment, 0 for just exploring. With those, a form answer alone can reach Hot before anyone calls. Is that wanted, and should apartment type score at all? Also: the timeline column lands on the seeded `purchase_timeline` field, so it carries the base options and the Meta codes side by side; fine, or a separate field?
 
