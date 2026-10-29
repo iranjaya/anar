@@ -23,6 +23,7 @@ export function AssignList({
   nextCursor = null,
   q = "",
   priority,
+  compact = false,
 }: {
   items: LeadRow[];
   members: Pick<Member, "id" | "name">[];
@@ -31,6 +32,7 @@ export function AssignList({
   nextCursor?: string | null;
   q?: string;
   priority?: Priority;
+  compact?: boolean;
 }) {
   const { slug } = useParams<{ slug: string }>();
   const router = useRouter();
@@ -44,6 +46,9 @@ export function AssignList({
   useEffect(() => setQuery(q), [q]);
   const allPicked =
     items.length > 0 && items.every((lead) => picked.includes(lead.id));
+  const detailCell = compact
+    ? "hidden"
+    : "col-start-2 min-w-0 break-words text-muted lg:col-start-auto";
   let emptyTitle = "No leads match";
   if (priority) emptyTitle = `No ${priority} leads waiting`;
   if (total === 0) emptyTitle = "No unassigned leads";
@@ -75,7 +80,7 @@ export function AssignList({
         );
         setPicked([]);
         onAssigned?.();
-        router.replace(href(q, priority), { scroll: false });
+        if (!compact) router.replace(href(q, priority), { scroll: false });
         router.refresh();
       } catch {
         setError("Couldn't assign these leads. Try again.");
@@ -84,12 +89,20 @@ export function AssignList({
   }
 
   return (
-    <div className="min-w-0 pb-64 lg:pb-0">
+    <div className={compact ? "min-w-0" : "min-w-0 pb-64 lg:pb-0"}>
       <p className="mb-6 text-muted">{total} unassigned leads</p>
-      <div className="grid min-w-0 items-start gap-5 lg:grid-cols-[11rem_minmax(0,1fr)_13rem]">
+      <div
+        className={
+          compact
+            ? "grid min-w-0 items-start gap-4"
+            : "grid min-w-0 items-start gap-5 lg:grid-cols-[11rem_minmax(0,1fr)_13rem]"
+        }
+      >
         <aside
           aria-label="Queue filters"
-          className="min-w-0 space-y-4 lg:sticky lg:top-6"
+          className={
+            compact ? "hidden" : "min-w-0 space-y-4 lg:sticky lg:top-6"
+          }
         >
           <form
             onSubmit={(event) => {
@@ -134,14 +147,21 @@ export function AssignList({
             ))}
           </fieldset>
         </aside>
-        <section aria-label="Unassigned queue" className="min-w-0 space-y-3">
+        <section
+          aria-label="Unassigned queue"
+          className={
+            compact
+              ? "min-w-0 space-y-3 lg:max-h-[32rem] lg:overflow-y-auto"
+              : "min-w-0 space-y-3"
+          }
+        >
           <table
             aria-label="Unassigned leads"
             className="block w-full min-w-0 space-y-3 text-left"
           >
             <thead className="block">
               <tr
-                className={`grid items-center gap-2 px-3 text-sm font-semibold text-muted ${columns}`}
+                className={`grid items-center gap-2 px-3 text-sm font-semibold text-muted ${compact ? "grid-cols-1" : columns}`}
               >
                 <th scope="col">
                   <label className="flex min-h-11 items-center gap-3">
@@ -166,7 +186,7 @@ export function AssignList({
                       }
                       className="size-5 shrink-0 accent-brand"
                     />
-                    <span className="lg:sr-only">
+                    <span className={compact ? "" : "lg:sr-only"}>
                       Select all {items.length} shown
                     </span>
                   </label>
@@ -182,7 +202,9 @@ export function AssignList({
                   <th
                     key={label}
                     scope="col"
-                    className="hidden min-w-0 break-words lg:block"
+                    className={
+                      compact ? "hidden" : "hidden min-w-0 break-words lg:block"
+                    }
                   >
                     {label}
                   </th>
@@ -193,7 +215,7 @@ export function AssignList({
               {items.map((lead) => (
                 <tr
                   key={lead.id}
-                  className={`grid min-w-0 grid-cols-[2.75rem_minmax(0,1fr)] items-center gap-2 rounded-2xl border border-line bg-surface p-3 text-sm ${columns}`}
+                  className={`grid min-w-0 grid-cols-[2.75rem_minmax(0,1fr)] items-center gap-2 rounded-2xl border border-line bg-surface p-3 text-sm ${compact ? "" : columns}`}
                 >
                   <td>
                     <label className="flex min-h-11 items-center justify-center">
@@ -221,29 +243,31 @@ export function AssignList({
                       {lead.fullName ?? formatPhone(lead.phoneE164)}
                     </Link>
                   </td>
-                  <td className="col-start-2 min-w-0 lg:col-start-auto">
+                  <td
+                    className={
+                      compact
+                        ? "col-start-2 min-w-0"
+                        : "col-start-2 min-w-0 lg:col-start-auto"
+                    }
+                  >
                     <ScoreBadge priority={lead.priority} score={lead.score} />
                   </td>
-                  <td className="col-start-2 min-w-0 break-words text-muted lg:col-start-auto">
+                  <td className={detailCell}>
                     {
                       lead.answers.find(
                         (answer) => answer.key === "apartment_type",
                       )?.label
                     }
                   </td>
-                  <td className="col-start-2 min-w-0 break-words text-muted lg:col-start-auto">
+                  <td className={detailCell}>
                     {
                       lead.answers.find(
                         (answer) => answer.key === "purchase_timeline",
                       )?.label
                     }
                   </td>
-                  <td className="col-start-2 min-w-0 break-words text-muted capitalize lg:col-start-auto">
-                    {lead.source}
-                  </td>
-                  <td className="col-start-2 min-w-0 break-words text-muted lg:col-start-auto">
-                    {formatDay(lead.leadDate)}
-                  </td>
+                  <td className={`${detailCell} capitalize`}>{lead.source}</td>
+                  <td className={detailCell}>{formatDay(lead.leadDate)}</td>
                 </tr>
               ))}
             </tbody>
@@ -270,7 +294,11 @@ export function AssignList({
         </section>
         <section
           aria-label="Assign leads"
-          className="fixed inset-x-0 bottom-0 z-30 space-y-3 border-t border-line bg-surface p-4 pb-[max(1rem,env(safe-area-inset-bottom))] lg:sticky lg:inset-x-auto lg:top-6 lg:bottom-auto lg:rounded-2xl lg:border lg:p-4"
+          className={
+            compact
+              ? "space-y-3 border-t border-line pt-4"
+              : "fixed inset-x-0 bottom-0 z-30 space-y-3 border-t border-line bg-surface p-4 pb-[max(1rem,env(safe-area-inset-bottom))] lg:sticky lg:inset-x-auto lg:top-6 lg:bottom-auto lg:rounded-2xl lg:border lg:p-4"
+          }
         >
           <p className="font-display text-lg font-semibold">
             {picked.length} selected

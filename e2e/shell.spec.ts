@@ -199,13 +199,14 @@ test.describe("shell", () => {
     await expect(
       page.getByRole("heading", { name: "Companies", exact: true }),
     ).toBeVisible();
+    await expect(banner).toHaveCount(0);
   });
 
   for (const { userId, path, links } of [
     { userId: "sunaina", path: "/sundar-heights/today", links: [] },
     {
       userId: "prakash",
-      path: "/sundar-heights/dashboard",
+      path: "/sundar-heights/leads",
       links: ["Dashboard", "Leads"],
     },
     {
@@ -220,10 +221,6 @@ test.describe("shell", () => {
       baseURL,
       isMobile,
     }) => {
-      test.fixme(
-        userId === "prakash",
-        "Needs the role home pages and their navigation.",
-      );
       await context.addCookies([
         {
           name: "anar_demo",
@@ -235,6 +232,9 @@ test.describe("shell", () => {
         },
       ]);
       await page.goto(path);
+      await expect(
+        page.getByRole("region", { name: "Company shell", exact: true }),
+      ).toBeVisible();
       const nav = page.getByRole("navigation", { name: "Main navigation" });
       if (isMobile || links.length === 0) {
         await expect(nav).not.toBeVisible();
@@ -250,7 +250,10 @@ test.describe("shell", () => {
     await page
       .getByRole("combobox", { name: "Demo user", exact: true })
       .selectOption("sunaina");
-    await page.goto("/sundar-heights/today");
+    await expect(page).toHaveURL("/sundar-heights/today");
+    await expect(
+      page.getByRole("heading", { name: "My Leads Today", exact: true }),
+    ).toBeVisible();
     const failure = page.getByRole("checkbox", {
       name: "Simulate failure",
       exact: true,
@@ -274,6 +277,9 @@ test.describe("shell", () => {
       await expect(failure).not.toBeChecked();
       await shell.getByRole("button", { name: "Retry", exact: true }).click();
       await expect(shell.getByRole("alert")).toHaveCount(0);
+      await expect(
+        shell.getByRole("heading", { name: "My Leads Today", exact: true }),
+      ).toBeVisible();
     } finally {
       await expect(failure).toBeEnabled();
       if (await failure.isChecked()) {
