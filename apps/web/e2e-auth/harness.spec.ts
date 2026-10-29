@@ -48,35 +48,26 @@ test("delivers a code through the worker and keeps the proxy cookie through refr
   expect((await page.request.get("/api/auth/listSessions")).status()).toBe(401);
 });
 
-test("keeps company creation gated on phone and desktop", async ({
+test("keeps demo access outside the real profile", async ({
   page,
   context,
   baseURL,
-}, testInfo) => {
+}) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  const response = await page.goto("/agency/companies");
+  const response = await page.goto("/login");
   expect(response?.headers()["content-security-policy"]).toContain(
     "frame-ancestors 'none'",
   );
   await expect(
-    page.getByRole("heading", { name: "Agency companies" }),
+    page.getByRole("heading", { name: "Sign in to Anar" }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Create company", exact: true }),
-  ).toBeDisabled();
-  await expect(page.getByLabel("Company name", { exact: true })).toBeDisabled();
-  await expect(page.getByText("No companies on this page.")).toHaveCount(0);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
   expect(errors).toEqual([]);
-  await page.screenshot({
-    path: testInfo.outputPath("companies-gated.png"),
-    fullPage: true,
-  });
   await context.addCookies([
     {
       name: "anar_demo",
@@ -91,7 +82,8 @@ test("keeps company creation gated on phone and desktop", async ({
   await expect(page).toHaveURL(`${baseURL}/login`);
   await expect(
     page.getByRole("button", { name: "Send code", exact: true }),
-  ).toBeDisabled();
+  ).toBeEnabled();
+  expect((await page.request.get("/companies")).status()).toBe(404);
   expect((await page.request.get("/sundar-heights/leads")).status()).toBe(404);
   expect((await page.request.post("/api/imports", { data: {} })).status()).toBe(
     403,

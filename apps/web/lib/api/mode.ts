@@ -15,7 +15,7 @@ export function dataMode(
 }
 
 export function authEnabled() {
-  return dataMode() === "real" && process.env.ANAR_AUTH_ENABLED === "true";
+  return dataMode() === "real" && process.env.ANAR_AUTH_ENABLED !== "false";
 }
 
 export function requireDemoMode() {

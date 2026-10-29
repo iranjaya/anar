@@ -61,6 +61,7 @@ async function startAuthStack(signal: AbortSignal) {
     MAIL_ENCRYPTION_KEY: randomBytes(32).toString("base64"),
     PUBLIC_ORIGIN: baseURL,
     ANAR_LOCAL_HTTP: "true",
+    ANAR_AUTH_ENABLED: "true",
     TRUSTED_PROXY_CIDRS: "uniquelocal",
     EMAIL_TRANSPORT: "mailpit",
     EMAIL_FROM: "proof@browser.example.test",

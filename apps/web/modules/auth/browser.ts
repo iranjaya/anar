@@ -1,7 +1,11 @@
 "use client";
 
 import {
+  acceptInviteResultSchema,
+  acceptInviteSchema,
   emptySchema,
+  inviteTokenSchema,
+  inviteViewSchema,
   okSchema,
   type RequestOtpInput,
   type RevokeSessionInput,
@@ -21,7 +25,9 @@ async function post<T>(
     | "/api/auth/verifyOtp"
     | "/api/auth/revokeSession"
     | "/api/auth/logout"
-    | "/api/auth/refresh",
+    | "/api/auth/refresh"
+    | "/api/auth/inspectInvite"
+    | "/api/auth/acceptInvite",
   body: unknown,
   schema: z.ZodType<T>,
 ): Promise<T> {
@@ -75,4 +81,21 @@ export async function logout() {
 
 export async function refreshSession() {
   return post("/api/auth/refresh", emptySchema.parse({}), okSchema);
+}
+
+export async function inspectInvite(token: string) {
+  const parsed = inviteTokenSchema.safeParse({ token });
+  if (!parsed.success)
+    throw new AppError(
+      "validation",
+      "Open the original invitation from your email again.",
+    );
+  return post("/api/auth/inspectInvite", parsed.data, inviteViewSchema);
+}
+
+export async function acceptInvite(token: string, name: string) {
+  const parsed = acceptInviteSchema.safeParse({ token, name });
+  if (!parsed.success)
+    throw new AppError("validation", "Check your name and invitation link.");
+  return post("/api/auth/acceptInvite", parsed.data, acceptInviteResultSchema);
 }

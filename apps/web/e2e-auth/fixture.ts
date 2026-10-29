@@ -12,6 +12,7 @@ export const test = base.extend<
     mailbox: {
       ids(): Promise<string[]>;
       code(email: string, before: string[]): Promise<string>;
+      invite(email: string, before: string[]): Promise<string>;
     };
   },
   { stack: AuthStack }
@@ -75,32 +76,44 @@ export const test = base.extend<
     };
     const messages = async (): Promise<Message[]> =>
       (await read("/api/v1/messages")).messages;
+    async function delivered(email: string, before: string[], pattern: RegExp) {
+      let value: string | undefined;
+      await expect
+        .poll(
+          async () => {
+            for (const message of await messages()) {
+              if (
+                before.includes(message.ID) ||
+                !message.To.some((to) => to.Address === email)
+              )
+                continue;
+              const body: Message = await read(
+                `/api/v1/message/${encodeURIComponent(message.ID)}`,
+              );
+              value = body.Text.match(pattern)?.[0];
+              if (value) return true;
+            }
+            return false;
+          },
+          { timeout: 30000, message: "Expected a new test email" },
+        )
+        .toBe(true);
+      if (!value) throw new Error("Test email has no matching content");
+      return value;
+    }
     await use({
       ids: async () => (await messages()).map((message) => message.ID),
-      async code(email, before) {
-        let code: string | undefined;
-        await expect
-          .poll(
-            async () => {
-              for (const message of await messages()) {
-                if (
-                  before.includes(message.ID) ||
-                  !message.To.some((to) => to.Address === email)
-                )
-                  continue;
-                const body: Message = await read(
-                  `/api/v1/message/${encodeURIComponent(message.ID)}`,
-                );
-                code = body.Text.match(/\b\d{6}\b/)?.[0];
-                if (code) return true;
-              }
-              return false;
-            },
-            { timeout: 30000, message: "Expected a new test email code" },
-          )
-          .toBe(true);
-        if (!code) throw new Error("Test email has no code");
-        return code;
+      code: (email, before) => delivered(email, before, /\b\d{6}\b/),
+      async invite(email, before) {
+        const link = await delivered(
+          email,
+          before,
+          /https?:\/\/[^\s]+\/invite#token=[A-Za-z0-9_-]{43}/,
+        );
+        const url = new URL(link);
+        if (url.origin !== stack.baseURL || url.pathname !== "/invite")
+          throw new Error("Invite must point to the disposable stack");
+        return url.hash;
       },
     });
   },

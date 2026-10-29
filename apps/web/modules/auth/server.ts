@@ -41,7 +41,7 @@ const readiness: Record<AuthScreen, AuthReadiness> = {
 export function getAuthReadiness(screen: AuthScreen): AuthReadiness {
   return {
     ...readiness[screen],
-    enabled: screen !== "invite" && authEnabled(),
+    enabled: authEnabled(),
   };
 }
 
@@ -140,10 +140,4 @@ export async function listSessions(): Promise<ActionResult<SessionList> | null> 
   } catch (error) {
     return actionFailure(error);
   }
-}
-
-export async function requirePendingAuthScreen(
-  screen: Exclude<AuthScreen, "login" | "code">,
-): Promise<never> {
-  throw new AppError("unavailable", getAuthReadiness(screen).message);
 }
