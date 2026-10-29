@@ -8,6 +8,8 @@ services:
     image: anar-api:dev
     build:
       target: dev
+    environment:
+      ANAR_LOCAL_HTTP: "true"
     volumes:
       - ./apps/api/src:/workspace/apps/api/src:ro
       - ./packages/domain/src:/workspace/packages/domain/src:ro
@@ -51,6 +53,7 @@ services:
       - ./apps/web/mock:/workspace/apps/web/mock:ro
       - ./apps/web/modules:/workspace/apps/web/modules:ro
       - ./apps/web/next.config.ts:/workspace/apps/web/next.config.ts:ro
+      - ./apps/web/proxy.ts:/workspace/apps/web/proxy.ts:ro
       - ./packages/domain/src:/workspace/packages/domain/src:ro
       - /workspace/node_modules
       - /workspace/apps/web/node_modules

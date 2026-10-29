@@ -43,6 +43,11 @@ services:
       HOST: 0.0.0.0
       PORT: "3001"
       DATABASE_URL: ${DATABASE_URL:-postgresql://anar_app:anar_app_local@db:5432/anar}
+      OTP_PEPPER: ${OTP_PEPPER:-}
+      MAIL_ENCRYPTION_KEY: ${MAIL_ENCRYPTION_KEY:-}
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:8080}
+      ANAR_LOCAL_HTTP: ${ANAR_LOCAL_HTTP:-}
+      TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-}
     init: true
 
   worker:

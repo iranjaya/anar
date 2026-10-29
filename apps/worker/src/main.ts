@@ -1,4 +1,11 @@
-import { type JobRegistration, registerJobs } from "@anar/api/jobs";
+import {
+  createEmailSender,
+  createMailCodec,
+  emailJob,
+  type JobRegistration,
+  loadMailKey,
+  registerJobs,
+} from "@anar/api/jobs";
 import { createQueueRuntime } from "@anar/db/queue";
 import { v7 } from "uuid";
 
@@ -21,39 +28,57 @@ export async function startWorker(
     failure ??= new Error("Worker queue failed");
     failed.abort();
   };
-  const runtime = await createQueueRuntime(url, fail);
-  const workerId = v7();
-  const startedAt = new Date();
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  let beating = Promise.resolve();
-  const scheduleHeartbeat = () => {
-    if (stopped.aborted) return;
-    timer = setTimeout(() => {
-      beating = runtime
-        .heartbeat(workerId, startedAt)
-        .catch(fail)
-        .then(scheduleHeartbeat);
-    }, 30000);
-  };
-  try {
-    if (!stopped.aborted) {
-      await registerJobs({ queue: runtime, jobs: options.jobs ?? [] });
-      if (!stopped.aborted) {
-        await runtime.heartbeat(workerId, startedAt);
-        scheduleHeartbeat();
-        await new Promise<void>((resolve) => {
-          if (stopped.aborted) resolve();
-          else
-            stopped.addEventListener("abort", () => resolve(), { once: true });
-        });
-      }
-    }
-  } finally {
-    clearTimeout(timer);
-    await beating;
-    await runtime.close();
+  let jobs = options.jobs;
+  let closeEmail: (() => Promise<void>) | undefined;
+  if (jobs === undefined) {
+    const delivery = await emailJob.start({
+      connectionString: url,
+      mailCodec: createMailCodec(loadMailKey()),
+      sendEmail: createEmailSender().sendEmail,
+      now: () => new Date(),
+    });
+    jobs = [delivery.job];
+    closeEmail = delivery.close;
   }
-  if (failure) throw failure;
+  try {
+    const runtime = await createQueueRuntime(url, fail);
+    const workerId = v7();
+    const startedAt = new Date();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let beating = Promise.resolve();
+    const scheduleHeartbeat = () => {
+      if (stopped.aborted) return;
+      timer = setTimeout(() => {
+        beating = runtime
+          .heartbeat(workerId, startedAt)
+          .catch(fail)
+          .then(scheduleHeartbeat);
+      }, 30000);
+    };
+    try {
+      if (!stopped.aborted) {
+        await registerJobs({ queue: runtime, jobs });
+        if (!stopped.aborted) {
+          await runtime.heartbeat(workerId, startedAt);
+          scheduleHeartbeat();
+          await new Promise<void>((resolve) => {
+            if (stopped.aborted) resolve();
+            else
+              stopped.addEventListener("abort", () => resolve(), {
+                once: true,
+              });
+          });
+        }
+      }
+    } finally {
+      clearTimeout(timer);
+      await beating;
+      await runtime.close();
+    }
+    if (failure) throw failure;
+  } finally {
+    await closeEmail?.();
+  }
 }
 
 if (import.meta.main) {

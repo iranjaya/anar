@@ -49,14 +49,8 @@ describe("DB-backed worker lifecycle", () => {
   function launch(entry: URL, port?: number) {
     const env = {
       ...process.env,
-      NODE_OPTIONS: "",
-      DATABASE_URL: fixture.postgres.appUrl,
-      EMAIL_TRANSPORT: "mailpit",
-      MAILPIT_URL: fixture.mailpit.url,
-      EMAIL_FROM: "sender@example.test",
-      RESEND_API_KEY: "",
-      HOST: "127.0.0.1",
-      ...(port ? { PORT: String(port) } : {}),
+      ...fixture.env,
+      PORT: port === undefined ? "" : String(port),
     };
     const child = spawn(process.execPath, [fileURLToPath(entry)], {
       env,

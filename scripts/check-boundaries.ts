@@ -33,7 +33,7 @@ const ignored = new Set([
 ]);
 const backend = /^(pg|drizzle-orm|drizzle-kit|pg-boss)(\/|$)/;
 const credentials =
-  /^(DATABASE_URL|MIGRATION_DATABASE_URL|POSTGRES_\w+|APP_DATABASE_\w+|MIGRATION_DATABASE_\w+|MAIL_ENCRYPTION_KEY|RESEND_API_KEY)$/;
+  /^(DATABASE_URL|MIGRATION_DATABASE_URL|POSTGRES_\w+|APP_DATABASE_\w+|MIGRATION_DATABASE_\w+|MAIL_ENCRYPTION_KEY|RESEND_API_KEY|OTP_PEPPER)$/;
 
 function files(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {

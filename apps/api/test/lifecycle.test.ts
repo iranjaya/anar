@@ -2,7 +2,12 @@ import { type ChildProcess, spawn } from "node:child_process";
 import { once } from "node:events";
 import { type AddressInfo, createServer } from "node:net";
 import { fileURLToPath } from "node:url";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import {
+  type Postgres,
+  startPostgres,
+} from "../../../test/support/postgres.js";
+import { createTestRuntimeConfig } from "../../../test/support/runtime-config.js";
 
 type RunningProcess = {
   child: ChildProcess;
@@ -11,13 +16,26 @@ type RunningProcess = {
 };
 
 describe("compiled API", () => {
+  let postgres: Postgres;
+  let config: ReturnType<typeof createTestRuntimeConfig>;
   const children: RunningProcess[] = [];
+
+  beforeAll(async () => {
+    postgres = await startPostgres();
+    await postgres.bootstrap();
+    await postgres.migrate();
+    config = createTestRuntimeConfig(postgres.appUrl);
+  }, 60000);
+  afterAll(async () => {
+    await postgres?.stop();
+  });
 
   async function getFreePort(): Promise<string> {
     const server = createServer();
     server.listen(0, "127.0.0.1");
     await once(server, "listening");
     const port = String((server.address() as AddressInfo).port);
+    expect(Number(port)).not.toBeOneOf([3000, 3001, 3100]);
     await new Promise<void>((resolve, reject) => {
       server.close((error) => (error ? reject(error) : resolve()));
     });
@@ -27,17 +45,14 @@ describe("compiled API", () => {
   function startProcess(
     entry = new URL("../dist/main.js", import.meta.url),
     port?: string,
+    overrides: NodeJS.ProcessEnv = {},
   ): RunningProcess {
-    const env: NodeJS.ProcessEnv = { ...process.env, HOST: "127.0.0.1" };
+    const env: NodeJS.ProcessEnv = { ...process.env, ...config };
     delete env.PORT;
-    delete env.NODE_OPTIONS;
-    delete env.DATABASE_URL;
-    delete env.APP_DATABASE_URL;
-    delete env.MIGRATION_DATABASE_URL;
     if (port !== undefined) env.PORT = port;
     const child = spawn(process.execPath, [fileURLToPath(entry)], {
       cwd: fileURLToPath(new URL("..", import.meta.url)),
-      env,
+      env: { ...env, ...overrides },
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stderr = "";
@@ -102,7 +117,7 @@ describe("compiled API", () => {
   });
 
   it.each(["SIGTERM", "SIGINT"] as const)(
-    "starts without a DB URL and exits 0 on %s",
+    "starts with required config and exits 0 on %s",
     async (signal) => {
       const port = await getFreePort();
       const process = startProcess(undefined, port);
@@ -121,7 +136,7 @@ describe("compiled API", () => {
       const port = String((occupied.address() as AddressInfo).port);
       const process = startProcess(undefined, port);
       expect(await waitForExit(process)).toEqual([1, null]);
-      expect(process.stderr()).toContain("EADDRINUSE");
+      expect(process.stderr()).toBe("API startup failed\n");
     } finally {
       await new Promise<void>((resolve, reject) => {
         occupied.close((error) => (error ? reject(error) : resolve()));
@@ -134,15 +149,29 @@ describe("compiled API", () => {
     async (port) => {
       const process = startProcess(undefined, port);
       expect(await waitForExit(process)).toEqual([1, null]);
-      expect(process.stderr()).toContain(
-        "PORT must be an integer from 1 to 65535",
-      );
+      expect(process.stderr()).toBe("API startup failed\n");
     },
   );
+
+  it.each([
+    "DATABASE_URL",
+    "OTP_PEPPER",
+    "MAIL_ENCRYPTION_KEY",
+    "PUBLIC_ORIGIN",
+    "ANAR_LOCAL_HTTP",
+  ])("refuses missing %s with a local HTTP origin", async (name) => {
+    const process = startProcess(undefined, await getFreePort(), {
+      [name]: "",
+    });
+    expect(await waitForExit(process)).toEqual([1, null]);
+    expect(process.stderr()).toBe("API startup failed\n");
+  });
 
   it("refuses to start the worker without its DB URL", async () => {
     const worker = startProcess(
       new URL("../../worker/dist/main.js", import.meta.url),
+      undefined,
+      { DATABASE_URL: "" },
     );
     expect(await waitForExit(worker)).toEqual([1, null]);
     expect(worker.stderr()).toBe("Worker stopped after a runtime failure\n");

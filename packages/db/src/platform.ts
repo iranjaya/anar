@@ -3,7 +3,8 @@ import type { TenantScope, TenantTx } from "./tenant.js";
 import tenantScope from "./tenantScope.js";
 
 export { auditLog } from "./schema/audit.js";
-export { users } from "./schema/platform.js";
+export { authRateLimits } from "./schema/authLimits.js";
+export { otpCodes, sessions, users } from "./schema/platform.js";
 
 export type PlatformTx = TenantTx;
 export type PlatformDb = {

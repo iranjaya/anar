@@ -6,6 +6,7 @@ import { PgBoss } from "pg-boss";
 import { v7 } from "uuid";
 import { startMailpit } from "../../../../test/support/mailpit.js";
 import { startPostgres } from "../../../../test/support/postgres.js";
+import { createTestRuntimeConfig } from "../../../../test/support/runtime-config.js";
 import { startWorker } from "../../src/main.js";
 
 export async function startFixture() {
@@ -31,6 +32,13 @@ export async function startFixture() {
     await postgres.bootstrap();
     await postgres.migrate();
     mailpit = await startMailpit();
+    const env = {
+      ...createTestRuntimeConfig(postgres.appUrl),
+      EMAIL_TRANSPORT: "mailpit",
+      MAILPIT_URL: mailpit.url,
+      EMAIL_FROM: "sender@example.test",
+      RESEND_API_KEY: "",
+    };
     const pool = (connectionString: string) => {
       const handle = new Pool({
         connectionString,
@@ -59,6 +67,7 @@ export async function startFixture() {
     return {
       postgres,
       mailpit,
+      env,
       runtime,
       owner,
       admin,

@@ -155,6 +155,9 @@ describe("database roles and tenant transactions", () => {
     expect(migrationResults).toHaveLength(2);
     expect(productTables).toEqual([
       { tablename: "audit_log" },
+      { tablename: "auth_rate_limits" },
+      { tablename: "otp_codes" },
+      { tablename: "sessions" },
       { tablename: "users" },
       { tablename: "worker_heartbeats" },
     ]);

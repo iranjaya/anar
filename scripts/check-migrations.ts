@@ -67,7 +67,7 @@ export function checkMigrations(root: string): void {
     const config = path.join(scratch, "drizzle.config.ts");
     writeFileSync(
       config,
-      `import config from ${JSON.stringify(path.join(packageDir, "drizzle.config.ts"))};\nexport default { ...config, out: ${JSON.stringify(generated)} };\n`,
+      `import config from ${JSON.stringify(path.join(packageDir, "drizzle.config.ts"))};\nexport default { ...config, out: ${JSON.stringify(path.relative(packageDir, generated))} };\n`,
     );
     const output = execFileSync(
       process.execPath,

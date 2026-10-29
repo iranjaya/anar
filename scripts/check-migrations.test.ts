@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import {
   copyFileSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -34,17 +36,40 @@ function schemaFixture(schema: string, run: (root: string) => void) {
       path.join(repo, "packages/db/node_modules"),
       path.join(root, "packages/db/node_modules"),
     );
-    writeFileSync(path.join(root, "packages/db/src/schema/index.ts"), schema);
+    const tracked = execFileSync(
+      "git",
+      [
+        "ls-tree",
+        "-r",
+        "--name-only",
+        "HEAD",
+        "--",
+        "packages/db/src/schema",
+        "packages/db/migrations",
+      ],
+      { cwd: repo, encoding: "utf8" },
+    )
+      .trim()
+      .split("\n")
+      .filter(Boolean);
+    for (const file of tracked) {
+      const destination = path.join(root, file);
+      mkdirSync(path.dirname(destination), { recursive: true });
+      writeFileSync(
+        destination,
+        execFileSync("git", ["show", `HEAD:${file}`], { cwd: repo }),
+      );
+    }
+    const index = path.join(root, "packages/db/src/schema/index.ts");
+    writeFileSync(index, `${readFileSync(index, "utf8")}\n${schema}`);
     run(root);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
 }
 
-test("generates the empty S0 schema in scratch storage", () => {
-  schemaFixture("export {};", (root) =>
-    assert.doesNotThrow(() => checkMigrations(root)),
-  );
+test("generates the committed schema in scratch storage", () => {
+  schemaFixture("", (root) => assert.doesNotThrow(() => checkMigrations(root)));
 });
 test("fails when a table has no committed migration", () => {
   schemaFixture(

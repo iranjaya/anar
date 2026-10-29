@@ -1,10 +1,33 @@
 import { z } from "zod";
+import { wireDateSchema } from "./http.js";
+import type { JobPayload } from "./jobs.js";
 import type { User } from "./tenant.js";
 
 export type AuthUser = User & {
   deactivatedAt: Date | null;
   createdAt: Date;
 };
+
+export const emailSchema = z.string().trim().toLowerCase().pipe(z.email());
+export const emptySchema = z.strictObject({});
+export const requestOtpSchema = z.strictObject({ email: emailSchema });
+export const verifyOtpSchema = z.strictObject({
+  email: emailSchema,
+  code: z.string().regex(/^\d{6}$/),
+});
+export const verifyOtpResultSchema = z.strictObject({
+  redirectTo: z.literal("/workspaces"),
+});
+export const okSchema = z.strictObject({ ok: z.literal(true) });
+export type RequestOtpInput = z.infer<typeof requestOtpSchema>;
+export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
+
+export const otpEmailJobSchema = z.strictObject({
+  kind: z.literal("otp"),
+  referenceId: z.uuid(),
+  expiresAt: wireDateSchema,
+  encryptedMessage: z.string().min(1),
+}) satisfies z.ZodType<JobPayload>;
 
 export const bootstrapDnaSchema = z.strictObject({
   environment: z
@@ -13,7 +36,7 @@ export const bootstrapDnaSchema = z.strictObject({
     .min(1)
     .max(64)
     .regex(/^[a-z][a-z0-9-]*$/),
-  email: z.string().trim().toLowerCase().pipe(z.email()),
+  email: emailSchema,
   name: z.string().trim().min(1).max(120),
 });
 

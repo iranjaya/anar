@@ -1,4 +1,3 @@
-import { randomBytes } from "node:crypto";
 import { inspect } from "node:util";
 import {
   createEmailSender,
@@ -25,10 +24,10 @@ const envelope = z.strictObject({
   expiresAt: z.iso.datetime(),
   encryptedMessage: z.string(),
 });
-const codec = createMailCodec(randomBytes(32).toString("base64"));
 
 describe("encrypted delivery through the real worker", () => {
   let fixture: WorkerFixture;
+  let codec: ReturnType<typeof createMailCodec>;
   let name: string;
   let key: string;
   let message: { to: string; subject: string; text: string };
@@ -36,6 +35,7 @@ describe("encrypted delivery through the real worker", () => {
 
   beforeAll(async () => {
     fixture = await startFixture();
+    codec = createMailCodec(fixture.env.MAIL_ENCRYPTION_KEY);
   });
   afterAll(async () => {
     await fixture?.close();
