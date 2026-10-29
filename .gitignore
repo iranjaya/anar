@@ -4,6 +4,7 @@ node_modules/
 next-env.d.ts
 .cache/
 out/
+dist/
 coverage/
 test-results/
 playwright-report/

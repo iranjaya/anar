@@ -6,7 +6,7 @@
       "**",
       "!!docs",
       "!!ANAR-System-Design.md",
-      "!!next-env.d.ts",
+      "!!apps/web/next-env.d.ts",
       "!!pnpm-lock.yaml"
     ]
   },
@@ -49,14 +49,14 @@
   "overrides": [
     {
       "includes": [
-        "modules/*/server.ts",
-        "modules/*/components.ts",
-        "modules/*/pages.ts"
+        "apps/web/modules/*/server.ts",
+        "apps/web/modules/*/components.ts",
+        "apps/web/modules/*/pages.ts"
       ],
       "assist": { "actions": { "source": { "organizeImports": "off" } } }
     },
     {
-      "includes": ["modules/*/data/**"],
+      "includes": ["apps/web/modules/*/data/**"],
       "linter": {
         "rules": {
           "style": {
@@ -81,7 +81,7 @@
       }
     },
     {
-      "includes": ["components/**", "lib/**"],
+      "includes": ["apps/web/components/**", "apps/web/lib/**"],
       "linter": {
         "rules": {
           "style": {

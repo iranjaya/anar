@@ -121,16 +121,14 @@ test.describe("day story", () => {
         .getByRole("searchbox", { name: "Search leads", exact: true })
         .fill(`+977982000000${index}`);
       await page.getByRole("button", { name: "Search", exact: true }).click();
+      const leadHref = `/sundar-heights/leads/meta-sundar-heights-${index + 1}`;
       const row = page
         .getByRole("table", { name: "Unassigned leads", exact: true })
         .getByRole("row")
-        .filter({ has: page.getByRole("link", { name, exact: true }) });
+        .filter({ has: page.locator(`a[href="${leadHref}"]`) });
       await expect(
         row.getByRole("link", { name, exact: true }),
-      ).toHaveAttribute(
-        "href",
-        `/sundar-heights/leads/meta-sundar-heights-${index + 1}`,
-      );
+      ).toHaveAttribute("href", leadHref);
       await row.getByRole("checkbox").check();
     }
     await page

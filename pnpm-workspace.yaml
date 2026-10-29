@@ -1,3 +1,6 @@
 storeDir: .cache/pnpm-store
 cacheDir: .cache/pnpm
 saveExact: true
+packages:
+  - apps/*
+  - packages/*
