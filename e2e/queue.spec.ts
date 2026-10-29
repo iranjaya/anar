@@ -112,9 +112,9 @@ test.describe("unassigned queue", () => {
     ).toBeVisible();
   });
 
-  test("keeps three picks and the assignee on failure, then retries", async ({
-    page,
-  }) => {
+  test("keeps three picks and the assignee on failure, then retries", {
+    tag: "@failure",
+  }, async ({ page }) => {
     await pickThree(page);
     const panel = page.getByRole("region", {
       name: "Assign leads",

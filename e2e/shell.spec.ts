@@ -140,9 +140,9 @@ test.describe("shell", () => {
     });
   }
 
-  test("shows a load error and retries after failure is off", async ({
-    page,
-  }) => {
+  test("shows a load error and retries after failure is off", {
+    tag: "@failure",
+  }, async ({ page }) => {
     const failure = page.getByRole("checkbox", {
       name: "Simulate failure",
       exact: true,
@@ -244,9 +244,9 @@ test.describe("shell", () => {
     });
   }
 
-  test("keeps the load error and Retry inside the company shell", async ({
-    page,
-  }) => {
+  test("keeps the load error and Retry inside the company shell", {
+    tag: "@failure",
+  }, async ({ page }) => {
     await page
       .getByRole("combobox", { name: "Demo user", exact: true })
       .selectOption("sunaina");
@@ -477,9 +477,9 @@ test.describe("Today", () => {
     });
   });
 
-  test("shows failed loads without the Good day card or zero counts", async ({
-    page,
-  }) => {
+  test("shows failed loads without the Good day card or zero counts", {
+    tag: "@failure",
+  }, async ({ page }) => {
     const failure = page.getByRole("checkbox", {
       name: "Simulate failure",
       exact: true,

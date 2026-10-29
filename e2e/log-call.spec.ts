@@ -250,10 +250,9 @@ test.describe("call logging", () => {
     ).toBeVisible();
   });
 
-  test("keeps the call details after a failed save and retries", async ({
-    context,
-    page,
-  }) => {
+  test("keeps the call details after a failed save and retries", {
+    tag: "@failure",
+  }, async ({ context, page }) => {
     const controls = await context.newPage();
     await controls.goto("/sundar-heights/today");
     const failure = controls.getByRole("checkbox", {

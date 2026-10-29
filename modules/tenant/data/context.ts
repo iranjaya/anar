@@ -6,9 +6,9 @@ import {
   setDemoFailure as setFailure,
   store,
 } from "@/mock/access";
-import { people } from "@/mock/names";
+import { db } from "@/mock/store";
 import { can, homeFor } from "../permissions";
-import type { Company, Ctx } from "../types";
+import type { Company, Ctx, DemoUser } from "../types";
 
 const demoSchema = z.object({
   userId: z.string().min(1),
@@ -135,7 +135,7 @@ export async function setActingCompany(
 }
 
 export async function getDemoControls(): Promise<{
-  users: { id: string; name: string }[];
+  users: DemoUser[];
   userId: string;
   failure: boolean;
   message: string;
@@ -157,8 +157,28 @@ export async function getDemoControls(): Promise<{
       throw error;
     failure = true;
   }
+  const data = db();
   return {
-    users: Object.entries(people).map(([id, name]) => ({ id, name })),
+    users: [
+      ...data.users
+        .filter((user) => user.platformRole === "dna")
+        .map((user) => ({
+          id: user.id,
+          name: user.name,
+          role: "dna" as const,
+          companyName: null,
+        })),
+      ...data.companies.flatMap((company) =>
+        data.members
+          .filter((member) => member.companyId === company.id)
+          .map((member) => ({
+            id: member.userId,
+            name: member.name,
+            role: member.role,
+            companyName: company.name,
+          })),
+      ),
+    ],
     userId,
     failure,
     message,

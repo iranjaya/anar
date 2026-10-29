@@ -8,6 +8,13 @@ import {
   setDemoFailureAction,
   switchDemoUserAction,
 } from "../actions";
+import type { DemoUser } from "../types";
+
+const demoRoles = [
+  { role: "dna", label: "DNA" },
+  { role: "super_admin", label: "Super Admin" },
+  { role: "admin", label: "Admin" },
+] as const;
 
 export function DemoBar({
   users,
@@ -15,7 +22,7 @@ export function DemoBar({
   failure,
   message,
 }: {
-  users: { id: string; name: string }[];
+  users: DemoUser[];
   userId: string;
   failure: boolean;
   message: string;
@@ -72,10 +79,17 @@ export function DemoBar({
             <option value="" disabled>
               Choose a user
             </option>
-            {users.map((user) => (
-              <option key={user.id} value={user.id}>
-                {user.name}
-              </option>
+            {demoRoles.map(({ role, label }) => (
+              <optgroup key={role} label={label}>
+                {users
+                  .filter((user) => user.role === role)
+                  .map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {label} · {user.name}
+                      {user.companyName && `, ${user.companyName}`}
+                    </option>
+                  ))}
+              </optgroup>
             ))}
           </select>
         </label>

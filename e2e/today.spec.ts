@@ -324,10 +324,9 @@ test.describe("Today panes", () => {
     }
   });
 
-  test("keeps failed loads in the list column and retries", async ({
-    page,
-    isMobile,
-  }) => {
+  test("keeps failed loads in the list column and retries", {
+    tag: "@failure",
+  }, async ({ page, isMobile }) => {
     await page.goto("/sundar-heights/today?lead=sundar-lead-002");
     await expect(
       page.getByRole("region", { name: "Lead detail", exact: true }),

@@ -1,6 +1,7 @@
 *.[cC][sS][vV]
 node_modules/
 .next/
+next-env.d.ts
 .cache/
 out/
 coverage/

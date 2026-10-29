@@ -37,8 +37,8 @@ async function expectNoOverflow(page: Page) {
 
 async function bounds(locator: Locator) {
   return locator.evaluate((element) => {
-    const { x, y, width } = element.getBoundingClientRect();
-    return { x, y, width };
+    const { x, y, width, height } = element.getBoundingClientRect();
+    return { x, y, width, height };
   });
 }
 
@@ -260,10 +260,10 @@ test.describe("import columns", () => {
     await expectNoOverflow(page);
   });
 
-  test("uses desktop columns and a mapping table without sideways scroll", async ({
+  test("uses phone cards and desktop columns without sideways scroll", async ({
     page,
-  }, testInfo) => {
-    test.skip(testInfo.project.name !== "desktop", "Desktop layout");
+    isMobile,
+  }) => {
     await pickFile(page);
     await expect(
       page.getByText("64 rows · 10 columns", { exact: true }),
@@ -281,13 +281,21 @@ test.describe("import columns", () => {
       exact: true,
     });
     await expect(rail).toBeVisible();
-    const railBox = await bounds(rail);
     const fileBox = await bounds(file);
     const detailsBox = await bounds(details);
-    expect(railBox.x + railBox.width).toBeLessThan(fileBox.x);
-    expect(fileBox.x + fileBox.width).toBeLessThan(detailsBox.x);
-    expect(Math.abs(fileBox.y - detailsBox.y)).toBeLessThan(2);
-    expect((await bounds(page.getByRole("main"))).width).toBeGreaterThan(1000);
+    if (isMobile) {
+      const railBox = await bounds(rail);
+      expect(fileBox.y).toBeGreaterThan(railBox.y + railBox.height);
+      expect(detailsBox.y).toBeGreaterThan(fileBox.y + fileBox.height);
+    } else {
+      const railBox = await bounds(rail);
+      expect(railBox.x + railBox.width).toBeLessThan(fileBox.x);
+      expect(fileBox.x + fileBox.width).toBeLessThan(detailsBox.x);
+      expect(Math.abs(fileBox.y - detailsBox.y)).toBeLessThan(2);
+      expect((await bounds(page.getByRole("main"))).width).toBeGreaterThan(
+        1000,
+      );
+    }
     await expectNoOverflow(page);
     await page
       .getByRole("link", { name: "Match columns", exact: true })
@@ -303,7 +311,10 @@ test.describe("import columns", () => {
         table.getByRole("rowheader").filter({ hasText: header }),
       ).toHaveCount(1);
     }
-    expect((await bounds(page.getByRole("main"))).width).toBeGreaterThan(1000);
+    if (!isMobile)
+      expect((await bounds(page.getByRole("main"))).width).toBeGreaterThan(
+        1000,
+      );
     await expectNoOverflow(page);
     const timelineTarget = page.getByRole("combobox", {
       name: `Map ${timeline}`,
@@ -324,10 +335,53 @@ test.describe("import columns", () => {
     await expectNoOverflow(page);
   });
 
-  test("keeps the upload form mounted with Simulate failure on", () => {
-    test.fixme(
-      true,
-      "The shared tenant toggle refreshes the layout and unmounts the form. Deferred with approval.",
-    );
+  test("keeps the upload form mounted with Simulate failure on", {
+    tag: "@failure",
+  }, async ({ page }) => {
+    const failure = page.getByRole("checkbox", {
+      name: "Simulate failure",
+      exact: true,
+    });
+    const file = page.getByRole("region", {
+      name: "Company and file",
+      exact: true,
+    });
+    try {
+      await failure.click();
+      await expect(failure).toBeChecked();
+      await expect(failure).toBeEnabled();
+      await expect(file).toBeVisible();
+      await pickFile(page);
+      await expect(file.getByRole("alert")).toHaveText(
+        "Couldn't load demo data. Try again.",
+      );
+      await expect(page).toHaveURL("/pahad-view/imports/new");
+      await expect(
+        file.getByRole("combobox", { name: "Company", exact: true }),
+      ).toHaveValue("pahad-view");
+      const pickedName = () =>
+        file
+          .getByLabel("Meta CSV file", { exact: true })
+          .evaluate((input: HTMLInputElement) => input.files?.[0]?.name);
+      expect(await pickedName()).toBe(fileName);
+      await failure.click();
+      await expect(failure).not.toBeChecked();
+      await expect(failure).toBeEnabled();
+      expect(await pickedName()).toBe(fileName);
+      await file
+        .getByRole("button", { name: "Retry upload", exact: true })
+        .click();
+      await expect(
+        page.getByText("64 rows · 10 columns", { exact: true }),
+      ).toBeVisible();
+      await expect(file.getByRole("alert")).toHaveCount(0);
+      await expectNoOverflow(page);
+    } finally {
+      await expect(failure).toBeEnabled();
+      if (await failure.isChecked()) {
+        await failure.click();
+        await expect(failure).not.toBeChecked();
+      }
+    }
   });
 });

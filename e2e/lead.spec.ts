@@ -166,11 +166,9 @@ test.describe("lead detail", () => {
     ).toBeVisible();
   });
 
-  test("keeps the chosen lost reason after a failed save and retries", async ({
-    context,
-    page,
-    baseURL,
-  }) => {
+  test("keeps the chosen lost reason after a failed save and retries", {
+    tag: "@failure",
+  }, async ({ context, page, baseURL }) => {
     await setUser(context, baseURL, "prakash");
     await page.goto("/sundar-heights/leads/sundar-lead-004");
     const banner = page.getByRole("region", {

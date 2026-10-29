@@ -367,9 +367,9 @@ test.describe("dashboard", () => {
       await expect(emptyQueue).toBeVisible();
   });
 
-  test("shows the load error without zero tiles and retries after the failure clears", async ({
-    page,
-  }) => {
+  test("shows the load error without zero tiles and retries after the failure clears", {
+    tag: "@failure",
+  }, async ({ page }) => {
     const failure = page.getByRole("checkbox", {
       name: "Simulate failure",
       exact: true,

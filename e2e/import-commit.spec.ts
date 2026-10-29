@@ -295,9 +295,9 @@ test.describe("import check and result", () => {
     ).toHaveValue("Reason to buy");
   });
 
-  test("keeps step 3 on failure and imports after failure is off", async ({
-    page,
-  }) => {
+  test("keeps step 3 on failure and imports after failure is off", {
+    tag: "@failure",
+  }, async ({ page }) => {
     await pickFile(page);
     await page
       .getByRole("link", { name: "Check 412 rows", exact: true })

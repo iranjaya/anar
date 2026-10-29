@@ -4,6 +4,12 @@ import { defineConfig } from "@playwright/test";
 const port = Number(process.env.E2E_PORT ?? 3100);
 const baseURL = `http://127.0.0.1:${port}`;
 const tsconfigPath = `.cache/e2e-${port}.tsconfig.json`;
+const phone = {
+  viewport: { width: 390, height: 844 },
+  isMobile: true,
+  hasTouch: true,
+};
+const desktop = { viewport: { width: 1440, height: 900 } };
 
 mkdirSync(".cache", { recursive: true });
 writeFileSync(
@@ -22,13 +28,22 @@ export default defineConfig({
   projects: [
     {
       name: "phone",
-      use: {
-        viewport: { width: 390, height: 844 },
-        isMobile: true,
-        hasTouch: true,
-      },
+      use: phone,
+      grepInvert: /@failure/,
     },
-    { name: "desktop", use: { viewport: { width: 1440, height: 900 } } },
+    { name: "desktop", use: desktop, grepInvert: /@failure/ },
+    {
+      name: "phone-failure",
+      use: phone,
+      grep: /@failure/,
+      dependencies: ["phone", "desktop"],
+    },
+    {
+      name: "desktop-failure",
+      use: desktop,
+      grep: /@failure/,
+      dependencies: ["phone-failure"],
+    },
   ],
   webServer: {
     command: `pnpm dev --hostname 127.0.0.1 --port ${port}`,

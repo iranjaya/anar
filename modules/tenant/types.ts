@@ -1,4 +1,10 @@
 export type Role = "super_admin" | "admin";
+export type DemoUser = {
+  id: string;
+  name: string;
+  role: Role | "dna";
+  companyName: string | null;
+};
 export type Company = {
   id: string;
   name: string;
