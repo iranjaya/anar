@@ -37,7 +37,7 @@ SELECT 'REVOKE DELETE, TRUNCATE ON TABLE public.users FROM anar_app'
 WHERE to_regclass('public.users') IS NOT NULL
 \gexec
 SELECT format('REVOKE DELETE, TRUNCATE ON TABLE public.%I FROM anar_app', tablename)
-FROM pg_tables WHERE schemaname = 'public' AND tablename IN ('otp_codes', 'auth_rate_limits', 'sessions')
+FROM pg_tables WHERE schemaname = 'public' AND tablename IN ('otp_codes', 'auth_rate_limits', 'sessions', 'agencies', 'invites', 'agency_members')
 \gexec
 SELECT 'REVOKE UPDATE, DELETE, TRUNCATE ON TABLE public.audit_log FROM anar_app'
 WHERE to_regclass('public.audit_log') IS NOT NULL

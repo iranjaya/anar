@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import {
   copyFileSync,
+  cpSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -31,35 +31,16 @@ function schemaFixture(schema: string, run: (root: string) => void) {
       "packages/db/drizzle.config.ts",
     ])
       copyFileSync(path.join(repo, file), path.join(root, file));
-    symlinkSync(path.join(repo, ".git"), path.join(root, ".git"));
     symlinkSync(
       path.join(repo, "packages/db/node_modules"),
       path.join(root, "packages/db/node_modules"),
     );
-    const tracked = execFileSync(
-      "git",
-      [
-        "ls-tree",
-        "-r",
-        "--name-only",
-        "HEAD",
-        "--",
-        "packages/db/src/schema",
-        "packages/db/migrations",
-      ],
-      { cwd: repo, encoding: "utf8" },
-    )
-      .trim()
-      .split("\n")
-      .filter(Boolean);
-    for (const file of tracked) {
-      const destination = path.join(root, file);
-      mkdirSync(path.dirname(destination), { recursive: true });
-      writeFileSync(
-        destination,
-        execFileSync("git", ["show", `HEAD:${file}`], { cwd: repo }),
-      );
-    }
+    for (const dir of [
+      "packages/db/src/schema",
+      "packages/db/migrations",
+      "packages/db/initial-sql",
+    ])
+      cpSync(path.join(repo, dir), path.join(root, dir), { recursive: true });
     const index = path.join(root, "packages/db/src/schema/index.ts");
     writeFileSync(index, `${readFileSync(index, "utf8")}\n${schema}`);
     run(root);
@@ -68,10 +49,10 @@ function schemaFixture(schema: string, run: (root: string) => void) {
   }
 }
 
-test("generates the committed schema in scratch storage", () => {
+test("accepts the regenerated initial migration before commit", () => {
   schemaFixture("", (root) => assert.doesNotThrow(() => checkMigrations(root)));
 });
-test("fails when a table has no committed migration", () => {
+test("fails when the initial migration misses a schema change", () => {
   schemaFixture(
     'import { pgTable, text } from "drizzle-orm/pg-core"; export const fixture = pgTable("fixture", { id: text("id") });',
     (root) => assert.throws(() => checkMigrations(root), /Migration drift/),
@@ -83,8 +64,46 @@ test("fails on a broken schema even when Drizzle exits zero", () => {
   );
 });
 
-test("accepts the empty S0 history", () => {
-  assert.deepEqual(migrationDrift(new Map(), new Map()), []);
+test("refuses a second migration before deployment", () => {
+  schemaFixture("", (root) => {
+    writeFileSync(
+      path.join(root, "packages/db/migrations/0001_extra.sql"),
+      "select 1;",
+    );
+    assert.throws(() => checkMigrations(root), /only 0000_initial/);
+  });
+});
+test("refuses a missing initial migration", () => {
+  schemaFixture("", (root) => {
+    rmSync(path.join(root, "packages/db/migrations/0000_initial.sql"));
+    assert.throws(() => checkMigrations(root), /only 0000_initial/);
+  });
+});
+test("refuses a missing owner index even when the snapshot is unchanged", () => {
+  schemaFixture("", (root) => {
+    const file = path.join(root, "packages/db/migrations/0000_initial.sql");
+    writeFileSync(
+      file,
+      readFileSync(file, "utf8").replace(
+        /CREATE UNIQUE INDEX "users_single_owner_idx"[^;]+;/,
+        "",
+      ),
+    );
+    assert.throws(() => checkMigrations(root), /Migration drift: initial SQL/);
+  });
+});
+test("refuses changed audit grants", () => {
+  schemaFixture("", (root) => {
+    const file = path.join(root, "packages/db/migrations/0000_initial.sql");
+    writeFileSync(
+      file,
+      readFileSync(file, "utf8").replace(
+        "GRANT SELECT, INSERT ON TABLE public.audit_log",
+        "GRANT SELECT, INSERT, UPDATE ON TABLE public.audit_log",
+      ),
+    );
+    assert.throws(() => checkMigrations(root), /Migration drift: initial SQL/);
+  });
 });
 test("detects changed SQL and metadata, including extra files", () => {
   const history = new Map([

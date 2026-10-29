@@ -1,15 +1,4 @@
 import { execFile } from "node:child_process";
-import {
-  cp,
-  mkdir,
-  mkdtemp,
-  readFile,
-  rm,
-  symlink,
-  writeFile,
-} from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { createPlatformDb } from "@anar/db/platform";
@@ -18,23 +7,14 @@ import { expect } from "vitest";
 import { startPostgres } from "../../../../test/support/postgres.js";
 
 const run = promisify(execFile);
-const dbDirectory = fileURLToPath(
-  new URL("../../../../packages/db/", import.meta.url),
-);
-
-export async function startBootstrapFixture(beforeOwner = false) {
+export async function startBootstrapFixture() {
   const postgres = await startPostgres();
   let db: Awaited<ReturnType<typeof createPlatformDb>> | undefined;
-  let scratch: string | undefined;
   const close = async () => {
     try {
       await db?.close();
     } finally {
-      try {
-        await postgres.stop();
-      } finally {
-        if (scratch) await rm(scratch, { recursive: true, force: true });
-      }
+      await postgres.stop();
       expect(
         (
           await run("docker", [
@@ -49,48 +29,9 @@ export async function startBootstrapFixture(beforeOwner = false) {
   };
   try {
     await postgres.bootstrap();
-    if (beforeOwner) {
-      const journal = JSON.parse(
-        await readFile(
-          path.join(dbDirectory, "migrations/meta/_journal.json"),
-          "utf8",
-        ),
-      ) as {
-        entries: { tag: string; idx: number; when: number }[];
-      };
-      const ownerIndex = journal.entries.findIndex(
-        (entry) => entry.tag === "0004_single-owner",
-      );
-      expect(ownerIndex).toBeGreaterThan(0);
-      journal.entries = journal.entries.slice(0, ownerIndex);
-      scratch = await mkdtemp(path.join(tmpdir(), "anar-owner-upgrade-"));
-      await cp(path.join(dbDirectory, "dist"), path.join(scratch, "dist"), {
-        recursive: true,
-      });
-      await symlink(
-        path.join(dbDirectory, "node_modules"),
-        path.join(scratch, "node_modules"),
-        "dir",
-      );
-      await mkdir(path.join(scratch, "migrations/meta"), { recursive: true });
-      await writeFile(
-        path.join(scratch, "migrations/meta/_journal.json"),
-        JSON.stringify(journal),
-      );
-      for (const entry of journal.entries)
-        await cp(
-          path.join(dbDirectory, `migrations/${entry.tag}.sql`),
-          path.join(scratch, `migrations/${entry.tag}.sql`),
-        );
-      await run(process.execPath, [path.join(scratch, "dist/migrate.js")], {
-        env: { ...process.env, MIGRATION_DATABASE_URL: postgres.migrationUrl },
-        timeout: 20000,
-      });
-    } else {
-      await postgres.migrate();
-      await postgres.bootstrap();
-      await postgres.migrate();
-    }
+    await postgres.migrate();
+    await postgres.bootstrap();
+    await postgres.migrate();
     db = await createPlatformDb(postgres.appUrl);
     const runtime = db;
     return {

@@ -21,6 +21,30 @@ function stepUpFixture() {
   };
 }
 
+function agencyFixture() {
+  return {
+    requireOwner: vi.fn(async (): Promise<never> => {
+      throw new Error("Unexpected owner lookup");
+    }),
+    createAgency: vi.fn(async (): Promise<never> => {
+      throw new Error("Unexpected agency creation");
+    }),
+    listAgencies: vi.fn(async () => ({ items: [], nextCursor: null })),
+  };
+}
+
+function inviteFixture() {
+  return {
+    admit: vi.fn(async () => ({ allowed: true, retryAfter: 0 })),
+    inspectInvite: vi.fn(async (): Promise<never> => {
+      throw new Error("Unexpected invite inspection");
+    }),
+    acceptInvite: vi.fn(async (): Promise<never> => {
+      throw new Error("Unexpected invite acceptance");
+    }),
+  };
+}
+
 describe("auth HTTP guards", () => {
   const apps: ReturnType<typeof buildApp>[] = [];
   afterEach(async () => {
@@ -47,6 +71,8 @@ describe("auth HTTP guards", () => {
       verifier: { verifyOtp },
       sessions: { ...sessionFixture(), refreshSession },
       stepUp: stepUpFixture(),
+      agencies: agencyFixture(),
+      invites: inviteFixture(),
       requireOrigin: originGuard("https://anar.example.test"),
       trustProxy: false,
     });
@@ -86,6 +112,8 @@ describe("auth HTTP guards", () => {
         },
       },
       stepUp: stepUpFixture(),
+      agencies: agencyFixture(),
+      invites: inviteFixture(),
       requireOrigin: originGuard("https://anar.example.test"),
       trustProxy: false,
     });

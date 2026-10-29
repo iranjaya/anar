@@ -48,7 +48,11 @@ export type SessionService = {
   revokeAllSessions(tx: PlatformTx, userId: string): Promise<void>;
   logout(request: Pick<FastifyRequest, "headers">): Promise<void>;
   clearCookie(): string;
-  lockSessionActor(tx: PlatformTx, actor: AuthSession): Promise<AuthSession>;
+  lockSessionActor(
+    tx: PlatformTx,
+    actor: AuthSession,
+    affectedUserIds?: string[],
+  ): Promise<AuthSession>;
   withPlatformSession<T>(
     actor: AuthSession,
     fn: (tx: PlatformTx, current: AuthSession) => Promise<T>,
@@ -182,13 +186,17 @@ const sessions = {
 
       clearCookie: cookie.clear,
 
-      async lockSessionActor(tx, actor) {
-        const user = await repository.lockUser(tx, actor.user.id);
-        const session = await repository.lockSession(
+      async lockSessionActor(tx, actor, affectedUserIds = []) {
+        const users = await repository.lockUsers(tx, [
+          ...new Set([actor.user.id, ...affectedUserIds]),
+        ]);
+        const user = users.find((row) => row.id === actor.user.id);
+        const rows = await repository.lockActorSessions(
           tx,
-          actor.user.id,
-          actor.session.id,
+          { userId: actor.user.id, id: actor.session.id },
+          affectedUserIds,
         );
+        const session = rows.find((row) => row.id === actor.session.id);
         return sessions._current(user, session, deps.now());
       },
 

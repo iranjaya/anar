@@ -269,7 +269,7 @@ export function checkBoundaries(root: string): string[] {
               const platformEntry =
                 specifier === "@anar/db/platform" ||
                 (target?.manifest.name === "@anar/db" &&
-                  /\/(?:src|dist)\/(?:platform|tenantScope|schema\/(?:platform|audit|authLimits|index))\.(?:d\.)?[cm]?[jt]s$/.test(
+                  /\/(?:src|dist)\/(?:platform|tenantScope|schema\/(?:agencies|platform|audit|authLimits|index))\.(?:d\.)?[cm]?[jt]s$/.test(
                     resolved?.replaceAll(path.sep, "/") ?? "",
                   ));
               if (
@@ -277,7 +277,7 @@ export function checkBoundaries(root: string): string[] {
                 pkg.manifest.name !== "@anar/db" &&
                 !(
                   pkg.manifest.name === "@anar/api" &&
-                  /^(?:src\/modules\/(?:auth|companies|tenant)\/|src\/modules\/notifications\/subscriptions(?:\/|\.ts$)|test\/(?:auth|companies|tenant)\/)/.test(
+                  /^(?:src\/modules\/(?:agencies|auth|companies|tenant)\/|src\/modules\/notifications\/subscriptions(?:\/|\.ts$)|test\/(?:agencies|auth|companies|tenant)\/)/.test(
                     local,
                   )
                 )

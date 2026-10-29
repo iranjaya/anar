@@ -4,6 +4,7 @@ import {
   emailJob,
   type JobRegistration,
   loadMailKey,
+  readInitialInviteAgency,
   registerJobs,
 } from "@anar/api/jobs";
 import { createQueueRuntime } from "@anar/db/queue";
@@ -36,6 +37,7 @@ export async function startWorker(
       mailCodec: createMailCodec(loadMailKey()),
       sendEmail: createEmailSender().sendEmail,
       now: () => new Date(),
+      readInitialInviteAgency,
     });
     jobs = [delivery.job];
     closeEmail = delivery.close;

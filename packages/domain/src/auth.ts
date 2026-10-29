@@ -47,6 +47,45 @@ export const otpEmailJobSchema = z.strictObject({
   encryptedMessage: z.string().min(1),
 }) satisfies z.ZodType<JobPayload>;
 
+export const inviteEmailJobSchema = otpEmailJobSchema.extend({
+  kind: z.literal("invite"),
+});
+export const authEmailJobSchema = z.discriminatedUnion("kind", [
+  otpEmailJobSchema,
+  inviteEmailJobSchema,
+]);
+export const inviteTokenSchema = z.strictObject({
+  token: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+});
+export const acceptInviteSchema = inviteTokenSchema.extend({
+  name: z.string().trim().min(1).max(120),
+});
+export const acceptInviteResultSchema = z.strictObject({ userId: z.uuid() });
+const inviteViewFields = {
+  email: emailSchema,
+  name: z.string().trim().min(1).max(120),
+  agencyName: z.string().trim().min(1).max(160),
+  expiresAt: wireDateSchema,
+};
+export const inviteViewSchema = z.discriminatedUnion("kind", [
+  z.strictObject({
+    ...inviteViewFields,
+    kind: z.literal("agency_staff"),
+    companyName: z.null(),
+  }),
+  z.strictObject({
+    ...inviteViewFields,
+    kind: z.literal("company_member"),
+    companyName: z.string().trim().min(1).max(160),
+  }),
+]);
+export type InviteTokenInput = z.infer<typeof inviteTokenSchema>;
+export type AcceptInviteInput = z.infer<typeof acceptInviteSchema>;
+export type AcceptInviteResult = z.infer<typeof acceptInviteResultSchema>;
+export type InviteView = Omit<z.infer<typeof inviteViewSchema>, "expiresAt"> & {
+  expiresAt: Date;
+};
+
 export const bootstrapOwnerSchema = z.strictObject({
   environment: z
     .string()

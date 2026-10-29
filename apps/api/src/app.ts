@@ -1,5 +1,11 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import { registerHttp, safeLogger } from "./lib/http.js";
+import agencyRoutes, {
+  type AgencyRouteOptions,
+} from "./modules/agencies/routes.js";
+import inviteRoutes, {
+  type InviteRouteOptions,
+} from "./modules/auth/inviteRoutes.js";
 import type {
   AuthRouteOptions,
   RefreshRouteOptions,
@@ -14,7 +20,9 @@ export type AppDeps = AuthRouteOptions &
   VerifyRouteOptions &
   RefreshRouteOptions &
   SessionRouteOptions &
-  StepUpRouteOptions & {
+  StepUpRouteOptions &
+  AgencyRouteOptions &
+  InviteRouteOptions & {
     trustProxy: false | string[];
     logging?: boolean;
   };
@@ -29,6 +37,14 @@ export function buildApp(deps?: AppDeps): FastifyInstance {
   registerHttp(app);
   app.register(healthRoutes);
   if (deps) {
+    app.register(inviteRoutes.register, {
+      invites: deps.invites,
+      requireOrigin: deps.requireOrigin,
+    });
+    app.register(agencyRoutes.register, {
+      agencies: deps.agencies,
+      requireOrigin: deps.requireOrigin,
+    });
     app.register(routes.register, {
       otp: deps.otp,
       requireOrigin: deps.requireOrigin,

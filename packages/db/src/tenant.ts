@@ -1,7 +1,8 @@
 import { createDb, type DbHandle } from "./connection.js";
 import tenantScope from "./tenantScope.js";
 
-export type TenantScope = { companyId: string; userId: string };
+export type AgencyScope = { agencyId: string; userId: string };
+export type TenantScope = AgencyScope & { companyId: string };
 export type TenantTx = Parameters<
   Parameters<DbHandle["db"]["transaction"]>[0]
 >[0];
@@ -32,7 +33,7 @@ export async function createTenantDb(
     ): Promise<T> {
       return handle.withConnection((connection) =>
         connection.transaction(async (tx) => {
-          await tenantScope.set(tx, scope);
+          await tenantScope.set(tx, { kind: "company", ...scope });
           return fn(tx);
         }),
       );

@@ -1,7 +1,7 @@
 import { otpCodes, type PlatformTx, sessions, users } from "@anar/db/platform";
 import type { AuthUser } from "@anar/domain/auth";
 import { AppError } from "@anar/domain/errors";
-import { and, desc, eq, gt, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, or } from "drizzle-orm";
 
 const repository = {
   async findOtpUser(tx: PlatformTx, email: string) {
@@ -55,6 +55,38 @@ const repository = {
     return user;
   },
 
+  async lockUsers(tx: PlatformTx, ids: string[]) {
+    return tx
+      .select()
+      .from(users)
+      .where(inArray(users.id, ids))
+      .orderBy(asc(users.id))
+      .for("update");
+  },
+
+  async ensureInviteUser(
+    tx: PlatformTx,
+    input: { id: string; email: string; name: string },
+  ) {
+    const [created] = await tx
+      .insert(users)
+      .values(input)
+      .onConflictDoNothing({ target: users.email })
+      .returning();
+    if (created) return created;
+    const [existing] = await tx
+      .select()
+      .from(users)
+      .where(eq(users.email, input.email));
+    if (!existing) throw new AppError("conflict", "Invite cannot be accepted");
+    return existing;
+  },
+
+  async readUser(tx: PlatformTx, id: string) {
+    const [user] = await tx.select().from(users).where(eq(users.id, id));
+    return user;
+  },
+
   async lockSession(tx: PlatformTx, userId: string, id: string) {
     const [session] = await tx
       .select()
@@ -62,6 +94,27 @@ const repository = {
       .where(and(eq(sessions.id, id), eq(sessions.userId, userId)))
       .for("update");
     return session;
+  },
+
+  async lockActorSessions(
+    tx: PlatformTx,
+    actor: { userId: string; id: string },
+    affectedUserIds: string[],
+  ) {
+    const current = and(
+      eq(sessions.userId, actor.userId),
+      eq(sessions.id, actor.id),
+    );
+    return tx
+      .select()
+      .from(sessions)
+      .where(
+        affectedUserIds.length
+          ? or(current, inArray(sessions.userId, affectedUserIds))
+          : current,
+      )
+      .orderBy(asc(sessions.id))
+      .for("update");
   },
 
   async listSessions(tx: PlatformTx, userId: string, at: Date) {

@@ -1,10 +1,12 @@
 import { createDb } from "./connection.js";
-import type { TenantScope, TenantTx } from "./tenant.js";
+import type { AgencyScope, TenantScope, TenantTx } from "./tenant.js";
 import tenantScope from "./tenantScope.js";
 
+export { agencies, agencyMembers } from "./schema/agencies.js";
 export { auditLog } from "./schema/audit.js";
 export { authRateLimits } from "./schema/authLimits.js";
-export { otpCodes, sessions, users } from "./schema/platform.js";
+export { invites, otpCodes, sessions, users } from "./schema/platform.js";
+export type { AgencyScope, TenantScope } from "./tenant.js";
 
 export type PlatformTx = TenantTx;
 export type PlatformDb = {
@@ -34,6 +36,24 @@ export async function withPlatformTenant<T>(
   scope: TenantScope,
   fn: (tx: TenantTx) => Promise<T>,
 ): Promise<T> {
-  await tenantScope.set(tx, scope);
+  await tenantScope.set(tx, { kind: "company", ...scope });
+  return fn(tx);
+}
+
+export async function withPlatformIdentity<T>(
+  tx: PlatformTx,
+  userId: string,
+  fn: (tx: PlatformTx) => Promise<T>,
+): Promise<T> {
+  await tenantScope.set(tx, { kind: "identity", userId });
+  return fn(tx);
+}
+
+export async function withPlatformAgency<T>(
+  tx: PlatformTx,
+  scope: AgencyScope,
+  fn: (tx: PlatformTx) => Promise<T>,
+): Promise<T> {
+  await tenantScope.set(tx, { kind: "agency", ...scope });
   return fn(tx);
 }

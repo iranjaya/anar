@@ -30,7 +30,13 @@ const bootstrap = {
       if (result.created) {
         await audit.audit(
           tx,
-          { user: result.user, agencyId: null, companyId: null, ip: null },
+          {
+            user: result.user,
+            role: "owner",
+            agencyId: null,
+            companyId: null,
+            ip: null,
+          },
           "auth.bootstrap_owner",
           { type: "user", id: result.user.id },
           { environment: parsed.data.environment },

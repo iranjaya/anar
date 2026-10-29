@@ -6,6 +6,8 @@ export function proxy(request: NextRequest) {
     path === "/login" ||
     path.startsWith("/login/") ||
     path === "/invite" ||
+    path === "/owner" ||
+    path.startsWith("/owner/") ||
     path === "/account/sessions";
   const incoming = new Headers(request.headers);
   incoming.set("x-anar-auth-screen", authScreen ? "1" : "0");

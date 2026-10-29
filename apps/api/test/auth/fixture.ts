@@ -23,8 +23,11 @@ import { buildApp } from "../../src/app.js";
 import { createMailCodec } from "../../src/lib/email/crypto.js";
 import stepUpCode from "../../src/lib/email/templates/stepUpCode.js";
 import { originGuard } from "../../src/lib/http.js";
+import agencies from "../../src/modules/agencies/service.js";
 import bootstrap from "../../src/modules/auth/bootstrap.js";
 import type { CookieTransport } from "../../src/modules/auth/cookies.js";
+import inviteAcceptance from "../../src/modules/auth/inviteAcceptance.js";
+import invites from "../../src/modules/auth/invites.js";
 import otp from "../../src/modules/auth/otp.js";
 import type { SessionService } from "../../src/modules/auth/sessions.js";
 
@@ -112,6 +115,7 @@ export async function startAuthFixture() {
   async function addApp(
     transport: CookieTransport = { protocol: "http", local: true },
   ): Promise<ApiInstance> {
+    if (!db) throw new Error("Proof database is not ready");
     const requester = await otp.start({
       connectionString: postgres.appUrl,
       otpPepper: pepper,
@@ -128,6 +132,24 @@ export async function startAuthFixture() {
       });
       const verification = verifier;
       const app = buildApp({
+        invites: inviteAcceptance.create({
+          db,
+          otpPepper: pepper,
+          now,
+          readInitialInviteAgency: agencies.readInitialInviteAgency,
+          lockInitialInviteAgency: agencies.lockInitialInviteAgency,
+          hasStaffMembership: agencies.hasStaffMembership,
+          activateInvitedStaff: agencies.activateInvitedStaff,
+        }),
+        agencies: agencies.create({
+          sessions: verification.sessions,
+          createInitialInvite: invites.create({
+            publicOrigin,
+            mailCodec: codec,
+            now,
+          }).createInitialInvite,
+          now,
+        }),
         otp: requester.service,
         verifier: verification.service,
         sessions: verification.sessions,

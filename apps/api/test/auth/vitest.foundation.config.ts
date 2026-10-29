@@ -10,6 +10,8 @@ export default defineConfig({
       "test/auth/refresh.integration.spec.ts",
       "test/auth/sessions.integration.spec.ts",
       "test/auth/stepUp.integration.spec.ts",
+      "test/agencies/onboarding.integration.spec.ts",
+      "test/agencies/acceptance.integration.spec.ts",
     ],
     hookTimeout: 60000,
     testTimeout: 30000,

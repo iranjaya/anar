@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./agencies": {
+      "types": "./dist/agencies.d.ts",
+      "default": "./dist/agencies.js"
+    },
     "./auth": {
       "types": "./dist/auth.d.ts",
       "default": "./dist/auth.js"

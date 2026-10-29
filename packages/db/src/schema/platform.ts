@@ -10,8 +10,42 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { agencies } from "./agencies.js";
 
 const citext = customType<{ data: string }>({ dataType: () => "citext" });
+
+export const invites = pgTable(
+  "invites",
+  {
+    id: uuid("id").primaryKey(),
+    agencyId: uuid("agency_id")
+      .notNull()
+      .references(() => agencies.id, { onDelete: "restrict" }),
+    companyId: uuid("company_id"),
+    email: citext("email").notNull(),
+    name: text("name").notNull(),
+    role: text("role").notNull().$type<"agency_staff">(),
+    tokenHash: text("token_hash").notNull().unique(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    check(
+      "invites_target_check",
+      sql`${table.role} = 'agency_staff' AND ${table.companyId} IS NULL`,
+    ),
+    uniqueIndex("invites_pending_staff_idx")
+      .on(table.agencyId, table.email)
+      .where(sql`${table.acceptedAt} IS NULL AND ${table.revokedAt} IS NULL`),
+  ],
+);
 
 export const users = pgTable(
   "users",

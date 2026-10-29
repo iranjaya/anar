@@ -29,7 +29,7 @@ Read on shared branch `ui-mock`, 2026-10-29. These are file observations, not cl
 | S1.5: auth `sessions.ts` refresh | No renewal algorithm change. Refresh may renew identity, never restore revoked agency membership or extend acting expiry. Existing locked `withPlatformSession` remains the identity guard; add authorization in the new agency wrapper. |
 | DB `tenant.ts`, `tenantScope.ts`, `platform.ts` | Extend the existing scope setter and same-transaction bridge with agency scope. Do not add feature pools or copy `set_config`. |
 | Domain `tenant.ts` / `auth.ts` | Separate real `AuthUser` from demo `User` before removing the legacy role from real auth. Add real agency/company context contracts without changing mock users, cookies, roles or seed behavior. |
-| Migrations `0000_lucky_bastion.sql` through `0003_messy_hydra.sql` | Identity/audit, heartbeat, OTP/limits and sessions already exist. Keep all four and their snapshots immutable; generate follow-up migrations from the accepted writer head. No assumption that the next free number is 0004. |
+| Migration `0000_initial.sql` | Before the first real deploy, regenerate one initial migration from accepted schema files. Preserve custom SQL and prove a fresh disposable DB plus repeated migration. See `docs/migrations/README.md`. |
 
 No company, invitation or membership table exists in the inspected migrations. Therefore these are new tables, not a claimed production backfill. No live DB or source CSV was opened. Existing edits to developer-design email documentation are preserved.
 
@@ -241,15 +241,15 @@ Agency actions have agency ID; company actions have both IDs, with entered reaso
 
 | Logical change | Step | Prerequisites and proof |
 | --- | --- | --- |
-| Existing identity/audit, heartbeat, OTP/limits, sessions | S1.1–S1.5 as already built/in progress | Keep migrations 0000–0003 and writer changes; do not regenerate their history. |
-| Owner constraint/bootstrap correction | S1.1a | Follow-up migration changes current role check and single-owner uniqueness; bootstrap/audit names change. Empty and previous-head upgrade proof. |
+| Existing identity/audit, heartbeat, OTP/limits, sessions | S1.1–S1.5 as already built/in progress | Include accepted schema in the single initial migration before first deployment. |
+| Owner constraint/bootstrap correction | S1.1a | Initial owner-only check and singleton index; bootstrap/audit names change. Fresh and repeated migration proof. |
 | Agency registry/staff, invite storage, agency RLS and audit agency scope | S1.8a | Owner/session/step-up/queue; pending agency + first-staff acceptance is atomic. |
 | Company shell, company/member RLS, invite company FK and session acting FK | S1.8c/S1.9 | Agency exists. Attach FKs when referenced company table exists; no cross-agency mismatch accepted. |
 | Only required policy/constraint corrections | S2 | No ceremonial empty migration or recreated foundation. |
 
 An existing agency-specific privileged user is **not** automatically the owner. Before a populated upgrade, inventory privileged users, memberships and audit counts in that environment and get Sishir's explicit mapping/data-change decision. Proposed conversion: old operational users become first-agency staff with platform_role cleared; create Sishir's owner separately through the command; revoke converted users' sessions. Preserve historical audit text, and only attach historical agency/company scope with an approved mapping. Default migration refuses unexplained legacy privileged rows rather than granting owner power. Disposable fixtures may be reset or explicitly mapped in test setup. No production reset/backfill is authorized by this docs task.
 
-Integrator generates the next migration from the accepted schema head, with fresh-install, previous-head upgrade, repeat and runtime-grants/RLS proofs. Applied migrations are immutable; no promise about the next numeric filename. Deploy corrected auth and hierarchy schema together; old runtime expecting its former role must not run against the corrected check. Populated upgrades need the separately reviewed data plan; actual row counts, duration and rollback are unknown here.
+Until the first real deployment, the integrator regenerates one `0000_initial.sql` from accepted schema files, preserving custom grants/RLS SQL and proving fresh install and repeat. No numbered follow-up migrations. This replaces the earlier immutable-history rule because nothing is deployed and no real data exists. After the first real deployment, use immutable applied migrations and separately reviewed populated-upgrade plans.
 
 ### Queue and lifecycle contract
 
@@ -391,7 +391,7 @@ Proof vocabulary: `D` = `pnpm --filter @anar/domain test`; `U` = `pnpm --filter 
 ### S1 steps
 
 **S1.1 — Existing identity/bootstrap foundation; keep its history.**
-Already present: DB platform/audit, CLI bootstrap, domain auth/HTTP and tests. Retain transaction, environment check, hash-free output and append-only audit. The role semantics change in S1.1a, not by rewriting migration 0000.
+Already present: DB platform/audit, CLI bootstrap, domain auth/HTTP and tests. Retain transaction, environment check, hash-free output and append-only audit. The S1.1a owner semantics are included in the regenerated initial migration.
 
 **S1.1a — Bootstrap the single owner.**
 Files: `packages/db/src/schema/{platform,audit}.ts`; `packages/domain/src/auth.ts`; API `modules/auth/{bootstrap,repository}.ts`, `modules/tenant/audit.ts`, `apps/api/package.json`; follow-up migration and existing bootstrap proof via integrator.
@@ -614,10 +614,10 @@ Avoid a scoring↔leads cycle: the pure scorer accepts plain data. Recompute rea
 ### Parallel migrations without collisions
 
 1. Each writer changes only their schema file and supplies a logical migration proposal in `docs/migrations/<module>/<change>.md`: tables/constraints/RLS/grants, dependencies, data impact, upgrade/rollback compatibility and required proof. Optional scratch SQL stays unnumbered outside `packages/db/migrations`; the integrator reviews it. Writers never commit generated journals/snapshots or reserve number ranges.
-2. Integrator takes one reviewed change at a time on the current integration head, registers schemas, generates the next migration from the actual accepted snapshot, and adds reviewed custom RLS/grant/queue SQL. No parallel “0005” files and no hand-merged journals. Record which owner/PR supplied the logical change.
+2. Integrator takes one reviewed change at a time, registers schemas, regenerates the single initial migration before first deployment, and restores reviewed custom RLS/grant SQL. No numbered follow-ups or hand-merged journals. Record which owner/PR supplied the logical change.
 3. Apply to an empty Postgres 17 database and one at the previous accepted head; run migration twice, catalog RLS/grants/FK checks and the module integration proof. Failed upgrade does not get hidden by recreating a local DB. Cross-module FK waits until both referenced tables exist; the lead-to-batch FK is the explicit S4 example.
 4. Merge schema + final generated migration + dependent runtime behavior as a coherent reviewed unit. The integrator does not silently rewrite module logic. Other writers rebase onto this accepted head before their final DB proof; stale scratch migrations are regenerated, never renumbered in isolation.
-5. Integrator alone updates manifests, runs package installation and regenerates the single lockfile. Writers supply exact dependency requests. No shared pnpm writes; no overlapping full Playwright/Compose runs. An applied migration is immutable; subsequent corrections are new migrations.
+5. Integrator alone updates manifests, runs package installation and regenerates the single lockfile. Writers supply exact dependency requests. No shared pnpm writes; no overlapping full Playwright/Compose runs. After the first real deployment, applied migrations become immutable and subsequent corrections use new migrations.
 
 The integrator publishes a short hand-off per merge: accepted commit, exported contract changes, ordered migration list, flags now enabled and proof commands/results. A writer can keep building pure logic on an older baseline, but merge proof must use the latest accepted contracts/schema. Source and tests still get separate reviews; parallelism changes ownership, not permission to skip review.
 

@@ -4,6 +4,9 @@ import { loadApiConfig } from "./lib/config.js";
 import { createMailCodec } from "./lib/email/crypto.js";
 import stepUpCode from "./lib/email/templates/stepUpCode.js";
 import { originGuard } from "./lib/http.js";
+import agencies from "./modules/agencies/service.js";
+import inviteAcceptance from "./modules/auth/inviteAcceptance.js";
+import invites from "./modules/auth/invites.js";
 import otp from "./modules/auth/otp.js";
 
 export async function startApi(): Promise<void> {
@@ -20,23 +23,49 @@ export async function startApi(): Promise<void> {
   }
 
   const config = loadApiConfig();
+  const mailCodec = createMailCodec(config.mailKey);
+  const now = () => new Date();
+  const invitations = invites.create({
+    publicOrigin: config.publicOrigin,
+    mailCodec,
+    now,
+  });
   const runtime = await otp.start({
     connectionString: config.connectionString,
     otpPepper: config.otpPepper,
-    mailCodec: createMailCodec(config.mailKey),
-    now: () => new Date(),
+    mailCodec,
+    now,
   });
   let app: FastifyInstance | undefined;
   let verifier: Awaited<ReturnType<typeof otp.startVerifier>> | undefined;
+  let acceptance:
+    | Awaited<ReturnType<typeof inviteAcceptance.start>>
+    | undefined;
   try {
     verifier = await otp.startVerifier({
       connectionString: config.connectionString,
       otpPepper: config.otpPepper,
       cookieTransport: config.cookieTransport,
-      now: () => new Date(),
+      now,
     });
     const verification = verifier;
+    acceptance = await inviteAcceptance.start({
+      connectionString: config.connectionString,
+      otpPepper: config.otpPepper,
+      now,
+      readInitialInviteAgency: agencies.readInitialInviteAgency,
+      lockInitialInviteAgency: agencies.lockInitialInviteAgency,
+      hasStaffMembership: agencies.hasStaffMembership,
+      activateInvitedStaff: agencies.activateInvitedStaff,
+    });
+    const inviteRuntime = acceptance;
     app = buildApp({
+      invites: inviteRuntime.service,
+      agencies: agencies.create({
+        sessions: verification.sessions,
+        createInitialInvite: invitations.createInitialInvite,
+        now,
+      }),
       otp: runtime.service,
       verifier: verification.service,
       sessions: verification.sessions,
@@ -58,14 +87,23 @@ export async function startApi(): Promise<void> {
     app.addHook("onClose", async () => {
       process.off("SIGINT", stop);
       process.off("SIGTERM", stop);
-      await Promise.all([runtime.close(), verification.close()]);
+      await Promise.all([
+        runtime.close(),
+        verification.close(),
+        inviteRuntime.close(),
+      ]);
     });
     process.once("SIGINT", stop);
     process.once("SIGTERM", stop);
     await app.listen({ host, port });
   } catch (error) {
     if (app) await app.close();
-    else await Promise.all([runtime.close(), verifier?.close()]);
+    else
+      await Promise.all([
+        runtime.close(),
+        verifier?.close(),
+        acceptance?.close(),
+      ]);
     throw error;
   }
 }

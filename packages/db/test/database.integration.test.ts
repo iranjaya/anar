@@ -23,10 +23,12 @@ import { type Postgres, startPostgres } from "./postgres.js";
 
 const run = promisify(execFile);
 const scopeA = {
+  agencyId: "cccccccc-cccc-cccc-cccc-cccccccccccc",
   companyId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
   userId: "11111111-1111-1111-1111-111111111111",
 };
 const scopeB = {
+  agencyId: "dddddddd-dddd-dddd-dddd-dddddddddddd",
   companyId: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
   userId: "22222222-2222-2222-2222-222222222222",
 };
@@ -154,8 +156,11 @@ describe("database roles and tenant transactions", () => {
       expect(output.split("\n").at(-1)).toBe("COMMIT");
     expect(migrationResults).toHaveLength(2);
     expect(productTables).toEqual([
+      { tablename: "agencies" },
+      { tablename: "agency_members" },
       { tablename: "audit_log" },
       { tablename: "auth_rate_limits" },
+      { tablename: "invites" },
       { tablename: "otp_codes" },
       { tablename: "sessions" },
       { tablename: "users" },
@@ -194,18 +199,21 @@ describe("database roles and tenant transactions", () => {
       WHERE member = (SELECT oid FROM pg_roles WHERE rolname = current_user)`);
     expect(memberships.rows).toEqual([{ count: 0 }]);
     const owner =
-      await runtime.pool.query(`SELECT pg_get_userbyid(c.relowner) AS table_owner,
+      await runtime.pool.query(`SELECT c.relname AS table_name, pg_get_userbyid(c.relowner) AS table_owner,
       pg_get_userbyid(n.nspowner) AS schema_owner, c.relrowsecurity, c.relforcerowsecurity
       FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-      WHERE c.oid = 'public.tenant_scope_fixture'::regclass`);
-    expect(owner.rows).toEqual([
-      {
+      WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')
+        AND c.relname NOT IN ('agencies', 'audit_log', 'auth_rate_limits', 'invites', 'otp_codes', 'sessions', 'users', 'worker_heartbeats')
+      ORDER BY c.relname`);
+    expect(owner.rows).toEqual(
+      ["agency_members", "tenant_scope_fixture"].map((table_name) => ({
+        table_name,
         table_owner: "anar_migrate",
         schema_owner: "anar_migrate",
         relrowsecurity: true,
         relforcerowsecurity: true,
-      },
-    ]);
+      })),
+    );
   });
 
   it.each([
@@ -330,7 +338,7 @@ describe("database roles and tenant transactions", () => {
     },
   );
 
-  it.each(["companyId", "userId"] as const)(
+  it.each(["agencyId", "companyId", "userId"] as const)(
     "rejects an invalid %s before the callback",
     async (key) => {
       const callback = vi.fn(async () => {});
@@ -342,7 +350,7 @@ describe("database roles and tenant transactions", () => {
   );
 
   it.each([false, true])(
-    "clears both settings after rollback=%s on the same connection",
+    "clears all scope settings after rollback=%s on the same connection",
     async (rollback) => {
       const before = (
         await runtime.pool.query("SELECT pg_backend_pid() AS pid")
@@ -361,10 +369,12 @@ describe("database roles and tenant transactions", () => {
       if (rollback) await expect(result).rejects.toBe(failure);
       else await expect(result).resolves.toBe("done");
       const settings = await runtime.pool.query(`SELECT pg_backend_pid() AS pid,
+      NULLIF(current_setting('app.scope_kind', true), '') AS kind,
+      NULLIF(current_setting('app.agency_id', true), '') AS agency,
       NULLIF(current_setting('app.company_id', true), '') AS company,
       NULLIF(current_setting('app.user_id', true), '') AS usr`);
       expect(settings.rows).toEqual([
-        { pid: before, company: null, usr: null },
+        { pid: before, kind: null, agency: null, company: null, usr: null },
       ]);
       expect(
         (await runtime.pool.query("SELECT * FROM public.tenant_scope_fixture"))

@@ -5,36 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1793248911625,
-      "tag": "0000_lucky_bastion",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1793249604935,
-      "tag": "0001_short_mole_man",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1793252435234,
-      "tag": "0002_sturdy_sir_ram",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1793252974447,
-      "tag": "0003_messy_hydra",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1793259489636,
-      "tag": "0004_single-owner",
+      "when": 1793265559494,
+      "tag": "0000_initial",
       "breakpoints": true
     }
   ]

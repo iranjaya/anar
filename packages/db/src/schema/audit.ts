@@ -1,4 +1,6 @@
+import { sql } from "drizzle-orm";
 import {
+  check,
   index,
   jsonb,
   pgTable,
@@ -6,13 +8,16 @@ import {
   timestamp,
   uuid,
 } from "drizzle-orm/pg-core";
+import { agencies } from "./agencies.js";
 import { users } from "./platform.js";
 
 export const auditLog = pgTable(
   "audit_log",
   {
     id: uuid("id").primaryKey(),
-    agencyId: uuid("agency_id"),
+    agencyId: uuid("agency_id").references(() => agencies.id, {
+      onDelete: "restrict",
+    }),
     companyId: uuid("company_id"),
     actorUserId: uuid("actor_user_id")
       .notNull()
@@ -28,6 +33,10 @@ export const auditLog = pgTable(
       .defaultNow(),
   },
   (table) => [
+    check(
+      "audit_log_company_agency_check",
+      sql`${table.companyId} IS NULL OR ${table.agencyId} IS NOT NULL`,
+    ),
     index("audit_log_agency_time_idx").on(
       table.agencyId,
       table.createdAt,

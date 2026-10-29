@@ -1,6 +1,5 @@
 import { execFileSync } from "node:child_process";
 import {
-  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -39,31 +38,33 @@ export function checkMigrations(root: string): void {
   const cache = path.join(root, ".cache");
   mkdirSync(cache, { recursive: true });
   const scratch = mkdtempSync(path.join(cache, "migrations-"));
-  const history = path.join(scratch, "history");
+  const history = path.join(root, "packages/db/migrations");
   const generated = path.join(scratch, "generated");
   const packageDir = path.join(root, "packages/db");
   try {
-    mkdirSync(history);
-    const tracked = execFileSync(
-      "git",
-      ["ls-tree", "-r", "--name-only", "HEAD", "--", "packages/db/migrations"],
-      { cwd: root, encoding: "utf8" },
+    const baseline = migrationFiles(history);
+    const required = [
+      "0000_initial.sql",
+      "meta/0000_snapshot.json",
+      "meta/_journal.json",
+    ];
+    if (
+      JSON.stringify([...baseline.keys()].sort()) !== JSON.stringify(required)
     )
-      .trim()
-      .split("\n")
-      .filter(Boolean);
-    for (const file of tracked) {
-      const destination = path.join(
-        history,
-        path.relative("packages/db/migrations", file),
+      throw new Error(
+        "Pre-deploy migrations must contain only 0000_initial.sql and its metadata",
       );
-      mkdirSync(path.dirname(destination), { recursive: true });
-      writeFileSync(
-        destination,
-        execFileSync("git", ["show", `HEAD:${file}`], { cwd: root }),
+    const journal = JSON.parse(
+      readFileSync(path.join(history, "meta/_journal.json"), "utf8"),
+    );
+    if (
+      journal.entries?.length !== 1 ||
+      journal.entries[0].idx !== 0 ||
+      journal.entries[0].tag !== "0000_initial"
+    )
+      throw new Error(
+        "Pre-deploy migrations require one initial journal entry",
       );
-    }
-    cpSync(history, generated, { recursive: true });
     const config = path.join(scratch, "drizzle.config.ts");
     writeFileSync(
       config,
@@ -76,6 +77,8 @@ export function checkMigrations(root: string): void {
         "generate",
         "--config",
         config,
+        "--name",
+        "initial",
       ],
       {
         cwd: packageDir,
@@ -91,28 +94,37 @@ export function checkMigrations(root: string): void {
     process.stdout.write(output);
     if (!/^\d+ tables\s*$/m.test(output))
       throw new Error("Drizzle did not report a generated schema");
-    const baseline = migrationFiles(history);
-    const expected = migrationFiles(generated);
-    if (!baseline.size && expected.size === 1) {
-      const journal = expected.get("meta/_journal.json");
-      if (
-        journal &&
-        JSON.stringify(JSON.parse(journal)) ===
-          JSON.stringify({ version: "7", dialect: "postgresql", entries: [] })
-      )
-        expected.clear();
-    }
-    const schemaDrift = migrationDrift(baseline, expected);
-    const workingDrift = migrationDrift(
-      baseline,
-      migrationFiles(path.join(packageDir, "migrations")),
-    );
-    if (schemaDrift.length || workingDrift.length)
+    const read = (dir: string, name: string) =>
+      readFileSync(path.join(dir, name), "utf8");
+    const statements = (sql: string) =>
+      sql
+        .split("--> statement-breakpoint")
+        .map((statement) => statement.trim())
+        .filter(Boolean);
+    const expectedSql = [
+      read(packageDir, "initial-sql/before.sql"),
+      read(generated, "0000_initial.sql"),
+      read(packageDir, "initial-sql/after.sql"),
+    ].flatMap(statements);
+    if (
+      JSON.stringify(statements(read(history, "0000_initial.sql"))) !==
+      JSON.stringify(expectedSql)
+    )
       throw new Error(
-        `Migration drift: ${[...new Set([...schemaDrift, ...workingDrift])].join(", ")}`,
+        "Migration drift: initial SQL differs from schema and reviewed custom SQL",
       );
+    const snapshot = (dir: string) => {
+      const { id: _id, ...schema } = JSON.parse(
+        read(dir, "meta/0000_snapshot.json"),
+      );
+      return schema;
+    };
+    if (
+      JSON.stringify(snapshot(history)) !== JSON.stringify(snapshot(generated))
+    )
+      throw new Error("Migration drift: initial snapshot differs from schema");
     console.log(
-      `Migrations passed: ${baseline.size} committed SQL/metadata files, no schema or working-tree drift.`,
+      "Migrations passed: one initial migration, no SQL or schema drift.",
     );
   } finally {
     rmSync(scratch, { recursive: true, force: true });

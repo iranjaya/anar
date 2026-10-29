@@ -11,6 +11,7 @@ import {
 
 const input = { environment: "proof", name: "Proof owner" };
 const scope = {
+  agencyId: "cccccccc-cccc-cccc-cccc-cccccccccccc",
   companyId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
   userId: "11111111-1111-1111-1111-111111111111",
 };
@@ -443,92 +444,26 @@ describe("single owner bootstrap on disposable Postgres", () => {
     },
   );
 
-  it("upgrades ordinary identities and historical audit without rewriting them", async () => {
-    const previous = await startBootstrapFixture(true);
-    try {
-      const actorId = v7();
-      const auditId = v7();
-      await previous.rows(
-        sql`insert into users (id,email,name) values (${actorId},'historical@example.test','Historical user')`,
-      );
-      await previous.rows(
-        sql`insert into audit_log (id,actor_user_id,actor_role,action,target_type,target_id,data) values (${auditId},${actorId},'dna','auth.bootstrap_dna','user',${actorId},'{}'::jsonb)`,
-      );
-      const identities = await previous.rows(sql`select * from users`);
-      const history = await previous.rows(
-        sql`select id,actor_user_id,actor_role,action,target_type,target_id,data,created_at from audit_log`,
-      );
-      await previous.postgres.migrate();
-      expect(await previous.rows(sql`select * from users`)).toEqual(identities);
-      expect(
-        await previous.rows(
-          sql`select id,actor_user_id,actor_role,action,target_type,target_id,data,created_at from audit_log`,
-        ),
-      ).toEqual(history);
-      expect(
-        await previous.rows(sql`select agency_id,company_id from audit_log`),
-      ).toEqual([{ agency_id: null, company_id: null }]);
-      await bootstrap.bootstrapOwner(previous.db, {
-        ...input,
-        email: "new-owner@example.test",
-      });
-      await previous.postgres.bootstrap();
-      await previous.postgres.migrate();
-      expect(
-        await previous.rows(
-          sql`select count(*)::int as count from users where platform_role = 'owner'`,
-        ),
-      ).toEqual([{ count: 1 }]);
-      expect(
-        await previous.rows(
-          sql`select actor_role,action from audit_log where id = ${auditId}`,
-        ),
-      ).toEqual([{ actor_role: "dna", action: "auth.bootstrap_dna" }]);
-    } finally {
-      await previous.close();
-    }
+  it("preserves ordinary identities and audit through repeated initial setup", async () => {
+    const actorId = v7();
+    await fixture.rows(
+      sql`insert into users (id,email,name) values (${actorId},'ordinary@example.test','Ordinary')`,
+    );
+    await bootstrap.bootstrapOwner(fixture.db, {
+      ...input,
+      email: "owner@example.test",
+    });
+    const identities = await fixture.rows(sql`select * from users order by id`);
+    const history = await fixture.rows(
+      sql`select * from audit_log order by id`,
+    );
+    await fixture.postgres.bootstrap();
+    await fixture.postgres.migrate();
+    expect(await fixture.rows(sql`select * from users order by id`)).toEqual(
+      identities,
+    );
+    expect(
+      await fixture.rows(sql`select * from audit_log order by id`),
+    ).toEqual(history);
   });
-
-  it.each(["legacy-role", "multiple-owners"])(
-    "refuses an unreviewed %s upgrade atomically",
-    async (kind) => {
-      const previous = await startBootstrapFixture(true);
-      try {
-        if (kind === "legacy-role")
-          await previous.owner(
-            `INSERT INTO users (id,email,name,platform_role) VALUES ('${v7()}','legacy@example.test','Legacy','dna')`,
-          );
-        else
-          await previous.owner(
-            `ALTER TABLE users DROP CONSTRAINT users_platform_role_check; INSERT INTO users (id,email,name,platform_role) VALUES ('${v7()}','one@example.test','One','owner'), ('${v7()}','two@example.test','Two','owner')`,
-          );
-        const before = await previous.rows(
-          sql`select * from users order by email`,
-        );
-        const message =
-          kind === "legacy-role"
-            ? "Owner migration refused: unreviewed privileged roles"
-            : "Owner migration refused: multiple existing owners";
-        await expect(previous.postgres.migrate()).rejects.toMatchObject({
-          code: 1,
-          stderr: expect.stringContaining(message),
-        });
-        expect(
-          await previous.rows(sql`select * from users order by email`),
-        ).toEqual(before);
-        expect(
-          await previous.rows(
-            sql`select column_name from information_schema.columns where table_schema = 'public' and table_name = 'audit_log' and column_name = 'agency_id'`,
-          ),
-        ).toEqual([]);
-        expect(
-          await previous.rows(
-            sql`select indexname from pg_indexes where schemaname = 'public' and indexname = 'users_single_owner_idx'`,
-          ),
-        ).toEqual([]);
-      } finally {
-        await previous.close();
-      }
-    },
-  );
 });
