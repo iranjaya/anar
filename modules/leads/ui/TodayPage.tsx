@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import type { ReactNode } from "react";
 import { PageShell } from "@/components/PageShell";
 import { AppError } from "@/lib/errors";
 import { loadSchema } from "@/modules/settings/server";
@@ -13,9 +14,11 @@ import { TodaySection } from "./TodaySection";
 export async function TodayPage({
   params,
   searchParams,
+  callSheet,
 }: {
   params: Promise<{ slug: string }>;
   searchParams: Promise<{ lead?: string | string[] }>;
+  callSheet?: (leadId: string) => ReactNode;
 }) {
   const { slug } = await params;
   const { lead } = await searchParams;
@@ -78,6 +81,7 @@ export async function TodayPage({
           )
         }
       />
+      {today && selectedLeadId && callSheet?.(selectedLeadId)}
     </PageShell>
   );
 }

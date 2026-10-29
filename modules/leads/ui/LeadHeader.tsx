@@ -16,10 +16,12 @@ export function LeadHeader({
   lead,
   stage,
   now,
+  canLogCall,
 }: {
   lead: Lead;
   stage: Stage;
   now: Date;
+  canLogCall: boolean;
 }) {
   const { slug } = useParams<{ slug: string }>();
   const pathname = usePathname();
@@ -68,12 +70,14 @@ export function LeadHeader({
             Email
           </a>
         )}
-        <Link
-          href={`${pathname}?${query}`}
-          className={`${secondary} fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-30 shadow-lg lg:static lg:shadow-none`}
-        >
-          Log a call
-        </Link>
+        {canLogCall && (
+          <Link
+            href={`${pathname}?${query}`}
+            className={`${secondary} fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-30 shadow-lg lg:static lg:shadow-none`}
+          >
+            Log a call
+          </Link>
+        )}
       </div>
     </header>
   );

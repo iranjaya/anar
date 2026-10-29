@@ -245,8 +245,8 @@ test.describe("Today panes", () => {
     );
     await expect(
       page
-        .getByRole("region", { name: "Lead detail", exact: true })
-        .getByRole("heading", { name: "Anita Maharjan", exact: true }),
+        .getByRole("dialog", { name: "Log a call", exact: true })
+        .getByText("Anita Maharjan", { exact: true }),
     ).toBeVisible();
   });
 

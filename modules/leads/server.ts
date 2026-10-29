@@ -6,3 +6,6 @@ export { getBucketCounts } from "./data/today";
 export { getLead } from "./data/detail";
 export { changeStage } from "./data/update";
 export { dismissLostSuggestion } from "./data/update";
+export { applyFollowUp } from "./data/write";
+export { listLeads } from "./data/list";
+export { assignLeads } from "./data/assign";

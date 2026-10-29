@@ -7,6 +7,7 @@ import type { Stage } from "@/modules/settings/types";
 import { can } from "@/modules/tenant/server";
 import type { Ctx } from "@/modules/tenant/types";
 import type { Lead, LeadEventType } from "../types";
+import { readVisibleLead } from "./detail";
 
 export async function addImportedLeads(
   ctx: Ctx,
@@ -71,6 +72,55 @@ export async function clearLostSuggestion(
   lead.lostSuggestedAt = null;
   appendEvent(data, ctx, lead, "lost_suggestion_dismissed", {}, new Date());
   return { ok: true };
+}
+
+export async function applyFollowUp(
+  ctx: Ctx,
+  change: {
+    leadId: string;
+    followUpId: string;
+    happenedAt: Date;
+    nextActionAt: Date | null;
+    stageId?: string;
+    lostReasonId?: string;
+  },
+): Promise<Lead> {
+  const { current, data, lead } = await readVisibleLead(ctx, change.leadId);
+  if (!can(current, "followups.log", lead))
+    throw new AppError("forbidden", "You cannot log a call for this lead.");
+  const stage = data.stages.find(
+    (stage) =>
+      stage.companyId === current.companyId &&
+      stage.id === (change.stageId ?? lead.stageId),
+  );
+  if (!stage) throw new AppError("validation", "Pick a stage in this company.");
+  if (
+    stage.kind === "lost" &&
+    !data.lostReasons.some(
+      (reason) =>
+        reason.companyId === current.companyId &&
+        reason.id === change.lostReasonId,
+    )
+  )
+    throw new AppError("validation", "Pick why it was lost.");
+  await applyStageChange(
+    data,
+    current,
+    lead,
+    stage,
+    stage.kind === "lost" ? (change.lostReasonId ?? null) : null,
+  );
+  lead.lastContactedAt = change.happenedAt;
+  lead.nextActionAt = stage.kind === "lost" ? null : change.nextActionAt;
+  appendEvent(
+    data,
+    current,
+    lead,
+    "follow_up_logged",
+    { followUpId: change.followUpId },
+    change.happenedAt,
+  );
+  return lead;
 }
 
 function appendEvent(

@@ -30,6 +30,7 @@ export function LeadDetailView({
         lead={detail.lead}
         stage={stage}
         now={now}
+        canLogCall={ctx.role !== "dna"}
       />
       <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         <div className="min-w-0 space-y-5">
