@@ -7,14 +7,17 @@
   "scripts": {
     "dev": "pnpm --filter @anar/domain build && pnpm --filter @anar/web dev",
     "dev:stack": "docker compose -f compose.yml -f compose.dev.yml run --build --rm migrate && docker compose -f compose.yml -f compose.dev.yml up --build -d api worker web proxy",
-    "build": "pnpm -r build",
+    "build": "pnpm -r build && node scripts/check-build.ts",
     "start": "pnpm --filter @anar/domain build && pnpm --filter @anar/web start",
-    "typecheck": "pnpm --filter @anar/web typecheck",
-    "lint": "biome check .",
-    "test": "pnpm --filter @anar/web test",
-    "e2e": "pnpm --filter @anar/domain build && pnpm --filter @anar/web e2e",
+    "typecheck": "pnpm --filter @anar/domain build && pnpm --filter @anar/db build && pnpm -r typecheck && tsc -p packages/domain/tsconfig.test.json && tsc -p scripts/tsconfig.json",
+    "lint": "biome check . && pnpm check:boundaries",
+    "check:boundaries": "node scripts/check-boundaries.ts && node --test scripts/check-boundaries.test.ts",
+    "check:migrations": "node scripts/check-migrations.ts && node --test scripts/check-migrations.test.ts",
+    "test": "pnpm --filter @anar/domain build && pnpm --filter @anar/api build && pnpm --filter @anar/worker build && node scripts/check-web-units.ts && pnpm --filter @anar/web test lib/errors.test.ts && pnpm --filter @anar/domain test && pnpm --filter @anar/api test && pnpm --filter @anar/worker test && node --test scripts/*.test.ts",
+    "test:integration": "pnpm --filter @anar/db build && pnpm --filter @anar/db test:integration",
+    "e2e": "pnpm --filter @anar/domain build && node scripts/check-e2e.ts && pnpm --filter @anar/web e2e",
     "smoke:compose": "pnpm --filter @anar/domain build && node scripts/smoke-compose.ts",
-    "db:migrate": "docker compose run --rm migrate"
+    "db:migrate": "pnpm --filter @anar/db build && pnpm --filter @anar/db migrate"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.3",

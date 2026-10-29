@@ -1,0 +1,22 @@
+name: Workspace setup
+description: Install the pinned runtime and frozen workspace dependencies.
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version-file: .node-version
+    - shell: bash
+      run: npm install --global "$(node -p 'require("./package.json").packageManager')"
+    - uses: actions/cache@v4
+      with:
+        path: |
+          .cache/pnpm-store
+          .cache/pnpm
+        key: ${{ runner.os }}-${{ runner.arch }}-pnpm-${{ hashFiles('.node-version', 'package.json', 'pnpm-lock.yaml') }}
+    - shell: bash
+      run: |
+        git rev-parse HEAD
+        node --version
+        pnpm --version
+        pnpm install --frozen-lockfile

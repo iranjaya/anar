@@ -4,10 +4,6 @@ import {
   actionFailure,
 } from "@anar/domain/errors";
 import { describe, expect, it } from "vitest";
-import {
-  AppError as WebAppError,
-  actionFailure as webActionFailure,
-} from "../../../apps/web/lib/errors.js";
 
 const codes: AppErrorCode[] = [
   "unauthorized",
@@ -19,24 +15,9 @@ const codes: AppErrorCode[] = [
 ];
 
 describe("shared errors", () => {
-  it("keeps one error class through the web exports", () => {
-    expect(WebAppError).toBe(AppError);
-  });
-
-  it.each(codes)("returns %s through the web exports", (code) => {
+  it.each(codes)("returns %s from an AppError", (code) => {
     const error = new AppError(code, "Could not save.");
-    expect(error).toBeInstanceOf(WebAppError);
     expect(error.name).toBe("AppError");
-
-    try {
-      throw error;
-    } catch (caught) {
-      expect(webActionFailure(caught)).toEqual({
-        ok: false,
-        error: code,
-        message: "Could not save.",
-      });
-    }
 
     expect(actionFailure(error)).toEqual({
       ok: false,
@@ -54,7 +35,7 @@ describe("shared errors", () => {
   ])("throws an unknown error unchanged (%#)", (error) => {
     expect.assertions(1);
     try {
-      webActionFailure(error);
+      actionFailure(error);
     } catch (caught) {
       expect(caught).toBe(error);
     }

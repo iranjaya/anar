@@ -1,0 +1,75 @@
+name: CI
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+
+jobs:
+  workspace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: pnpm lint
+      - run: pnpm check:boundaries
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+      - run: pnpm audit --prod
+      - name: Audit all dependencies (non-blocking)
+        if: always()
+        continue-on-error: true
+        run: pnpm audit
+
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: docker pull postgres:17
+      - run: pnpm test:integration
+      - run: pnpm check:migrations
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      E2E_PORT: "3201"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: pnpm --filter @anar/web exec playwright install --with-deps chromium
+      - run: pnpm e2e --reporter=line,html
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: |
+            apps/web/playwright-report
+            apps/web/test-results
+          if-no-files-found: error
+
+  compose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: docker compose build
+      - run: docker compose up -d db
+      - run: docker compose run --rm migrate
+      - run: docker compose up -d api worker web proxy
+      - run: pnpm smoke:compose
+      - if: failure()
+        run: node scripts/compose-logs.ts > compose-failure.log
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: compose-failure
+          path: compose-failure.log
+          if-no-files-found: error
+      - if: always()
+        run: docker compose down

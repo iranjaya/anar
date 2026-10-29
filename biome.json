@@ -48,6 +48,98 @@
   },
   "overrides": [
     {
+      "includes": ["apps/web/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "@anar/db",
+                      "@anar/db/**",
+                      "@anar/api",
+                      "@anar/api/**",
+                      "@anar/worker",
+                      "@anar/worker/**",
+                      "pg",
+                      "pg/**",
+                      "drizzle-orm",
+                      "drizzle-orm/**",
+                      "drizzle-kit",
+                      "pg-boss",
+                      "pg-boss/**"
+                    ],
+                    "message": "Web may only use domain public exports, never backend code."
+                  },
+                  {
+                    "group": [
+                      "@/mock",
+                      "@/mock/**",
+                      "mock",
+                      "mock/**",
+                      "**/mock",
+                      "**/mock/**"
+                    ],
+                    "message": "Only module data files may import mock data."
+                  },
+                  {
+                    "group": [
+                      "@/modules/*/data",
+                      "@/modules/*/data/**",
+                      "@/modules/*/ui",
+                      "@/modules/*/ui/**"
+                    ],
+                    "message": "Use the module's public entry files."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/domain/src/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "node:*",
+                      "@anar/db",
+                      "@anar/db/**",
+                      "@anar/web",
+                      "@anar/web/**",
+                      "@anar/api",
+                      "@anar/api/**",
+                      "@anar/worker",
+                      "@anar/worker/**",
+                      "server-only",
+                      "next",
+                      "next/**",
+                      "react",
+                      "react/**",
+                      "pg",
+                      "drizzle-orm",
+                      "pg-boss"
+                    ],
+                    "message": "Domain must stay browser-safe and independent of apps and DB."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
       "includes": [
         "apps/web/modules/*/server.ts",
         "apps/web/modules/*/components.ts",
