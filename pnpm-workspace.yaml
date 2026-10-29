@@ -1,6 +1,8 @@
 storeDir: .cache/pnpm-store
 cacheDir: .cache/pnpm
 saveExact: true
+allowBuilds:
+  esbuild: false
 packages:
   - apps/*
   - packages/*

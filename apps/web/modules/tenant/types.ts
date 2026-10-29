@@ -1,31 +1,17 @@
-export type Role = "super_admin" | "admin";
+import type { Member, Role, User } from "@anar/domain/tenant";
+
+export type {
+  Company,
+  Member,
+  Role,
+  User,
+} from "@anar/domain/tenant";
+
 export type DemoUser = {
   id: string;
   name: string;
   role: Role | "dna";
   companyName: string | null;
-};
-export type Company = {
-  id: string;
-  name: string;
-  slug: string;
-  status: "active" | "suspended" | "closing";
-  defaultCountry: "NP";
-  timezone: "Asia/Kathmandu";
-};
-export type User = {
-  id: string;
-  email: string;
-  name: string;
-  platformRole: "dna" | null;
-};
-export type Member = {
-  id: string;
-  companyId: string;
-  userId: string;
-  name: string;
-  role: Role;
-  status: "invited" | "active" | "deactivated";
 };
 export type Ctx = {
   user: User;
