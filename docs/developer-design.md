@@ -1,6 +1,7 @@
 # Anar developer design
 
 Date: 2026-10-27
+Architecture revision: 2026-10-29, pnpm monorepo. Implementation starts with [S0](specs/s0-monorepo.md); this revision is docs only.
 Base: `ANAR-System-Design.md` in `iranjaya/anar` (dated 2026-10-27). That doc is the product. This one is what a dev team needs to build it.
 
 How to read the marks:
@@ -9,8 +10,9 @@ How to read the marks:
 - `[new]` added in this doc.
 - `[default]` the base is silent and it is a business call. I picked a default so work can start. Every one of these is repeated in section 11.
 - `[verified on real export]` checked on one real Meta lead export DNA gave us (appendix A). Facts, not guesses.
+- `[monorepo]` changed ownership, transport, paths or delivery order in the 2026-10-29 revision. A mark on a heading covers that section.
 
-Short version of the big calls, all `[new]`: one Postgres, `company_id` on every tenant table plus row level security. Next.js with server actions and a job worker in the same repo. PWA, not native. Web Push with our own VAPID keys, no OneSignal. Custom fields in one JSONB column per lead with a fields table as the schema. CSV import is a background job with a saved mapping per form. Scoring is a config row per company, never code.
+Short version of the big calls: one Postgres, `company_id` on every tenant table plus row level security. `[monorepo]` One pnpm workspace: Next.js screens in `apps/web`, Fastify HTTP service in `apps/api`, a separate pg-boss process in `apps/worker`, Drizzle and RLS in `packages/db`, shared contracts in `packages/domain`. The API owns all business logic; Next actions are UI transport adapters only. PWA, not native. Web Push with our own VAPID keys, no OneSignal. Custom fields in one JSONB column per lead with a fields table as the schema. CSV import is a background job with a saved mapping per form. Scoring is a config row per company, never code.
 
 ---
 
@@ -70,17 +72,19 @@ Everything in this section is from the base doc, sections 1 to 8. One page, noth
 
 ## 2. System architecture `[new]`
 
-### 2.1 Components
+### 2.1 Components `[monorepo]`
 
 ```mermaid
 flowchart LR
   Phone[Admin phone, PWA] --> Caddy
   Desk[Super Admin / DNA browser] --> Caddy
-  Caddy[Caddy, TLS] --> Web[Next.js app]
-  Web --> PG[(Postgres)]
-  Web --> Files[(uploads dir)]
-  Web -->|enqueue| PG
-  Worker[Job worker] -->|pg-boss| PG
+  Caddy[Caddy, TLS] -->|pages and Next actions| Web[apps/web, Next.js screens]
+  Caddy -->|/api/*| API[apps/api, Fastify]
+  Web -->|typed HTTP, session cookie| API
+  API --> PG[(Postgres)]
+  API --> Files[(uploads dir)]
+  API -->|enqueue| PG
+  Worker[apps/worker, pg-boss] --> PG
   Worker --> Files
   Worker --> Push[Web Push, VAPID]
   Worker --> Email[Email API]
@@ -91,18 +95,25 @@ flowchart LR
 
 | Component | Job | Runs as |
 | --- | --- | --- |
-| Next.js app | UI, server actions for mutations, route handlers for upload, download, push subscribe, health | `web` container |
-| Job worker | imports, score recompute, overdue scan, summaries, push and email sends, exports, retention purge | `worker` container, same repo, `pnpm worker` |
+| Next.js app | screens, rendering, form state, redirects and revalidation; module data adapters call HTTP | `web` container, `apps/web` |
+| HTTP API | auth and sessions, permissions, tenancy, leads, imports, follow-ups, scoring, reports, export; upload/download/push/health routes | `api` container, `apps/api` |
+| Job worker | runs import commit, score recompute, overdue scan, summaries, push/email, export and retention handlers owned by the backend | `worker` container, `apps/worker`, `pnpm --filter @anar/worker start` |
 | Postgres | all data, and the job queue (pg-boss tables) | `db` container, volume on disk |
-| uploads dir | raw CSV files and generated exports | bind mount, backed up with the DB |
+| uploads dir | raw CSV files and generated exports | shared by API and worker only, backed up with the DB |
 | Caddy | TLS, reverse proxy, request size limit | `proxy` container |
 | Backup cron | `pg_dump` plus uploads tar, encrypt, upload off-site | host cron |
 
-One server, Docker Compose, four containers. No Redis, no S3 in the MVP. pg-boss uses Postgres as the queue so there is one thing to back up and one thing to monitor.
+One server, Docker Compose, five long-running containers: `db`, `api`, `worker`, `web`, `proxy`. A separate `migrate` command runs once before backend startup, using the DB package and migration credentials. No Redis or object store for app files in the MVP. pg-boss uses Postgres as the queue.
+
+**Framework: Fastify.** Route plugins, request hooks and HTTP injection tests fit a small typed service. It gives us one HTTP boundary without a controller framework or code generation layer. [Fastify testing](https://fastify.dev/docs/latest/Guides/Testing/).
+
+**Worker: its own app.** `apps/worker` has its own start, stop and deploy lifecycle so imports do not tie up or restart with HTTP. Business handlers stay in `apps/api/src/modules`; the worker imports only the explicit `@anar/api/jobs` entry, introduced when jobs land, never the HTTP entry point.
+
+Production and local Compose use one browser origin. Caddy sends `/api/*` unchanged to API and everything else to web. S0 temporarily routes `/api/imports` to the relocated mock web handler; S4 removes that exception when the real upload endpoint and file transport land together.
 
 ### 2.2 Multi-tenancy model
 
-**Pick: one Postgres, one schema, `company_id` on every tenant table, Postgres row level security (RLS) on every tenant table, plus a tenant-scoped DB client in the app.**
+**Pick: one Postgres, one application schema, `company_id` on every tenant table, Postgres row level security (RLS) on every tenant table, plus a tenant-scoped DB client in API and worker.** `[monorepo]` Web has no DB credentials or DB imports. pg-boss has its own internal schema in that same database.
 
 Why this and not the others:
 
@@ -112,11 +123,13 @@ Why this and not the others:
 
 How it is enforced:
 
-1. Two DB roles. `anar_migrate` owns the tables and runs migrations. `anar_app` is what the app and worker connect as. It has no `BYPASSRLS`, is not the owner, and tables have `FORCE ROW LEVEL SECURITY` so even the owner is subject to policies in tests.
-2. Every tenant table has one policy: `company_id = current_setting('app.company_id', true)::uuid` for select, insert, update, delete. No `company_id` set means no rows.
-3. The app only touches tenant tables through `withTenant(ctx, fn)`. It opens a transaction, runs `SET LOCAL app.company_id = $1` and `SET LOCAL app.user_id = $2`, then runs `fn(tx)`. Feature modules receive `tx`, never the pool.
-4. Platform tables (`companies`, `users`, `invites`, `otp_codes`, `sessions`, `push_subscriptions`, `audit_log`) have no `company_id` policy. Only the `auth`, `companies` and `tenant` modules may import the platform client. An ESLint `no-restricted-imports` rule blocks it everywhere else.
-5. A CI check queries `pg_tables` and `pg_policies` and fails if a table with a `company_id` column has RLS off or no policy.
+1. `[monorepo]` Two application DB roles, defined in `packages/db`: `anar_migrate` owns tables and runs migrations; `anar_app` is used by API and worker. Both are non-superusers without `BYPASSRLS`; `anar_app` cannot assume the migration role, has no DDL or TRUNCATE grants, and is not a table owner. Tenant tables have `FORCE ROW LEVEL SECURITY`, including for the owner in tests. Postgres bootstrap administration is never an application connection.
+2. `[monorepo]` Every tenant table has `USING` and `WITH CHECK` policies comparing `company_id` to `NULLIF(current_setting('app.company_id', true), '')::uuid` for select, insert, update and delete. Unset or reset-to-empty context gives no rows and refuses writes. This is the same company isolation rule, including after a pooled connection is reused.
+3. `[monorepo]` `packages/db/src/tenant.ts` owns `withTenant(scope, fn)`. It opens a transaction and uses parameterised `set_config('app.company_id', companyId, true)` and `set_config('app.user_id', userId, true)` (the parameter-safe equivalent of `SET LOCAL`). Feature functions receive `tx`, never the pool. API supplies server-resolved context; worker supplies a validated persisted job's company and actor. Context never comes from a browser-provided role or member object.
+4. `[monorepo]` Platform tables (`companies`, `users`, `invites`, `otp_codes`, `sessions`, `push_subscriptions`, `audit_log`) have no tenant policy. `@anar/db/platform` is restricted to API `auth`, `companies`, `tenant`, and the `notifications/subscriptions` repository for user/session-scoped push storage. Workers call these owners for platform retention and company enumeration. Biome plus the resolved-import boundary check enforce this allowlist, including relative imports. There is no web access to either DB entry.
+5. `[monorepo]` CI checks policy coverage, `ENABLE` and `FORCE RLS`, `USING` and `WITH CHECK`, ownership and grants. The exact platform-table allowlist above exempts `invites` and `audit_log` despite their nullable `company_id`; a new tenant table cannot silently become exempt. See [Postgres row security](https://www.postgresql.org/docs/17/ddl-rowsecurity.html).
+
+`[monorepo]` Context bootstrapping is explicit: API loads the session and candidate company via platform owners, opens a scoped transaction to read only that user's membership, then constructs `Ctx`. No feature runs before membership or DNA acting access is verified. DNA company-list counts use one authorised scoped query per company, never an unscoped tenant query.
 
 DNA is a platform role, not a company member. To see a company DNA calls `enterCompany(companyId, reason)`. That writes `acting_company_id`, `acting_reason` and `acting_until` (8 hours) on the DNA session row and one audit row. From then on `requireContext()` builds the context with that company id and RLS applies to DNA exactly as it does to a Super Admin. There is no "see all companies' leads" query anywhere. A banner at the top says which company DNA is in and a "leave" button clears it.
 
@@ -132,12 +145,12 @@ DNA is a platform role, not a company member. To see a company DNA calls `enterC
 
 **Session.** On verify we create a `sessions` row with a random 32 byte token, store its hash, and set an `httpOnly`, `Secure`, `SameSite=Lax` cookie. `expires_at = last_seen_at + 30 days`, sliding, updated at most once per hour. Deactivating a member or changing a role revokes all sessions of that user in that company. A user can see their sessions (device, last seen) and revoke any. Settings, user management and export ask for a fresh OTP if the session's last OTP is older than 15 minutes (step-up). That is the main defence for shared phones, see risk 7.4.
 
-**Context.** Every server action and route handler starts with `requireContext()`: cookie to session to user to membership (or DNA acting company), returning `{ user, companyId, member, role, session }`. Then `can(ctx, permission, resource?)` against the table in section 5.1.
+**Context.** `[monorepo]` Every protected company API endpoint starts with `requireContext(request, companySlug)`: cookie to session to user to membership (or DNA acting company), returning backend-only `{ user, companyId, member, role, session }`. Then `can(ctx, permission, resource?)` against section 5.1 and `withTenant`. Login, OTP and health are explicitly public; own-session and DNA platform endpoints require a session without requiring an entered company. The web `requireContext(slug)` seam becomes an HTTP adapter returning a safe context view, never a session validator. Cookie forwarding and expiry are in section 5.3.
 
 ```mermaid
 sequenceDiagram
   participant SA as Super Admin
-  participant App
+  participant App as API (through web UI)
   participant DB
   participant Mail
   SA->>App: invite admin (email, name)
@@ -156,7 +169,7 @@ sequenceDiagram
 
 The CSV never goes straight into `leads`. Steps, each its own function and each testable on its own:
 
-1. **Upload** (route handler, streaming): save the raw file to `uploads/imports/<companyId>/<batchId>.csv`, max 25 MB, insert `import_batches` with status `uploaded`.
+1. **Upload** (`[monorepo]` Fastify route, streaming): save the raw file to `uploads/imports/<companyId>/<batchId>.csv`, max 25 MB, insert `import_batches` with status `uploaded`.
 2. **Decode**: sniff the BOM and bytes, pick the encoding, decode to text. Record the encoding on the batch.
 3. **Parse**: sniff the delimiter, parse with a streaming CSV parser, take the first non-empty row as the header, read up to 20 sample rows for the preview and count the rows.
 4. **Match mapping**: fingerprint the headers. Exact fingerprint match on a saved template applies it. Else suggest a mapping from a synonym list and offer new custom fields for unknown columns.
@@ -168,7 +181,7 @@ Details and edge cases in section 6.1.
 
 ### 2.5 Background jobs
 
-pg-boss in Postgres. The worker registers these:
+pg-boss in Postgres. `[monorepo]` API publishes; `apps/worker` consumes through `@anar/api/jobs`, a side-effect-free registration entry. Importing it must not start Fastify, open a pool or register cron jobs. Jobs have zod payload schemas in `packages/domain` and tenant work goes through `withTenant`; scheduler enumeration stays with API's company/tenant owner. The worker registers these:
 
 | Job | Trigger | What it does |
 | --- | --- | --- |
@@ -184,6 +197,8 @@ pg-boss in Postgres. The worker registers these:
 
 Jobs are idempotent by key: `import.commit` keyed by batch id, `scoring.recompute` by company id plus config version, overdue alerts by `(lead_id, date)`. A worker crash mid-import resumes from `import_batches.last_row_no`.
 
+`[monorepo]` pg-boss schema migrations and any queue-creation DDL run with `anar_migrate` before services start; runtime migration is disabled. API and worker use `anar_app` with only required queue runtime grants. Do not give the runtime role DDL to make first boot work. At S1 verify the pinned pg-boss version's queue setup and transactional publishing against real Postgres; publish in the same transaction as the feature write through its supported DB adapter. [pg-boss database installation](https://pgboss.io/install).
+
 ### 2.6 Notifications
 
 Three channels, one table. Every notification is first a row in `notifications` (in-app list with a bell). Then:
@@ -196,6 +211,34 @@ Three channels, one table. Every notification is first a row in `notifications` 
 
 `[base]` Self-hosted. `[new]` One VPS (4 vCPU, 8 GB, 80 GB SSD is enough for the first years), Ubuntu LTS, Docker Compose, Caddy with automatic TLS on `anar.<dna-domain>`. Separate from Ekata (section 3). Staging is a second Compose project on the same box with its own DB and subdomain until it gets its own VPS. Backups go off the box every night (section 8.3).
 
+### 2.8 Repository and module ownership `[monorepo]`
+
+```text
+apps/web/                  existing app/, modules/, mock/, components/, lib/, e2e/
+  modules/<feature>/       pages.ts, components.ts, ui/: presentation
+                           server.ts -> data/: typed HTTP adapters after cutover
+                           actions.ts: form transport, redirects, revalidation
+  lib/api/                 one HTTP client, cookies, error and wire decoding
+apps/api/src/
+  app.ts                   Fastify construction, no listen side effect
+  main.ts                  HTTP process startup and shutdown
+  modules/<feature>/       routes.ts -> service.ts -> repository.ts where needed
+                           feature-owned pure helpers and job handlers
+  modules/tenant/          context.ts, permissions.ts, audit.ts, stepUp.ts
+  jobs/index.ts            explicit registerJobs entry used only by worker
+  lib/                     config, error mapping, email and other shared I/O
+apps/worker/src/main.ts    pg-boss lifecycle, handler registration, shutdown
+packages/db/               Drizzle schema, migrations, roles, RLS, tenant/platform entries
+packages/domain/src/       browser-safe types, zod input/output schemas, AppError
+ops/                       Caddy, DB bootstrap, backup/restore scripts
+```
+
+Each feature owns its writes; imports and follow-ups call the leads owner, not its private repository. Adopt small backend modules, thin routes, one client per outside service, shared errors and transactions. Do not copy Aragon's Mongo, RabbitMQ, runner framework, publishing machinery or class hierarchy. No Turbo, catalogs or published packages; plain pnpm workspace scripts suffice.
+
+Dependencies: web → domain; API → domain + db; worker → domain + db + the single API jobs export; db → domain only if a shared type is needed; domain → zod only. The API jobs export is the sole allowed app-to-app import. No cycles, deep package imports, web → db/API source, or domain → server dependencies. Packages use explicit exports and `workspace:*` dependencies. [pnpm workspaces](https://pnpm.io/workspaces).
+
+The existing UI mock spec and design-principles document describe the completed mock. This revision supersedes their future direct-to-Postgres path and one-app recommendation; module ownership, thin routes and the `server.ts` seam stay. S0 moves the mock intact. Each later feature replaces its `data/` body with API calls while keeping page/component contracts. Mock permissions and calculations remain only in the isolated demo until that feature switches; they are not production fallbacks. Production API never reads mock data or accepts `anar_demo` as authentication.
+
 ---
 
 ## 3. Tech stack decisions `[new]`
@@ -204,7 +247,7 @@ Each open question from base section 9, with the pick and one line of reason.
 
 | # | Base question | Pick | Why |
 | --- | --- | --- | --- |
-| 1 | Next.js + PostgreSQL or other | **Next.js (App Router) + TypeScript + Postgres 17 + Drizzle ORM** | One language end to end, server actions fit a forms-heavy app, Drizzle stays close to SQL so RLS, JSONB and `SET LOCAL` are not fought through an ORM. |
+| 1 | Next.js + PostgreSQL or other | **[monorepo] Next.js screens + Fastify API + separate pg-boss worker, TypeScript, Postgres 17 + Drizzle** | One language, separate runtime ownership; Drizzle stays close to SQL for RLS, JSONB and tenant transactions. |
 | 2 | Same server as Ekata or separate | **Separate VPS, same provider is fine** | A different client's personal data and a different blast radius; Ekata deploys or load must not touch Anar. Cost is one small VPS. |
 | 3 | Push service | **Web Push with our own VAPID keys, no OneSignal or Firebase** | Self-hosted and no third party holding lead data; the PWA already needs the service worker; free. |
 | 4 | Email for OTP | **Resend, behind one `sendEmail()` module** | Simplest API, free tier covers OTP and invite volume, swap to SES is one file if volume grows. Needs SPF, DKIM and DMARC on the sending domain. |
@@ -216,9 +259,9 @@ Each open question from base section 9, with the pick and one line of reason.
 
 Rest of the stack, same reasoning (small, boring, one box):
 
-- Node current LTS, pnpm, Vitest, Playwright, Biome.
+- `[monorepo]` One pinned supported Node LTS across apps, pnpm (keep the existing pin for S0), Vitest per package, Playwright in web, Biome at workspace root. No framework upgrades folded into the move.
 - Tailwind plus shadcn/ui for the phone-first UI.
-- zod at every boundary (actions, route handlers, job payloads, CSV rows).
+- `[monorepo]` zod contracts in domain at HTTP and job boundaries, backend CSV validation; web can reuse input schemas for form feedback. API validates again and owns the decision.
 - `libphonenumber-js` for E.164. `csv-parse` streaming. `exceljs` streaming writer for XLSX. `web-push`. `pino` logs.
 - UUIDv7 primary keys, generated in the app (time ordered, good index locality).
 - Reports: SQL aggregates read live for dashboards; export as a job (section 2.5). No warehouse, no cube.
@@ -335,13 +378,13 @@ Eight default stages, ten default outcomes (`No Answer`, `Not Interested` and `C
 
 ---
 
-## 5. API design `[new]`
+## 5. API design `[monorepo]`
 
-Mutations are Next.js server actions. Route handlers only where a browser needs a URL: file upload, file download, push subscribe, health. Every action and handler: `requireContext()` then `can()` then `withTenant()`. zod on every input. Errors are typed (`unauthorized`, `forbidden`, `not_found`, `validation`, `conflict`) and never leak another company's existence (`not_found` for both missing and foreign ids, RLS makes them the same).
+Reads and mutations are Fastify HTTP endpoints in `apps/api`. Protected company operations resolve `requireContext(request, slug)`, check `can()`, then run inside `withTenant()`; resource-specific permission checks use rows loaded in that transaction. zod validates every input. Errors keep the existing typed `AppError` codes and never leak another company's existence (`not_found` for missing and foreign ids). API decides auth, permissions, tenancy, validation, writes, queueing and audit. Web actions only adapt the UI call to HTTP and refresh the screen.
 
 ### 5.1 Permissions
 
-One table in `modules/tenant/permissions.ts`, mirror of the base access matrix.
+One authoritative table in `apps/api/src/modules/tenant/permissions.ts`, mirror of the base access matrix. Web may hide controls using API-supplied capabilities; it does not grant access. The mock's `can` stays for S0 demo tests only.
 
 | Permission | DNA (in a company) | Super Admin | Admin |
 | --- | --- | --- | --- |
@@ -362,21 +405,24 @@ One table in `modules/tenant/permissions.ts`, mirror of the base access matrix.
 
 "own" is checked by `can(ctx, 'leads.update', lead)` which compares `lead.assigned_to` with `ctx.member.id`. The list queries add the same filter so an Admin never gets a foreign id back to probe with.
 
-### 5.2 Endpoints and actions
+### 5.2 HTTP endpoints and operation contracts
 
-Shapes are TypeScript-ish. `Cursor` lists return `{ items, nextCursor }` with page size 50.
+Shapes are TypeScript-ish response payloads, wrapped as described in 5.3. `Cursor` lists return `{ items, nextCursor }` with page size 50. Existing operation names remain typed-client methods.
+
+Named auth operations use `/api/auth/<name>`; platform company operations use `/api/companies/<name>`. Other named operations use `/api/companies/:slug/<module>/<name>` with the owning module (`members`, `settings`, `imports`, `leads`, `followups`, `reports`, `notifications`). Reads (`list*`, `get*`, `compareMembers`) use GET with validated query fields; writes use POST with a JSON body. Combined table rows represent separate operations. `GET /api/context?company=<slug>` supplies the safe web context. Explicit upload, download, push and health URLs below are exceptions. Upload/download carry a company slug which the API resolves and authorises, never a trusted tenant id or role.
 
 **Auth and session**
 
 | Name | Kind | Input | Output | Check |
 | --- | --- | --- | --- | --- |
-| `acceptInvite` | action | `{ token, name }` | `{ userId }` then redirects to OTP | valid, unexpired, unaccepted token |
-| `requestOtp` | action | `{ email }` | `{ ok: true }` always | rate limit, section 8.5 |
-| `verifyOtp` | action | `{ email, code }` | sets cookie, `{ redirectTo }` | ≤5 attempts, not expired, not consumed |
-| `stepUp` | action | `{ code }` | `{ ok }` sets `sessions.last_otp_at` | active session |
-| `logout`, `revokeSession` | action | `{ sessionId? }` | `{ ok }` | own sessions only |
-| `listSessions` | query | none | `{ id, deviceLabel, lastSeenAt, current }[]` | own |
-| `POST /api/push/subscribe` | route | `PushSubscriptionJSON` | 204 | active session; ties subscription to `session_id` so revoke kills push too |
+| `acceptInvite` | POST | `{ token, name }` | `{ userId }` then UI redirects to OTP | valid, unexpired, unaccepted token |
+| `requestOtp` | POST | `{ email }` | `{ ok: true }` always | rate limit, section 8.5 |
+| `verifyOtp` | POST | `{ email, code }` | sets cookie, `{ redirectTo }` | ≤5 attempts, not expired, not consumed |
+| `stepUp` | POST | `{ code }` | `{ ok }` sets `sessions.last_otp_at` | active session |
+| `logout`, `revokeSession` | POST | `{ sessionId? }` | `{ ok }` | own sessions only |
+| `refresh` | POST | none | `{ ok }`, renews cookie with DB idle expiry | active session, at most hourly |
+| `listSessions` | GET | none | `{ id, deviceLabel, lastSeenAt, current }[]` | own |
+| `POST /api/push/subscribe` | API route | `PushSubscriptionJSON` | 204 | active session; ties subscription to `session_id` so revoke kills push too |
 
 **Companies (DNA)**
 
@@ -414,11 +460,11 @@ Shapes are TypeScript-ish. `Cursor` lists return `{ items, nextCursor }` with pa
 
 | Name | Kind | Input | Output | Check |
 | --- | --- | --- | --- | --- |
-| `POST /api/imports` | route, multipart | file | `{ batchId, encoding, delimiter, headers, sample: string[][], rowCount, matchedTemplate?, suggestedMapping, newColumns, missingColumns }` | `imports.upload`; size ≤ 25 MB; `.csv` or `.txt` |
-| `commitImport` | action | `{ batchId, mapping, saveTemplate?: { name }, newFields?: { header, key?, label, type, options?: { value, label }[] }[] }` | `{ jobId }`; creates fields, saves template, enqueues `import.commit` | `imports.commit`; every `field:` target must exist or be in `newFields`; exactly one `system:phone` |
-| `getImportBatch` | query | `{ batchId }` | `{ status, rowCount, lastRowNo, summary: { imported, duplicateDb, duplicateFile, invalid, error } }` | `imports.upload` or `leads.view` all |
-| `listImportRows` | query | `{ batchId, result?, cursor? }` | rows with `rowNo, result, reason, leadId, raw` | same |
-| `listImportBatches` | query | `{ cursor? }` | batches with summary | same |
+| `POST /api/imports?company=<slug>` | API route, multipart | file | `{ batchId, encoding, delimiter, headers, sample: string[][], rowCount, matchedTemplate?, suggestedMapping, newColumns, missingColumns }` | `imports.upload`; size ≤ 25 MB; `.csv` or `.txt` |
+| `commitImport` | POST | `{ batchId, mapping, saveTemplate?: { name }, newFields?: { header, key?, label, type, options?: { value, label }[] }[] }` | `{ jobId }`; creates fields, saves template, enqueues `import.commit` | `imports.commit`; every `field:` target must exist or be in `newFields`; exactly one `system:phone` |
+| `getImportBatch` | GET | `{ batchId }` | `{ status, rowCount, lastRowNo, summary: { imported, duplicateDb, duplicateFile, invalid, error } }` | `imports.upload` or `leads.view` all |
+| `listImportRows` | GET | `{ batchId, result?, cursor? }` | rows with `rowNo, result, reason, leadId, raw` | same |
+| `listImportBatches` | GET | `{ cursor? }` | batches with summary | same |
 | `listMappingTemplates`, `deleteMappingTemplate` | | | | `imports.upload` |
 
 **Leads**
@@ -450,7 +496,7 @@ Shapes are TypeScript-ish. `Cursor` lists return `{ items, nextCursor }` with pa
 | `getMemberDashboard` | `{ memberId, from, to }` | same shape as the Admin's own view plus `targets: { metric, period, value, actual }[]` | `reports.view_all`, or own id |
 | `compareMembers` | `{ a, b, from, to }` | `{ a: Metrics, b: Metrics }` with calls, median response hours, site visits, bookings, conversion | `reports.compare` |
 | `requestExport` | `{ format, filters (same as listLeads) }` | `{ exportId }`, enqueues `export.build`, audit | `leads.export`, step-up |
-| `GET /api/exports/:id/download` | route | | file stream, 410 after expiry | requester or Super Admin of that company |
+| `GET /api/exports/:id/download?company=<slug>` | company slug and export id | file stream, 410 after expiry | requester or Super Admin of that company |
 
 **Notifications**
 
@@ -463,15 +509,53 @@ Shapes are TypeScript-ish. `Cursor` lists return `{ items, nextCursor }` with pa
 
 | Name | Output |
 | --- | --- |
-| `GET /api/health` | `{ db: ok, worker: lastHeartbeatAt, queue: { waiting, failed } }`, 503 if DB down or worker heartbeat older than 5 min |
+| `GET /api/health` | S0: `{ status: 'ok', service: 'api' }`, process liveness only. S1 adds DB status, worker heartbeat and queue counts; then 503 if DB down or heartbeat older than 5 min. No false dependency-health claim in S0. |
+
+### 5.3 Web transport, cookies and errors
+
+The existing door stays: `apps/web/modules/<feature>/server.ts` exports the same async functions. Its `data/` files call the single server-only `apps/web/lib/api/client.ts`; pages and components still consume the same results. `actions.ts` keeps its UI-facing signature and `ActionResult<T>`, does form parsing, invokes the seam, and handles redirects/revalidation. Move business orchestration, including permission decisions and follow-up bucket selection, to the owning API service when that feature cuts over. Do not put DB queries, import parsing or scoring into a Next route.
+
+`packages/domain` owns `AppError`, `AppErrorCode`, `ActionResult<T>`, DTO types and zod request/response schemas. Existing `lib/errors.ts` and module `types.ts` paths become explicit compatibility re-exports. No Fastify, Next, Drizzle, environment reads or permission policy in domain. Transport contracts serialize dates as ISO UTC strings and decode them through explicit per-DTO schemas to `Date` at the web seam, including nested dates, nulls and array entries. Never use `as Lead` on raw JSON or change every component to consume strings.
+
+| Boundary | Contract |
+| --- | --- |
+| Typed client | `apiRequest<T>(request: ApiRequest, response: z.ZodType<T>): Promise<T>`; finite timeout, `cache: 'no-store'`, no automatic mutation retries |
+| API success | `{ ok: true, data: Wire<T> }`; 204 routes, health and file streams have their explicit contracts |
+| API expected error | `{ ok: false, error: AppErrorCode, message: string }`; reconstruct `new AppError(code, message)` in web so `actionFailure` keeps working |
+| Status mapping | `unauthorized` 401, `forbidden` 403, `not_found` 404, `validation` 400, `conflict` 409, `unavailable` 503; `step_up_required` 428 is added with S1, not invented as a second error class |
+| Unexpected failure | API logs a redacted error/request id and returns 500 with safe `unavailable`; client timeout, bad response schema or connection failure also become `unavailable`, never an empty list or successful save |
+
+API creates and validates the host-only `anar_session` cookie, `Path=/`, `httpOnly`, `Secure` in HTTPS environments, `SameSite=Lax`, 30-day idle expiry. Caddy passes `Set-Cookie` unchanged. Browser auth calls go to same-origin `/api/auth/*`; a session-refresh POST while the app is active renews the browser cookie at most hourly alongside the DB expiry. A Server Component cannot set cookies, so render-time API reads never silently depend on forwarding `Set-Cookie`. If a Next action wraps an auth mutation, its adapter must explicitly copy approved API cookie changes through `cookies().set/delete`; API still owns their values and lifetime.
+
+Server-side requests use server-only `API_INTERNAL_URL` (Compose: `http://api:3001`) and forward only the session cookie, request id, and original Origin for mutations. They do not forward a client-supplied `Ctx`, role, user id, arbitrary headers or `anar_demo`; API resolves context again. No process-global cookie jar, shared user cache, or public API URL secret. API returns private/no-store responses for authenticated reads. Browser file upload/download and push go through Caddy directly; an in-process `fetch` does not forward cookies automatically.
+
+```mermaid
+sequenceDiagram
+  participant UI as Page / form
+  participant Seam as web module server.ts
+  participant Client as web lib/api/client
+  participant API as Fastify service
+  participant DB as Postgres (anar_app)
+  UI->>Seam: existing async function (action for forms)
+  Seam->>Client: typed request, response schema
+  Client->>API: HTTP + session cookie + original Origin on writes
+  API->>API: validate, requireContext, can
+  API->>DB: withTenant transaction, resource checks, feature write
+  DB-->>API: result or rollback
+  API-->>Client: typed envelope / safe error
+  Client-->>Seam: decoded Dates or AppError
+  Seam-->>UI: existing data / ActionResult (input retained on failure)
+```
+
+S0 extracts shared contracts but does not install this client or switch a mock module to HTTP. S1 introduces the client with auth/context; each later slice adds its own endpoint schemas and compatibility tests. The one deliberate upload adapter change in S4 sends real multipart bytes instead of today's mock `{ slug, fileName, fileSize }`; the file screen and mapping components keep their layout and result contracts.
 
 ---
 
 ## 6. Key flows `[new]`
 
-### 6.1 CSV import
+### 6.1 CSV import `[monorepo: runtime ownership]`
 
-Owner: `modules/imports`. Pure functions first, IO at the edges.
+`[monorepo]` Owner: `apps/api/src/modules/imports`; worker runs its commit handler through the jobs entry. Pure functions first, IO at the edges. The web imports module only renders results and transports input.
 
 **1. Upload.** Stream the body to `uploads/imports/<companyId>/<batchId>.csv`. Refuse over 25 MB, refuse anything that is not `text/csv`, `text/plain` or `application/vnd.ms-excel` by content type, but trust the bytes not the header. Insert the batch with `status = uploaded`.
 
@@ -518,14 +602,16 @@ Any thrown error marks the chunk failed, the batch `failed` with the error, and 
 sequenceDiagram
   participant DNA
   participant Web
+  participant API
   participant Worker
   participant DB
-  DNA->>Web: POST /api/imports (file)
-  Web->>Web: detectEncoding, sniffDelimiter, parse header + sample
-  Web->>DB: insert import_batches, lookup template by fingerprint
-  Web-->>DNA: headers, sample, suggested mapping, new columns
+  DNA->>API: POST /api/imports through proxy (file, session)
+  API->>API: context, permissions, detectEncoding, parse header + sample
+  API->>DB: insert import_batches, lookup template by fingerprint
+  API-->>DNA: headers, sample, suggested mapping, new columns
   DNA->>Web: commitImport(mapping, new fields)
-  Web->>DB: create fields, save template, status mapped, enqueue import.commit
+  Web->>API: typed commit request + session cookie
+  API->>DB: create fields, save template, status mapped, enqueue import.commit
   Worker->>DB: chunks of 500: normalise, dedupe, insert, events, import_rows
   Worker->>DB: summary, status done
   Worker->>DB: notifications (uploader, super admins)
@@ -559,7 +645,7 @@ Response time metric (used in comparison): hours between `assigned` event and th
 
 ### 6.4 Scoring recompute
 
-`scoreLead(config, custom): { score, priority, breakdown }` is a pure function in `modules/scoring/score.ts`. `breakdown` is `{ base: 1, purchase_timeline: 4, budget_fit: 2 }` and is stored on the lead so a score is always explainable on the detail page.
+`[monorepo]` `scoreLead(config, custom): { score, priority, breakdown }` is a pure function in `apps/api/src/modules/scoring/score.ts`, shared by HTTP feature writes and worker handlers via backend ownership. `breakdown` is `{ base: 1, purchase_timeline: 4, budget_fit: 2 }` and is stored on the lead so a score is always explainable on the detail page.
 
 Inline: every write to `leads.custom` (import, field update, follow-up with custom) calls it with the active config. Event `score_changed` only when `priority` changes, so the timeline does not fill with 5 to 6 noise.
 
@@ -601,14 +687,14 @@ One block per risk. Risks 7.1 to 7.9 are the ones the base doc names. 7.10 onwar
 ### 7.1 Cross-tenant data leak
 
 - **Mitigation.** RLS on every tenant table, tenant-scoped client, DNA enters one company at a time. Section 2.2.
-- **In code.** `withTenant` is the only way to get a transaction on tenant tables. Feature modules get `tx`, never a pool. ESLint blocks `platformDb` imports outside `auth`, `companies`, `tenant`. Every list query still filters `company_id` in SQL, RLS is the second lock, not the only one. Error type `not_found` for foreign ids.
-- **Test.** Integration suite `tenant-isolation.test.ts`: seed two companies with leads, members, imports; for every query and action in section 5.2 run as a Super Admin of company A with company B's ids and assert `not_found` or zero rows. A CI job runs `select tablename from pg_tables where schemaname='public'` minus `pg_policies` and fails on any tenant table without a policy. One test runs a raw `SELECT * FROM leads` as `anar_app` without `app.company_id` set and asserts zero rows.
+- **In code.** `[monorepo]` DB package `withTenant` is the only tenant transaction entry. Feature modules get `tx`, never a pool. Biome and resolved-import checks enforce the platform allowlist in 2.2 and prevent all web DB access. Every list query still filters `company_id`; RLS is the second lock. Error type `not_found` for foreign ids.
+- **Test.** `[monorepo]` API integration suite `tenant-isolation.test.ts`: two companies with leads, members and imports; every endpoint in 5.2 called as company A with B's ids returns `not_found` or zero rows. DB policy checks use 2.2's exact platform exceptions. Unscoped raw SELECT as `anar_app` gives zero; foreign INSERT/UPDATE fails; commit, rollback and pooled reuse do not retain tenant context.
 
 ### 7.2 DNA support access to client data
 
 - **Mitigation.** DNA sees a company only after `enterCompany` with a reason, for at most 8 hours, with a visible banner. Every DNA action in a company is audited with `actor_role = dna`. Super Admins see the last 30 DNA entries in settings.
-- **In code.** `requireContext` for a DNA user reads `acting_company_id` and refuses if `acting_until` is past. `audit()` is called by every mutating action; the `tenant` module wraps it so forgetting is a lint failure (`every exported action calls audit` is checked by a small custom rule, or by the integration test below).
-- **Test.** For each mutating action run as DNA, assert one `audit_log` row with `actor_role = dna`, `company_id` set and `action` matching. Test that a DNA session with `acting_until` in the past gets `forbidden` on a company page.
+- **In code.** `[monorepo]` API `requireContext` reads `acting_company_id` and refuses if `acting_until` is past. The backend tenant owner writes audit entries for mutations; integration tests cover every endpoint, including direct HTTP calls that bypass web.
+- **Test.** `[monorepo]` For each mutating API operation run as DNA, assert one `audit_log` row with `actor_role = dna`, `company_id` set and `action` matching. An expired acting session gets `forbidden` from API and the company page reflects it.
 
 ### 7.3 Manual CSV upload is a bottleneck on DNA
 
@@ -619,7 +705,7 @@ One block per risk. Risks 7.1 to 7.9 are the ones the base doc names. 7.10 onwar
 ### 7.4 Shared phones with 30-day sessions
 
 - **Mitigation.** Sessions list and revoke, "signed in as" always visible with a one-tap sign out, step-up OTP (15 min) for members, settings and export, revoke all sessions on deactivate or role change, push subscriptions tied to the session so revoke stops notifications on that phone too. Idle expiry stays 30 days `[base]`.
-- **In code.** `requireContext` checks `revoked_at` and `expires_at` on every request, no cached session. `deactivateMember` and role changes call `revokeAllSessions(userId, companyId)`. Step-up is one helper `requireFreshOtp(ctx)` used by the actions marked in 5.1.
+- **In code.** `[monorepo]` API `requireContext` checks `revoked_at` and `expires_at` on every request, no cached session. `deactivateMember` and role changes call `revokeAllSessions(userId, companyId)`. API `requireFreshOtp(ctx)` guards the operations marked in 5.1, including direct calls without the UI.
 - **Test.** Deactivate a member, the next request with the old cookie is `unauthorized`. Export with `last_otp_at` 20 minutes old returns `step_up_required`. Session not used for 30 days and 1 minute is rejected.
 
 ### 7.5 Meta changes the CSV format
@@ -643,7 +729,7 @@ One block per risk. Risks 7.1 to 7.9 are the ones the base doc names. 7.10 onwar
 ### 7.8 Self-hosting
 
 - **Mitigation.** Compose on one box, Caddy for TLS, nightly encrypted backups off-site, a restore drill every quarter on a scratch VM, uptime and disk monitoring, a runbook (`docs/runbook.md`: deploy, roll back, restore, rotate keys, add a company by hand). Accepted: single box is a single point of failure for the MVP; RTO 4 h, RPO 24 h `[default]`.
-- **In code.** `/api/health` checks DB and worker heartbeat; deploy script waits on it before switching. Migrations run in a one-shot container before `web` starts, with `pg_dump` taken right before.
+- **In code.** `[monorepo]` API `/api/health` checks DB and worker heartbeat from S1; S0 is liveness only. Deploy waits for full health before switching. Migrations run once before API and worker start, with `pg_dump` taken right before; web never runs migrations.
 - **Test.** The restore drill is a script: pull last night's dump, restore into a fresh Postgres, run the integration smoke test against it, print the row counts next to production's. Run quarterly by hand and logged in the runbook.
 
 ### 7.9 Hardcoded scoring
@@ -667,7 +753,7 @@ One block per risk. Risks 7.1 to 7.9 are the ones the base doc names. 7.10 onwar
 ### 7.12 Big exports and dashboards slow the app
 
 - **Mitigation.** Export is a job that streams to a file; the dashboard queries are plain aggregates with indexes and a 90 day default range.
-- **In code.** `export.build` uses a cursor query and a streaming writer. Dashboard queries live in `modules/reports/queries.ts` with an `EXPLAIN` check in a test.
+- **In code.** `[monorepo]` Worker `export.build` uses a cursor query and a streaming writer owned by API reports. Dashboard queries live in `apps/api/src/modules/reports/queries.ts` with an `EXPLAIN` check in a test.
 - **Test.** 100k lead company: team overview under 1 s, export of 100k rows finishes under 60 s on staging.
 
 ### 7.13 Data loss on merge, archive or field change
@@ -728,19 +814,21 @@ Per-lead delete request (a person asks to be removed): `deleteLead` sets `delete
 ### 8.4 Monitoring, alerts, logging
 
 - Uptime: external check on `/api/health` every minute (Better Uptime or Uptime Kuma on another box `[default]`), alerts to a DNA Telegram or email.
-- Errors: Sentry (SaaS, free tier) or self-hosted GlitchTip `[default: Sentry]`, with PII scrubbing on, for web and worker.
+- Errors: Sentry (SaaS, free tier) or self-hosted GlitchTip `[default: Sentry]`, with PII scrubbing on, for web, API and worker `[monorepo]`.
 - Host: Netdata on the VPS for disk, memory, CPU, with alerts at 80% disk.
 - Queue: `/api/health` reports failed jobs; alert when `failed > 0` for 15 minutes or `waiting > 1000`.
 - Business signals: alert if no import in 3 days on a company that imported daily before (one query in the weekly job), alert on OTP send failures over 5 per hour.
 - Logs: `pino` JSON to stdout, Docker log driver with rotation, request id, user id, company id, action name, duration. 30 days on disk. Audit log is in the DB and is the one that matters.
 
-### 8.5 Security
+### 8.5 Security `[monorepo]`
 
 - OWASP basics: zod on every input, parameterised SQL only (Drizzle, no string SQL in features), output escaping by React, CSP with nonce, `X-Frame-Options: DENY`, HSTS, cookies `httpOnly Secure SameSite=Lax`.
-- CSRF: server actions check `Origin` by default; route handlers that mutate (upload, push subscribe) check `Origin` and the session.
+- CSRF: API checks an exact configured public `Origin` on every unsafe browser method, including login/OTP, refresh, upload and push; reject missing, `null` or unapproved origins before side effects. Require a valid session for protected operations. No state-changing GETs. SameSite is extra protection, not the check. Next actions retain their framework Origin check and forward the original Origin to API; they must not manufacture an allowed Origin for an unverified caller.
+- CORS: the separate service is behind the same public origin, so no cross-origin grants in production. For direct local web/API ports only, opt into an exact development-origin allowlist with credentials, explicit methods/headers and `Vary: Origin`; no wildcard or reflection. Preflight may be unauthenticated but grants only allowed origins; the actual request still passes CSRF/auth checks. CORS alone does not prevent CSRF. [Fastify CORS options](https://github.com/fastify/fastify-cors).
+- Proxy: only Caddy is exposed publicly; API trusts forwarded host/proto/client-IP headers only from the configured proxy hop, not arbitrary clients. API origin validation compares against configuration, never an attacker-controlled Host header. Internal web requests preserve the originating browser Origin on writes. API uses its own size/rate caps as well as proxy caps.
 - Rate limits (Postgres table, per key, sliding window): OTP request 3 per email per 10 min and 20 per IP per hour; OTP verify 5 attempts per code then consumed; invite accept 10 per IP per hour; upload 20 per user per hour; login page 60 requests per IP per minute at Caddy.
 - Uploads: size cap, extension and sniffed content check, stored outside the web root, served never (only parsed).
-- DB: `anar_app` has no DDL, no `BYPASSRLS`; `audit_log` is insert-only for it. Secrets in a `.env` on the host with mode 600, not in the repo, rotated in the runbook.
+- DB: `anar_app` has no DDL, no `BYPASSRLS`; `audit_log` allows INSERT/SELECT only. Runtime DB credentials go only to API/worker, migration credentials only to the one-shot, mail/push keys only to their backend owners. Web gets no DB URL. Secrets in a `.env` on the host with mode 600, not in the repo, rotated in the runbook.
 - Dependencies: `pnpm audit` in CI, Renovate weekly.
 - Sessions: section 2.3 and 7.4.
 - Step-up for anything that creates users, changes settings or exports.
@@ -764,26 +852,29 @@ Measured on staging with a seeded company of 100k leads and 20 Admins.
 
 ## 9. Testing, CI/CD, environments, Excel migration `[new]`
 
-### 9.1 Testing strategy
+### 9.1 Testing strategy `[monorepo]`
 
-- **Unit (Vitest), pure functions.** `detectEncoding`, `sniffDelimiter`, `normaliseHeaders` (incl. trailing `?` and `_`), `fingerprint`, `suggestMapping`, `guessLabel` (code and header to label), `normalisePhone`, `parseLeadDate` (offset with and without colon), `normaliseRow`, `scoreLead`, merge rules, bucket rules (overdue, due today, new), channel choice for notifications, permission table. Table-driven, no mocks.
-- **Integration (Vitest + Postgres service in CI).** Real DB, real RLS, `anar_app` role. Suites: tenant isolation (7.1), permission matrix (every action × every role × own/foreign resource, expected allow or deny), import end to end on each fixture (summary counts, events, rows), follow-up and lost suggestion, scoring recompute, merge, overdue scan and summaries with a fake clock, retention purge, audit rows for every mutating action.
-- **E2E (Playwright, mobile viewport).** Invite → OTP → Today → call link present → log follow-up → lead moves bucket. DNA upload → mapping → commit → summary. Super Admin assign in bulk → Admin sees it. Export download. Runs against a Compose stack in CI.
-- **Fixtures.** `test/fixtures/csv/`: the six encoding files, `meta-v1` (20 made-up rows with the real 10 headers, encoding, CRLF, tab and answer codes, appendix A), `meta-v2`, `dupes.csv`, `bad-phones.csv`, `50k.csv` (generated), `meta-real-anon.csv` (the real export with `full_name`, `phone`, `email` and `job_title` replaced by generated values, same row count and bytes layout, made by a small script in `test/fixtures/anonymise.ts` that never commits the source file), and one Excel tracker export (9.4).
+- **Web.** Keep the relocated 231 unit and 128 Playwright cases as the S0 regression floor from the brief; record actual baseline output before moving. Phone, desktop and serial failure projects remain. Later adapter tests check cookies, Date decoding, typed errors and preserved form input; the mock suite remains separate from authenticated full-stack acceptance tests.
+- **Domain.** Vitest checks shared schemas and error/result contracts. Tests reject malformed HTTP dates and round-trip nested/null dates when those endpoints land; no Node-only dependencies in browser contracts.
+- **API unit.** Pure functions: encoding, delimiter, header normalisation, fingerprint, mapping/labels, phone/date parsing, row normalisation, scoring, merge and bucket rules, channel choice and permissions. Fastify injection checks HTTP behavior; no listener needed. Table-driven pure tests, no mocks of the subject.
+- **DB and API integration.** Real Postgres 17 and `anar_app`, never an owner connection disguised as the runtime. Roles, tenant isolation (7.1), permission matrix (every endpoint × role × own/foreign), imports, follow-ups, merge, audit, session expiry/revocation, direct calls with forged context, and CSRF/CORS including missing Origin and hostile preflight. No mocking the DB.
+- **Worker.** Process startup/shutdown in S0; from S1 real pg-boss against Postgres, separate from API HTTP tests. Recompute, import retries/crash resume, duplicate delivery, overdue/summary clocks, export and retention. Assert stored outcomes and drained/closed resources, not just enqueue calls.
+- **E2E (web owns Playwright).** Existing mock suite stays directly runnable without API/DB in S0. Full-stack project starts as real features land: invite → OTP → Today → follow-up, DNA upload → mapping → commit, bulk assign → Admin sees it, export download. Test through proxy and built images too, including session Set-Cookie/refresh and stale sessions. Keep 390 px and 1440 px layouts.
+- **Fixtures.** `apps/api/test/fixtures/csv/`: the six encoding files, `meta-v1` (20 made-up rows with the real headers and byte layout, appendix A), `meta-v2`, duplicates, bad phones, generated 50k rows, and an anonymised real-shape fixture generated without committing the source. Worker tests access fixtures through test setup only, not runtime exports. Excel fixture added in S15. No source CSV under `docs/` is opened for the architecture or S0 work.
 - **Rule.** Tests assert what is stored or returned, not internals. No mocking the DB.
 
-### 9.2 CI/CD
+### 9.2 CI/CD `[monorepo]`
 
-- GitHub Actions on every PR: Biome lint and format check, `tsc`, unit, integration with a Postgres service container, `drizzle-kit generate` must produce no diff (schema and migrations in sync), the RLS policy check, `pnpm audit`, build the image, Playwright against the built image.
-- On merge to `main`: build and push the image tagged with the commit sha and `staging`, deploy to staging, run the e2e smoke.
-- Release: tag `vX.Y.Z` → image tagged with the version → manual approval → deploy to production: `pg_dump`, run the `migrate` one-shot, `docker compose up -d web worker`, wait on `/api/health`, smoke. Roll back is `docker compose up` with the previous tag; migrations are written to be backward compatible for one version (add column, backfill, drop next release).
+- GitHub Actions on every PR: frozen workspace install; Biome and resolved-import boundary checks; per-package typecheck/build in dependency order; web's `next typegen` stays local to web; per-package units; real-Postgres DB/API/worker integrations as they land; migration drift and RLS checks; `pnpm audit`; build web/API/worker images; Playwright and proxy smoke. No empty passing suite replaces the existing mock tests. Exact S0 gate in its spec.
+- On merge to `main`: build and push all three app images with the same commit sha and `staging`, deploy together, run the e2e smoke. S0 builds/smokes locally and in CI only; deployment automation comes with ops.
+- Release: tag `vX.Y.Z` → three versioned images → manual approval → `pg_dump`, migration one-shot, `docker compose up -d api worker web proxy`, wait on full API health, smoke. Roll back all app images to the previous tag; migrations remain compatible for one version (add column, backfill, drop next release).
 - Secrets live in GitHub Environments for the deploy SSH key and in `.env` on the host for the app.
 
 ### 9.3 Environments
 
 | Env | Where | Data | Who |
 | --- | --- | --- | --- |
-| local | Compose on the laptop, Mailpit for email, push to localhost with test VAPID keys | seed script: one company, 2 Super Admins, 3 Admins, 500 leads from fixtures | devs |
+| local | `[monorepo]` Compose on laptop: db, api, worker, web, proxy; Mailpit added with S1, test VAPID with S10 | S0: unchanged web mock, no product DB rows. S1: real company, 2 Super Admins, 3 Admins; S3: settings defaults; S5: scoring defaults and 500 imported fixture leads. Seeds grow with their owning schemas | devs |
 | staging | second Compose project on the VPS, own DB and `staging.anar.<domain>`, real email provider with a test domain | anonymised copy of production refreshed on demand (phones and emails replaced) | devs, DNA for UAT |
 | production | the VPS | real | DNA, clients |
 
@@ -805,89 +896,91 @@ The trackers (Sarina's and the others) are the first real data. Same import pipe
 
 Each slice is one end-to-end behaviour, leaves the repo working, has files, uses, gives and proof. Order is MVP first. Sizes are code lines without fixtures and migrations. Approve the spec, then one slice at a time.
 
-### 10.1 MVP
+### 10.1 MVP `[monorepo]`
 
-**S0. Skeleton and health.** Compose with `db`, `web`, `worker`, `proxy`; Drizzle setup; two DB roles; `migrate` one-shot; `/api/health`; Biome, Vitest, Playwright wired; CI green on an empty test.
-Files: `compose.yml`, `Dockerfile`, `db/`, `app/api/health`, `.github/workflows/ci.yml`.
-Gives: `platformDb`, migration flow, CI.
-Proof: `docker compose up` then `curl /api/health` returns 200 with `db: ok`.
+Every slice names backend owners and web adapters separately. A feature cutover replaces its mock body at the seam; a real request never falls back to demo state. New authentication/settings UI can be added, but existing product pages keep their presentation contracts. Backend context and session fields never cross as authority.
 
-**S1. Companies, invites, OTP, sessions.** Platform tables, `createCompany` (seeds section 4.3), `inviteSuperAdmin`, invite accept page, OTP request and verify, session cookie, `requireContext`, logout, sessions list and revoke, email module with Resend and Mailpit locally, rate limit table.
-Files: `modules/auth/*`, `modules/companies/*`, `modules/tenant/context.ts`, `lib/email/*`, `app/(auth)/*`.
-Uses: S0. Gives: `requireContext(): Ctx`, `sendEmail({ to, template, data })`, `rateLimit(key, limit, windowSec)`.
-Proof: e2e: DNA creates a company, invites a Super Admin, accepts on a phone viewport, OTP from Mailpit, lands on an empty company home. Integration: 4th OTP in 10 min sends nothing; 6th wrong code is rejected.
+**S0. Monorepo with the mock still working.** Relocate the finished app to `apps/web`; private pnpm workspace; shared errors/types; Fastify health-only API; worker lifecycle stub; Drizzle config, two roles and tenant transaction foundation; five-service local Compose, boundaries and CI. Detailed files, steps, writer split and proof: [S0 spec](specs/s0-monorepo.md).
+Files: root workspace/config/CI, `apps/{web,api,worker}`, `packages/{db,domain}`, `ops/`.
+Uses: existing `ui-mock` branch. Gives: same mock behavior, `@anar/domain`, `@anar/db/tenant`, build/test entry points and API liveness.
+Proof: all 231 existing web unit and 128 e2e cases pass after the move; new contract/health/DB/lifecycle checks pass; built Compose serves both mock and API. These counts are acceptance requirements, not results of this docs revision.
 
-**S2. Tenant scoping, members, audit, DNA enter.** RLS policies on `company_members` (and the policy template for every later tenant table), `withTenant`, `can()` and the permission table, `inviteAdmin`, `listMembers`, `deactivateMember`, `audit()`, `enterCompany`/`leaveCompany` with the banner, step-up helper, the CI RLS check, the ESLint import rule.
-Files: `db/policies.sql`, `modules/tenant/{withTenant,permissions,audit,stepUp}.ts`, `modules/members/*`, `app/(company)/[slug]/settings/members`.
-Uses: S1. Gives: `withTenant(ctx, fn)`, `can(ctx, perm, res?)`, `audit(tx, ctx, action, target, data)`, `requireFreshOtp(ctx)`.
-Proof: tenant-isolation test with two companies passes; raw select without `app.company_id` gives zero rows; DNA action writes an audit row; deactivated member's cookie gets `unauthorized`.
+**S1. Companies, invites, OTP and sessions over HTTP.** Platform tables and minimal membership table/RLS; company shell creation; invite, OTP, rate limits, session/refresh/revoke/step-up; API context resolver. Introduce the typed web client, cookie forwarding, error/status mapping and auth UI. Start pg-boss with migration-owned setup, `notify.email`, Resend/Mailpit and worker heartbeat so OTP has a working delivery path. Settings defaults arrive in S3; scoring config v1 arrives in S5.
+Files: `packages/db/src/schema/{platform,members}.ts`, migrations; `packages/domain/src/{auth,context,jobs}.ts`; `apps/api/src/modules/{auth,companies,tenant}`, `src/lib/email/`, `src/jobs/index.ts`; `apps/worker/src/main.ts`; `apps/web/lib/api/`, auth pages and tenant/companies adapters.
+Uses: S0 tenant transaction and shared errors. Gives: `requireContext(request, slug): Promise<Ctx>`, `requireFreshOtp(ctx): void`, `enqueue(job, payload, key)`, `sendEmail(input)`, cookie refresh and real health.
+Proof: invite → queued email in Mailpit → OTP → real company shell; fourth OTP sends nothing; sixth wrong code rejected; revoked/expired cookie fails direct API call; hostile/missing Origin refused; API outage stays `unavailable`; cookies remain isolated across concurrent users. Demo mode remains separately selected until all product adapters are ready, never a runtime fallback.
 
-**S3. Settings: fields, stages, outcomes, lost reasons.** Tables, CRUD actions, settings pages (phone layout too), archive rules, type-change refusal, defaults seeded on company create moved here.
-Files: `modules/settings/*`, `app/(company)/[slug]/settings/{fields,stages,outcomes,lost-reasons}`.
-Uses: S2. Gives: `Field`, `Stage`, `Outcome`, `LostReason` types and `loadSchema(tx): CompanySchema` used by imports, leads and scoring.
-Proof: integration CRUD and refusal tests; e2e: Super Admin adds a dropdown field and sees it in the list.
+**S2. Tenant permissions, members, audit and DNA entry.** Full `can` matrix, scoped resource checks, invite/list/deactivate Admins, DNA enter/leave with reason/expiry/banner, audit and platform-access restrictions. Membership bootstrap uses only the scoped membership read described in 2.2.
+Files: `apps/api/src/modules/tenant/{context,permissions,audit,stepUp}.ts`, `modules/members/`; `packages/db/` policies/checks; `packages/domain/src/{context,members}.ts`; web tenant/member adapters and member settings UI.
+Uses: S1 verified sessions and S0 `withTenant`. Gives: `can(ctx, permission, resource?): boolean`, `audit(tx, ctx, action, target, data)`, API-computed UI capabilities.
+Proof: full two-company and every-role matrix through HTTP; no context gives zero rows; rejected foreign writes and pool reuse; DNA mutation audited; deactivation invalidates the next request.
 
-**S4. Import upload, encoding, headers, mapping, preview.** `POST /api/imports`, `detectEncoding`, `sniffDelimiter`, header normalise, fingerprint, `suggestMapping`, template match, new-field proposal, dry-run counts, mapping page, `commitImport` up to enqueue (no job yet, status `mapped`).
-Files: `modules/imports/{upload,encoding,parse,mapping,templates,commit}.ts`, `app/api/imports`, `app/(company)/[slug]/imports/[batchId]/map`.
-Uses: S3 schema. Gives: `normaliseRow`, `ImportBatch`, `Mapping` types, `normalisePhone`, `parseLeadDate` (in `lib/phone`, `lib/dates`).
-Proof: unit tests on all six encodings and the phone table; e2e: upload `meta-v1.csv`, see six system columns matched and four new fields proposed (three dropdowns with the codes as values and guessed labels, `job_title` as text), remap the timeline column to the seeded `purchase_timeline`, commit, batch is `mapped`; upload again, template matches with no edits.
+**S3. Company settings and defaults.** Fields, stages, outcomes, lost reasons, CRUD endpoints, archive/type-change rules and their defaults on company creation. Create the lead table and its reference-count reads now so refusal checks have a real table; no user lead writes yet. Its nullable import-batch column gains its FK in S4 when that table exists. Existing S1 company shells receive settings defaults through an explicitly reviewed migration/seed path; scoring config is deferred to S5.
+Files: `packages/db/src/schema/{settings,leads}.ts`, migrations; domain settings contracts; `apps/api/src/modules/settings/`, `modules/leads/referenceCounts.ts`; web settings adapters and `app/(company)/[slug]/settings/`.
+Uses: S2. Gives: `loadSchema(tx): Promise<CompanySchema>`, settings write APIs and seeded company configuration.
+Proof: CRUD and refusal integration tests with fixture leads referencing a field/stage; Super Admin adds a dropdown on phone and sees it; tenant B cannot read it; field values/labels stay distinct.
 
-**S5. Import commit job and report.** pg-boss worker process, `import.commit`, chunked insert with dedupe, events, `import_rows`, resume from `last_row_no`, summary, notifications table and in-app bell (no push yet), batch report page.
-Files: `apps/worker/*`, `modules/jobs/*`, `modules/imports/job.ts`, `modules/notifications/{inapp}.ts`, `app/(company)/[slug]/imports/[batchId]`.
-Uses: S4. Gives: `enqueue(job, payload, key)`, `notify(tx, { userId, type, title, body, url, dedupeKey })`, `leads` and `lead_events` tables, `Lead` type.
-Proof: fixture `dupes.csv` gives `imported 45, duplicateDb 2, duplicateFile 1, needPhoneReview 4` exactly; `meta-v1.csv` twice gives 20 imported then 20 `duplicate_db` with no new events; `meta-real-anon.csv` gives 1,884 imported, 0 in-file duplicates, lead dates in UTC; kill the worker mid-batch and restart, the batch finishes with the same counts; 50k fixture under 2 min on staging.
+**S4. Real upload, mapping and dry-run preview.** API streams bytes, detects encoding/delimiter, matches templates, proposes fields and computes dry-run counts against S3's lead table. Create import/event tables and the lead-to-batch FK. Replace the metadata-only mock upload adapter with multipart and remove Caddy's mock `/api/imports` exception in the same change. Save/preview works; commit stays visibly unavailable until S5 supplies its handler.
+Files: API `modules/imports/{routes,upload,encoding,parse,mapping,templates,preview}.ts`, lead query owner, `lib/{phone,dates}.ts`; DB import/event/FK migrations; domain import contracts; web imports data/file transport; `ops/Caddyfile`.
+Uses: S3 schema, S1 queue/client. Gives: `normaliseRow`, `normalisePhone`, `parseLeadDate`, persisted `ImportBatch`, `Mapping`, preview API.
+Proof: six encodings and phone table; multipart byte/size/auth checks; exact mapped columns/new fields and preview counts; reload preserves batch; proxy upload reaches API, not Next; no unhandled commit job is queued.
 
-**S6. Lead list, search, filters, detail, timeline.** `listLeads` with cursor and every filter including custom JSONB, trigram search, `getLead`, `updateLeadFields`, `changeStage`, detail page showing only fields with data, timeline from `lead_events`, Admin-only-own enforcement.
-Files: `modules/leads/{list,detail,update}.ts`, `app/(company)/[slug]/leads`, `app/(company)/[slug]/leads/[id]`.
-Uses: S5. Gives: `LeadRow`, `LeadDetail`, `listLeads(ctx, filters)`.
-Proof: integration: Admin gets only own leads whatever filter is passed; custom filter hits the GIN index (`EXPLAIN` test); e2e: search by phone prefix finds the lead.
+**S5. Import commit and report.** Implement `import.commit`, enable commit endpoint, chunked dedupe/inserts/events/rows/resume; create scoring storage, seed v1 for existing company shells through a reviewed migration/seed path, extend company creation to seed it, and add the pure `scoreLead` needed for truthful imported priorities. Notifications table, in-app list and batch report. Handler runs in worker, logic stays in API imports/scoring owners.
+Files: API `modules/imports/{commit,job}.ts`, `modules/scoring/score.ts`, `modules/notifications/`, jobs registration; DB scoring/notifications migrations; domain contracts; web import/report/notification adapters.
+Uses: S4 persisted upload/preview, S1 pg-boss. Gives: real leads/events/score, `notify(tx, input)`, completed import report.
+Proof: duplicate fixture exact counts; `meta-v1` twice imports 20 then skips 20 with no extra events; anonymous 1,884-row fixture yields zero in-file duplicates; kill/restart worker mid-batch gives identical counts; 50k under 2 min on staging; basic default-score table tests.
 
-**S7. Assignment.** `assignLeads` single and bulk, unassigned queue as the default Super Admin view, reassign on deactivate, assignment notification in-app.
-Files: `modules/leads/assign.ts`, `app/(company)/[slug]/leads` (bulk bar).
-Uses: S6. Gives: `assignLeads(ctx, ids, memberId | null)`.
-Proof: integration: 500 ids in one call, events per lead, one notification for the assignee; deactivate with reassign moves every open lead; e2e: bulk assign from the list.
+**S6. Lead list, filters, detail and timeline.** API owns search, cursor pagination, custom filters, field/stage updates and own-lead enforcement. Replace existing leads data implementations; preserve page shapes, Date values, hidden-empty fields and timeline.
+Files: API `modules/leads/{routes,list,detail,update}.ts`; domain lead schemas; web `modules/leads/data/{list,detail,update}.ts` and action transport; DB indexes.
+Uses: S5 leads and score helper. Gives: `listLeads(ctx, filters): Promise<LeadPage>`, `getLead(ctx, id): Promise<LeadDetail>`.
+Proof: forged assignee filter still returns only own leads; foreign id is `not_found`; nested Date decode; phone-prefix search e2e; GIN filter EXPLAIN.
 
-**S8. Admin Today and follow-up logging.** `getMyToday` with the three buckets, lead page `tel:` link, quick form, `logFollowUp` with stage change and custom fields, failed attempts, lost suggestion with Super Admin notification, dismiss.
-Files: `modules/followups/*`, `modules/leads/today.ts`, `app/(company)/[slug]/today`, follow-up form on the lead page.
-Uses: S6, S7. Gives: `logFollowUp(ctx, input)`, bucket rules.
-Proof: e2e on mobile viewport: Admin logs No Answer with a next date, lead moves from New to Due Today; after the 5th No Answer the Super Admin gets the suggestion and dismissing resets the counter.
+**S7. Assignment.** API single/bulk assignment, unassignment, reassign-on-deactivate and one in-app notification. Queue UI unchanged.
+Files: API `modules/leads/assign.ts`, member deactivation integration; domain assignment schema; web `modules/leads/data/assign.ts` and action adapter.
+Uses: S6. Gives: `assignLeads(ctx, { leadIds, memberId }): Promise<{ updated: number }>`.
+Proof: 500 ids, events per lead and one notification; inactive/foreign assignee refused; deactivation moves open leads; existing bulk-select e2e retains selections on failure.
 
-**S9. Scoring.** `scoring_configs`, `scoreLead`, inline scoring on every custom write, settings page, `saveScoringConfig`, recompute job, priority filter and badge, breakdown on the detail page.
-Files: `modules/scoring/*`, `app/(company)/[slug]/settings/scoring`.
-Uses: S5, S8. Gives: `scoreLead(config, custom)`.
-Proof: table test on the base defaults and on the Meta code config from 4.2; config change flips the expected leads after the job; import of `meta-v1.csv` with that config lands each of its 20 rows on the expected priority (`within_1_month` + `3_bhk` + `for_myself/family` is 9, Hot; `just_exploring` + `not_sure_yet` + `just_exploring` is 2, Cold).
+**S8. Today and follow-up logging.** API bucket rules and counts, follow-up transaction, lost suggestion/dismiss, returned next-lead choice. Preserve Today and LogCallSheet contracts and tel links.
+Files: API `modules/{followups,leads}/` relevant handlers; DB follow-up migration; domain follow-up DTOs; web Today/follow-up data and action adapters.
+Uses: S6, S7, S5 inline scoring. Gives: `getMyToday(ctx)`, `logFollowUp(ctx, input)` and lost-suggestion APIs.
+Proof: No Answer moves New → Due Today; fifth failed call suggests Lost; manager dismissal resets; failure preserves input; another Admin's lead cannot be updated through direct HTTP.
 
-**S10. PWA, Web Push, overdue and summary jobs.** Manifest, service worker, install guide for iOS, VAPID keys, `/api/push/subscribe`, `notify.push`, email fallback, `followups.overdue_scan`, `summary.daily`, `summary.weekly`, timezone handling.
-Files: `app/manifest.ts`, `public/sw.js`, `modules/notifications/{push,email,channels}.ts`, `modules/jobs/{overdue,daily,weekly}.ts`.
-Uses: S5 notifications, S8 buckets. Gives: push on any `notify()`.
-Proof: integration with a fake clock: a lead overdue for 3 days gets 3 alerts total; daily summary dedupes by date; dead subscription is disabled after 410. Manual: push received on one Android and one installed-PWA iPhone.
+**S9. Scoring configuration and recompute.** Extend S5's one scorer, add config edit/versioning and `scoring.recompute`; all custom writes use it. Preserve badges and Why Hot data.
+Files: API `modules/scoring/{routes,config,job}.ts`, existing score helper; domain scoring schemas; web scoring settings/adapters.
+Uses: S5 scorer and S8 writes. Gives: `saveScoringConfig(ctx, input)` and idempotent recompute.
+Proof: base and Meta-code score tables; config change flips exactly expected priorities; repeat job is harmless; import fixture retains expected Hot/Cold results.
 
-**S11. Super Admin dashboards and targets.** `getTeamOverview`, `getMemberDashboard`, `compareMembers`, `targets` table and `setTarget`, three dashboard views, target vs actual.
-Files: `modules/reports/{queries,targets}.ts`, `app/(company)/[slug]/dashboard/*`.
-Uses: S8 follow-ups, S9 priority. Gives: `Metrics` type.
-Proof: integration on a seeded company with known numbers (calls, site visits, bookings per member) returns them exactly; team overview under 1 s on the 100k seed.
+**S10. PWA, push and timed jobs.** Web manifest/service worker/install guide; API push-subscription owner; worker `notify.push`, overdue/daily/weekly and email fallback with timezone handling.
+Files: `apps/web/app/manifest.ts`, `public/sw.js`; API `modules/notifications/{subscriptions,push,channels}.ts`, `modules/followups/overdue.ts`, `modules/reports/summaries.ts`, jobs registration; worker lifecycle.
+Uses: S1 email, S5 notifications, S8 buckets. Gives: push delivery through the existing notify path.
+Proof: fake-clock real-queue integration, daily dedupe and dead subscription 410; session revoke stops push; manual receipt on Android and installed-PWA iPhone.
 
-**S12. Export.** `requestExport`, `export.build` streaming CSV and XLSX with fixed columns plus every active custom field, download route, expiry, step-up.
-Files: `modules/reports/export.ts`, `app/api/exports/[id]/download`.
-Uses: S6 filters, S2 step-up.
-Proof: export of a filtered list has the same row count as the list `total`; 410 after expiry; export without fresh OTP returns `step_up_required`.
+**S11. Dashboards and targets.** API SQL aggregates, targets, member and comparison endpoints; replace reports data adapters, keep dashboard composition.
+Files: API `modules/reports/{routes,queries,targets}.ts`; DB targets migration; domain report contracts; web `modules/reports/data/`.
+Uses: S8 follow-ups, S9 priority. Gives: typed `Metrics`, `TeamOverview`, `MemberDashboard`.
+Proof: known counts per member, own-report enforcement, empty vs failed results, original dashboard e2e, under 1 s on 100k seed.
 
-**S13. Merge.** Duplicate candidates on the lead page, `mergeLeads`, redirect from a merged id.
-Files: `modules/leads/merge.ts`, merge dialog on the lead page.
-Uses: S6, S9.
-Proof: integration: follow-ups and events re-pointed, snapshot holds every duplicate field, the old id redirects; e2e: merge two leads with different phones.
+**S12. Export.** API step-up/request/download; worker filtered streaming CSV/XLSX, expiry and audit; web initiates and shows status.
+Files: API `modules/reports/{export,download}.ts`, jobs registration; DB export migration; domain export schemas; web export UI/adapter.
+Uses: S6 filters, S2 step-up. Gives: `requestExport(ctx, input)`, authenticated download URL.
+Proof: same count as filtered list; foreign company/requester denied; 410 after expiry; `step_up_required` without fresh OTP; 100k under 60 s on staging.
 
-**S14. Ops: backups, monitoring, runbook, restore drill.** Backup cron with `age` and off-site upload, Netdata, uptime check, Sentry wiring with redaction, `docs/runbook.md`, restore drill script and its first run, retention purge job.
-Files: `ops/{backup.sh,restore-drill.sh}`, `modules/jobs/retention.ts`, `docs/runbook.md`.
-Uses: S0, S5.
-Proof: restore drill restores last night's dump into a scratch Postgres and the integration smoke passes; alert fires when the health check is stopped.
+**S13. Merge.** API candidates/merge transaction, snapshot, rescore and old-id redirect; web merge dialog.
+Files: API `modules/leads/merge.ts`; domain merge schema; web lead adapter/dialog.
+Uses: S6, S9. Gives: `mergeLeads(ctx, input)`.
+Proof: follow-ups/events re-point, duplicate fields preserved in snapshot, old id redirects; cross-company pair refused; merge e2e.
 
-**S15. Excel migration run.** Follow-up and stage targets in the mapping (9.4), `assignAllTo` import option, status mapping table, dry run on staging with DNA, production run.
-Files: `modules/imports/{mapping,job}.ts` (extend), status table fixture.
-Uses: S5.
-Proof: each tracker's counts match the Excel row counts minus duplicates, 20 sampled leads match, DNA signs off.
+**S14. Ops and retention.** Five-container release/rollback, backups, off-site restore drill, monitoring/redaction, runbook; worker retention calls platform owners for sessions/OTP and `withTenant` per company.
+Files: `ops/{backup.sh,restore-drill.sh}`, deployment workflow, `docs/runbook.md`; API `modules/retention/`, jobs registration; Compose production configuration.
+Uses: S1 full health, all persisted features. Gives: reviewed deploy/rollback and restore procedures.
+Proof: real scratch restore and integration smoke; health alert; retention clocks and scoped deletes; no migration secret in a runtime container.
 
-S0 to S10 are the MVP a company can go live on. S11 to S15 are needed before DNA hands it to the first client as "done".
+**S15. Excel migration run.** Extend the API mapping and worker import handler with follow-up/stage targets, `assignAllTo` and confirmed tracker status mapping; matching web import controls. Real stored-data import is its own approval after staging counts.
+Files: API `modules/imports/{mapping,job}.ts`; domain contracts, web import adapters/controls, anonymous status fixture.
+Uses: S5, S8 follow-ups. Gives: reviewed tracker import path.
+Proof: counts match tracker rows minus duplicates, 20 sampled leads match, DNA signs off before production import.
+
+S0 to S10 are the MVP a company can go live on. S11 to S15 are needed before DNA hands it to the first client as "done". Before a real deployment, disable the demo entry points and run the full-stack acceptance path for every enabled feature.
 
 ### 10.2 After launch, small
 
@@ -903,7 +996,7 @@ Design so it drops into the same pipeline:
 
 1. A Meta app owned by DNA, `leads_retrieval` and `pages_manage_ads` permissions, app review. Business owns the app and the review; dev work cannot start before.
 2. Per company: connect a Page (OAuth in settings, DNA does it), store the long-lived Page token encrypted in `companies.settings.meta` (encryption key in env, not in the DB).
-3. Webhook `leadgen` route handler: verify the signature, enqueue `meta.fetch_lead` with `leadgen_id`. Fetch the lead by id from the Graph API, turn `field_data` into a row shaped like a CSV row, run it through the same `matchMapping` by `form_id` (templates get a `form_id` column) and `normaliseRow`, insert through the same code as S5 with `source_kind = api` and `external_id`. Unknown form → park in a `pending_mapping` batch and notify DNA to map it once.
+3. `[monorepo]` API webhook `leadgen` endpoint: verify the signature, enqueue `meta.fetch_lead` with `leadgen_id`. Worker fetches the lead from the Graph API, turns `field_data` into a row shaped like a CSV row, runs it through the same API-owned `matchMapping` by `form_id` (templates get a `form_id` column) and `normaliseRow`, inserts through the same code as S5 with `source_kind = api` and `external_id`. Unknown form → park in a `pending_mapping` batch and notify DNA to map it once. This provider-signed endpoint is exempt from browser Origin/session checks, never from signature verification.
 4. Backfill job on connect: pull the last 90 days of leads per form, dedupe by `external_id` and phone.
 5. Manual CSV upload stays as the fallback.
 
