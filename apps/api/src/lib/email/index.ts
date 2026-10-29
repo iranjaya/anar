@@ -13,6 +13,7 @@ export function createEmailSender(config: EmailConfig = loadEmailConfig()) {
           to: input.to,
           subject: input.subject,
           text: input.text,
+          html: input.html,
         });
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
@@ -26,6 +27,7 @@ export function createEmailSender(config: EmailConfig = loadEmailConfig()) {
             To: [{ Email: message.to }],
             Subject: message.subject,
             Text: message.text,
+            HTML: message.html,
             Headers: { "X-Anar-Delivery-Key": input.deliveryKey },
           };
         } else {
@@ -37,6 +39,7 @@ export function createEmailSender(config: EmailConfig = loadEmailConfig()) {
             to: [message.to],
             subject: message.subject,
             text: message.text,
+            html: message.html,
           };
         }
         const timeout = AbortSignal.timeout(10000);

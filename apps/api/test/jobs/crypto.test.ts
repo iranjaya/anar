@@ -9,6 +9,7 @@ describe("encrypted mail", () => {
     to: "recipient@example.test",
     subject: "Fixture",
     text: "Synthetic OTP 384205",
+    html: "<p>Synthetic OTP 384205</p>",
   };
   const deliveryKey = "fixture-revision";
 

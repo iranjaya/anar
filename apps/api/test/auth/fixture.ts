@@ -21,6 +21,7 @@ import { startPostgres } from "../../../../test/support/postgres.js";
 import { buildApp } from "../../src/app.js";
 import { createMailCodec } from "../../src/lib/email/crypto.js";
 import { originGuard } from "../../src/lib/http.js";
+import bootstrap from "../../src/modules/auth/bootstrap.js";
 import type { CookieTransport } from "../../src/modules/auth/cookies.js";
 import otp from "../../src/modules/auth/otp.js";
 import type { SessionService } from "../../src/modules/auth/sessions.js";
@@ -290,7 +291,13 @@ export async function startAuthFixture() {
         await mail.clear();
         time = Date.now();
       },
-      async seedUser(email = `${v7()}@example.test`) {
+      async seedUser(email = `${v7()}@example.test`, owner = false) {
+        if (owner)
+          return bootstrap.bootstrapOwner(runtime, {
+            environment: "proof",
+            email,
+            name: "Proof user",
+          });
         const [user] = await runtime.transaction((tx) =>
           tx
             .insert(users)
@@ -298,7 +305,7 @@ export async function startAuthFixture() {
               id: v7(),
               email,
               name: "Proof user",
-              platformRole: "dna",
+              platformRole: null,
             })
             .returning(),
         );
@@ -314,8 +321,10 @@ export async function startAuthFixture() {
         runtime.transaction((tx) =>
           tx.select().from(otpCodes).where(eq(otpCodes.userId, userId)),
         ),
-      async login(options: { index?: number; ip?: string } = {}) {
-        const user = await fixture.seedUser();
+      async login(
+        options: { index?: number; ip?: string; owner?: boolean } = {},
+      ) {
+        const user = await fixture.seedUser(undefined, options.owner);
         expect(
           (await post("requestOtp", { email: user.email }, options)).statusCode,
         ).toBe(200);

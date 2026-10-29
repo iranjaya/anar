@@ -2,9 +2,14 @@ import { auditLog, type PlatformTx } from "@anar/db/platform";
 import type { AuthUser } from "@anar/domain/auth";
 import { v7 } from "uuid";
 
-export type AuditAction = "auth.bootstrap_dna";
+export type AuditAction = "auth.bootstrap_owner";
 export type AuditData = { environment: string };
-export type AuditActor = { user: AuthUser; companyId: null; ip: string | null };
+export type AuditActor = {
+  user: AuthUser;
+  agencyId: null;
+  companyId: null;
+  ip: string | null;
+};
 
 const audit = {
   async audit(
@@ -17,7 +22,8 @@ const audit = {
     await tx.insert(auditLog).values({
       id: v7(),
       actorUserId: actor.user.id,
-      actorRole: "dna",
+      actorRole: "owner",
+      agencyId: actor.agencyId,
       companyId: actor.companyId,
       action,
       targetType: target.type,

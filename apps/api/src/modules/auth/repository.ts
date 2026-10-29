@@ -109,14 +109,14 @@ const repository = {
     return challenge;
   },
 
-  async bootstrapDna(
+  async bootstrapOwner(
     tx: PlatformTx,
     input: { id: string; email: string; name: string },
   ): Promise<{ user: AuthUser; created: boolean }> {
     const [created] = await tx
       .insert(users)
-      .values({ ...input, platformRole: "dna" })
-      .onConflictDoNothing({ target: users.email })
+      .values({ ...input, platformRole: "owner" })
+      .onConflictDoNothing()
       .returning();
     if (created) return { user: created, created: true };
 
@@ -125,10 +125,17 @@ const repository = {
       .from(users)
       .where(eq(users.email, input.email))
       .for("update");
-    if (existing?.platformRole !== "dna") {
+    if (!existing) throw new AppError("conflict", "An owner already exists");
+    if (existing.platformRole !== "owner") {
       throw new AppError(
         "conflict",
         "Bootstrap cannot promote an existing user",
+      );
+    }
+    if (existing.deactivatedAt !== null) {
+      throw new AppError(
+        "conflict",
+        "Bootstrap cannot revive an inactive owner",
       );
     }
     return { user: existing, created: false };

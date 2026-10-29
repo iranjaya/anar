@@ -18,6 +18,7 @@ describe("Resend HTTP transport", () => {
     to: "recipient@example.test",
     subject: "Fixture",
     text: "Synthetic message",
+    html: "<p>Synthetic message</p>",
     deliveryKey: "fixture-revision-1",
   };
   const config = () => ({
@@ -77,6 +78,7 @@ describe("Resend HTTP transport", () => {
         to: [message.to],
         subject: message.subject,
         text: message.text,
+        html: message.html,
       });
     }
   });

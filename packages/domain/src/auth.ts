@@ -1,9 +1,12 @@
 import { z } from "zod";
 import { wireDateSchema } from "./http.js";
 import type { JobPayload } from "./jobs.js";
-import type { User } from "./tenant.js";
 
-export type AuthUser = User & {
+export type AuthUser = {
+  id: string;
+  email: string;
+  name: string;
+  platformRole: "owner" | null;
   deactivatedAt: Date | null;
   createdAt: Date;
 };
@@ -29,7 +32,7 @@ export const otpEmailJobSchema = z.strictObject({
   encryptedMessage: z.string().min(1),
 }) satisfies z.ZodType<JobPayload>;
 
-export const bootstrapDnaSchema = z.strictObject({
+export const bootstrapOwnerSchema = z.strictObject({
   environment: z
     .string()
     .trim()
@@ -40,4 +43,4 @@ export const bootstrapDnaSchema = z.strictObject({
   name: z.string().trim().min(1).max(120),
 });
 
-export type BootstrapDnaInput = z.infer<typeof bootstrapDnaSchema>;
+export type BootstrapOwnerInput = z.infer<typeof bootstrapOwnerSchema>;

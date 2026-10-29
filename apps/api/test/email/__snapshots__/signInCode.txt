@@ -1,0 +1,19 @@
+Anar
+
+Your sign-in code
+
+Enter this code in Anar to sign in.
+
+    482913
+
+It works for 10 minutes and only once. If you ask for a new code, this
+one stops working.
+
+Did not ask for this?
+Ignore this email. Nobody can sign in without the code.
+
+--
+You got this email because someone asked to sign in to Anar with this
+email address.
+Anar is a lead tracker run by DNA.
+Trouble signing in? Ask the person who invited you.

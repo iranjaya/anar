@@ -11,7 +11,7 @@ describe("auth input", () => {
   it("rejects identity and purpose fields supplied by the caller", () => {
     for (const extra of [
       { userId: "forged" },
-      { platformRole: "dna" },
+      { platformRole: "owner" },
       { purpose: "step_up" },
       { sessionId: "forged" },
     ]) {

@@ -12,13 +12,12 @@ export const auditLog = pgTable(
   "audit_log",
   {
     id: uuid("id").primaryKey(),
+    agencyId: uuid("agency_id"),
     companyId: uuid("company_id"),
     actorUserId: uuid("actor_user_id")
       .notNull()
       .references(() => users.id, { onDelete: "restrict" }),
-    actorRole: text("actor_role")
-      .notNull()
-      .$type<"dna" | "super_admin" | "admin">(),
+    actorRole: text("actor_role").notNull(),
     action: text("action").notNull(),
     targetType: text("target_type").notNull(),
     targetId: uuid("target_id").notNull(),
@@ -29,6 +28,11 @@ export const auditLog = pgTable(
       .defaultNow(),
   },
   (table) => [
+    index("audit_log_agency_time_idx").on(
+      table.agencyId,
+      table.createdAt,
+      table.id,
+    ),
     index("audit_log_company_time_idx").on(
       table.companyId,
       table.createdAt,

@@ -394,7 +394,7 @@ describe("OTP verification on Postgres", () => {
   );
 
   it("passes fresh role and OTP state to locked platform work", async () => {
-    const issued = await fixture.login();
+    const issued = await fixture.login({ owner: true });
     const actor = await fixture.apps[0].sessions.requireSession({
       headers: { cookie: issued.cookie },
     });
@@ -423,7 +423,7 @@ describe("OTP verification on Postgres", () => {
       user: { platformRole: null },
       session: { lastOtpAt: older },
     });
-    expect(actor.user.platformRole).toBe("dna");
+    expect(actor.user.platformRole).toBe("owner");
   });
 
   it("rolls back failed platform work", async () => {

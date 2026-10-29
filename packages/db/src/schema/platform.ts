@@ -19,7 +19,7 @@ export const users = pgTable(
     id: uuid("id").primaryKey(),
     email: citext("email").notNull().unique(),
     name: text("name").notNull(),
-    platformRole: text("platform_role").$type<"dna">(),
+    platformRole: text("platform_role").$type<"owner">(),
     deactivatedAt: timestamp("deactivated_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -28,8 +28,11 @@ export const users = pgTable(
   (table) => [
     check(
       "users_platform_role_check",
-      sql`${table.platformRole} IS NULL OR ${table.platformRole} = 'dna'`,
+      sql`${table.platformRole} IS NULL OR ${table.platformRole} = 'owner'`,
     ),
+    uniqueIndex("users_single_owner_idx")
+      .on(sql`(true)`)
+      .where(sql`${table.platformRole} = 'owner'`),
   ],
 );
 

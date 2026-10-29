@@ -1,113 +1,95 @@
-import { execFile } from "node:child_process";
-import { fileURLToPath } from "node:url";
-import { promisify } from "node:util";
-import {
-  createPlatformDb,
-  type PlatformDb,
-  users,
-  withPlatformTenant,
-} from "@anar/db/platform";
-import { sql } from "drizzle-orm";
+import { readFile } from "node:fs/promises";
+import { createPlatformDb, users, withPlatformTenant } from "@anar/db/platform";
+import { eq, sql } from "drizzle-orm";
 import { v7 } from "uuid";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import bootstrap from "../../src/modules/auth/bootstrap.js";
+import {
+  type BootstrapFixture,
+  startBootstrapFixture,
+} from "./bootstrapFixture.js";
 
-const run = promisify(execFile);
-const input = { environment: "proof", name: "Proof DNA" };
+const input = { environment: "proof", name: "Proof owner" };
 const scope = {
   companyId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
   userId: "11111111-1111-1111-1111-111111111111",
 };
+const args = (email: string, environment = "proof") => [
+  "--environment",
+  environment,
+  "--email",
+  email,
+  "--name",
+  input.name,
+];
 
-describe("DNA bootstrap on disposable Postgres", () => {
-  let db: PlatformDb;
-  let appUrl: string;
-
+describe("single owner bootstrap on disposable Postgres", () => {
+  let fixture: BootstrapFixture;
   beforeAll(async () => {
-    if (process.env.ANAR_BOOTSTRAP_PROOF !== "disposable") {
-      throw new Error("Run through the disposable bootstrap proof harness");
-    }
-    appUrl = process.env.ANAR_TEST_DATABASE_URL ?? "";
-    const url = new URL(appUrl);
-    expect(url.hostname).toBe("127.0.0.1");
-    expect(url.pathname).toBe("/anar_s04");
-    expect(Number(url.port)).not.toBeOneOf([3000, 3001, 3100]);
-    db = await createPlatformDb(appUrl);
+    fixture = await startBootstrapFixture();
+    expect(fixture.postgres.port).not.toBeOneOf([3000, 3001, 3100]);
+    await fixture.owner(`CREATE TABLE bootstrap_scope_fixture (company_id uuid NOT NULL, value text NOT NULL, PRIMARY KEY (company_id,value));
+      ALTER TABLE bootstrap_scope_fixture ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE bootstrap_scope_fixture FORCE ROW LEVEL SECURITY;
+      CREATE POLICY bootstrap_scope ON bootstrap_scope_fixture
+      USING (company_id = NULLIF(current_setting('app.company_id', true), '')::uuid)
+      WITH CHECK (company_id = NULLIF(current_setting('app.company_id', true), '')::uuid)`);
   });
-
+  beforeEach(async () => {
+    await fixture.owner(
+      "TRUNCATE public.audit_log, public.otp_codes, public.sessions, public.users CASCADE; TRUNCATE bootstrap_scope_fixture",
+    );
+    await fixture.db.transaction((tx) =>
+      tx.insert(users).values({
+        id: v7(),
+        email: "existing@example.test",
+        name: "Existing ordinary user",
+      }),
+    );
+  });
   afterAll(async () => {
-    await db?.close();
+    await fixture?.close();
   });
 
-  async function counts(email: string) {
-    return db.transaction(
-      async (tx) =>
-        (
-          await tx.execute<{ users: number; audits: number }>(sql`
-      select (select count(*)::int from users where email = ${email}) as users,
-      (select count(*)::int from audit_log a join users u on u.id = a.actor_user_id
-       where u.email = ${email}) as audits`)
-        ).rows[0],
-    );
-  }
+  const counts = () =>
+    fixture.rows<{ owners: number; audits: number; sessions: number }>(sql`
+    select (select count(*)::int from users where platform_role = 'owner') as owners,
+    (select count(*)::int from audit_log where action = 'auth.bootstrap_owner') as audits,
+    (select count(*)::int from sessions) as sessions`);
 
-  function cli(args: string[], env: NodeJS.ProcessEnv = {}) {
-    return run(
-      process.execPath,
-      [
-        fileURLToPath(
-          new URL("../../dist/modules/auth/bootstrap.js", import.meta.url),
-        ),
-        ...args,
-      ],
-      {
-        env: {
-          ...process.env,
-          NODE_OPTIONS: "",
-          ANAR_ENV: "proof",
-          DATABASE_URL: appUrl,
-          ...env,
-        },
-        timeout: 8000,
-      },
-    );
-  }
-
-  it("creates one DNA identity and audit on repeated normalized email", async () => {
-    const first = await bootstrap.bootstrapDna(db, {
+  it("creates one owner and audit and preserves the first fields on normalized repeat", async () => {
+    const first = await bootstrap.bootstrapOwner(fixture.db, {
       ...input,
-      email: " Repeat@Example.Test ",
+      email: " Owner@Example.Test ",
     });
-    const again = await bootstrap.bootstrapDna(db, {
-      ...input,
-      email: "repeat@example.test",
-      name: "Changed name",
-    });
-    expect(again).toEqual(first);
+    expect(
+      await bootstrap.bootstrapOwner(fixture.db, {
+        ...input,
+        email: "owner@example.test",
+        name: "Changed name",
+      }),
+    ).toEqual(first);
     expect(first).toMatchObject({
-      email: "repeat@example.test",
+      email: "owner@example.test",
       name: input.name,
-      platformRole: "dna",
+      platformRole: "owner",
       deactivatedAt: null,
     });
     expect(first.id).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
     );
-    expect(await counts(first.email)).toEqual({ users: 1, audits: 1 });
-    const rows = await db.transaction(
-      async (tx) =>
-        (
-          await tx.execute(sql`
-      select actor_user_id, actor_role, company_id, action, target_type, target_id, data, ip
-      from audit_log where actor_user_id = ${first.id}`)
-        ).rows,
-    );
-    expect(rows).toEqual([
+    expect(await counts()).toEqual([{ owners: 1, audits: 1, sessions: 0 }]);
+    expect(
+      await fixture.rows(
+        sql`select actor_user_id, actor_role, agency_id, company_id, action, target_type, target_id, data, ip from audit_log`,
+      ),
+    ).toEqual([
       {
         actor_user_id: first.id,
-        actor_role: "dna",
+        actor_role: "owner",
+        agency_id: null,
         company_id: null,
-        action: "auth.bootstrap_dna",
+        action: "auth.bootstrap_owner",
         target_type: "user",
         target_id: first.id,
         data: { environment: "proof" },
@@ -116,63 +98,198 @@ describe("DNA bootstrap on disposable Postgres", () => {
     ]);
   });
 
-  it("creates one identity and audit across concurrent bootstraps", async () => {
+  it("creates one owner and audit across concurrent same-email requests", async () => {
     const results = await Promise.all(
       Array.from({ length: 8 }, () =>
-        bootstrap.bootstrapDna(db, {
+        bootstrap.bootstrapOwner(fixture.db, {
           ...input,
           email: "parallel@example.test",
         }),
       ),
     );
     expect(new Set(results.map((user) => user.id)).size).toBe(1);
-    expect(await counts("parallel@example.test")).toEqual({
-      users: 1,
-      audits: 1,
-    });
+    expect(await counts()).toEqual([{ owners: 1, audits: 1, sessions: 0 }]);
   });
 
-  it("keeps an existing DNA name and deactivation state", async () => {
-    const user = await bootstrap.bootstrapDna(db, {
+  it("refuses a second email and ordinary-user promotion without changing either identity", async () => {
+    const first = await bootstrap.bootstrapOwner(fixture.db, {
       ...input,
-      email: "retained@example.test",
+      email: "owner@example.test",
     });
-    expect(user).toMatchObject({
-      name: "Existing DNA",
-      deactivatedAt: new Date("2026-01-01T00:00:00Z"),
-    });
-    expect(await counts(user.email)).toEqual({ users: 1, audits: 0 });
-  });
-
-  it("refuses promoting a non-DNA identity without changing it", async () => {
     await expect(
-      bootstrap.bootstrapDna(db, { ...input, email: "existing@example.test" }),
-    ).rejects.toMatchObject({ code: "conflict" });
-    const rows = await db.transaction(
-      async (tx) =>
-        (
-          await tx.execute(
-            sql`select name, platform_role from users where email = 'existing@example.test'`,
-          )
-        ).rows,
-    );
-    expect(rows).toEqual([{ name: "Existing member", platform_role: null }]);
-    expect(await counts("existing@example.test")).toEqual({
-      users: 1,
-      audits: 0,
-    });
-  });
-
-  it("rolls back the identity when audit insertion fails", async () => {
-    await expect(
-      bootstrap.bootstrapDna(db, { ...input, email: "rollback@example.test" }),
+      bootstrap.bootstrapOwner(fixture.db, {
+        ...input,
+        email: "second@example.test",
+      }),
     ).rejects.toMatchObject({
-      cause: { code: "P0001", message: "Reject fixture audit" },
+      code: "conflict",
+      message: "An owner already exists",
     });
-    expect(await counts("rollback@example.test")).toEqual({
-      users: 0,
-      audits: 0,
+    await expect(
+      bootstrap.bootstrapOwner(fixture.db, {
+        ...input,
+        email: "existing@example.test",
+      }),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      message: "Bootstrap cannot promote an existing user",
     });
+    expect(
+      await fixture.rows(
+        sql`select email, name, platform_role from users order by email`,
+      ),
+    ).toEqual([
+      {
+        email: "existing@example.test",
+        name: "Existing ordinary user",
+        platform_role: null,
+      },
+      { email: first.email, name: input.name, platform_role: "owner" },
+    ]);
+    expect(await counts()).toEqual([{ owners: 1, audits: 1, sessions: 0 }]);
+  });
+
+  it("refuses ordinary-user promotion even before any owner exists", async () => {
+    await expect(
+      bootstrap.bootstrapOwner(fixture.db, {
+        ...input,
+        email: "existing@example.test",
+      }),
+    ).rejects.toMatchObject({ code: "conflict" });
+    expect(await counts()).toEqual([{ owners: 0, audits: 0, sessions: 0 }]);
+  });
+
+  it("admits exactly one competing owner email", async () => {
+    const results = await Promise.allSettled(
+      Array.from({ length: 8 }, (_, index) =>
+        bootstrap.bootstrapOwner(fixture.db, {
+          ...input,
+          email: `competing-${index}@example.test`,
+        }),
+      ),
+    );
+    expect(
+      results.filter((result) => result.status === "fulfilled"),
+    ).toHaveLength(1);
+    const refused = results.filter((result) => result.status === "rejected");
+    expect(refused).toHaveLength(7);
+    for (const result of refused)
+      expect(result.reason).toMatchObject({ code: "conflict" });
+    expect(await counts()).toEqual([{ owners: 1, audits: 1, sessions: 0 }]);
+  });
+
+  it("enforces the singleton below the bootstrap service", async () => {
+    await bootstrap.bootstrapOwner(fixture.db, {
+      ...input,
+      email: "owner@example.test",
+    });
+    await expect(
+      fixture.db.transaction((tx) =>
+        tx.insert(users).values({
+          id: v7(),
+          email: "bypass@example.test",
+          name: "Second owner",
+          platformRole: "owner",
+        }),
+      ),
+    ).rejects.toMatchObject({
+      cause: { code: "23505", constraint: "users_single_owner_idx" },
+    });
+    expect(await counts()).toEqual([{ owners: 1, audits: 1, sessions: 0 }]);
+  });
+
+  it.each(["dna", "agency_staff", "arbitrary"])(
+    "refuses current global role %s at the database boundary",
+    async (role) => {
+      await expect(
+        fixture.rows(
+          sql`insert into users (id,email,name,platform_role) values (${v7()},'invalid-role@example.test','Invalid role',${role})`,
+        ),
+      ).rejects.toMatchObject({
+        cause: { code: "23514", constraint: "users_platform_role_check" },
+      });
+      expect(
+        await fixture.rows(sql`select count(*)::int as count from users`),
+      ).toEqual([{ count: 1 }]);
+      expect(await counts()).toEqual([{ owners: 0, audits: 0, sessions: 0 }]);
+    },
+  );
+
+  it("never revives an inactive owner or creates a replacement", async () => {
+    const first = await bootstrap.bootstrapOwner(fixture.db, {
+      ...input,
+      email: "owner@example.test",
+    });
+    const deactivatedAt = new Date("2026-01-01T00:00:00Z");
+    await fixture.db.transaction((tx) =>
+      tx.update(users).set({ deactivatedAt }).where(eq(users.id, first.id)),
+    );
+    await expect(
+      bootstrap.bootstrapOwner(fixture.db, {
+        ...input,
+        email: first.email,
+        name: "Changed name",
+      }),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      message: "Bootstrap cannot revive an inactive owner",
+    });
+    await expect(
+      bootstrap.bootstrapOwner(fixture.db, {
+        ...input,
+        email: "replacement@example.test",
+      }),
+    ).rejects.toMatchObject({ code: "conflict" });
+    const [stored] = await fixture.db.transaction((tx) =>
+      tx.select().from(users).where(eq(users.id, first.id)),
+    );
+    expect(stored).toEqual({ ...first, deactivatedAt });
+    expect(await counts()).toEqual([{ owners: 1, audits: 1, sessions: 0 }]);
+  });
+
+  it("rolls back the owner when audit insertion fails and releases the singleton slot", async () => {
+    await fixture.owner("REVOKE INSERT ON public.audit_log FROM anar_app");
+    try {
+      await expect(
+        bootstrap.bootstrapOwner(fixture.db, {
+          ...input,
+          email: "rollback@example.test",
+        }),
+      ).rejects.toMatchObject({ cause: { code: "42501" } });
+      expect(await counts()).toEqual([{ owners: 0, audits: 0, sessions: 0 }]);
+      await expect(
+        fixture.cli(args("rollback@example.test")),
+      ).rejects.toMatchObject({
+        code: 1,
+        stdout: "",
+        stderr: "Owner bootstrap failed\n",
+      });
+    } finally {
+      await fixture.owner("GRANT INSERT ON public.audit_log TO anar_app");
+    }
+    await bootstrap.bootstrapOwner(fixture.db, {
+      ...input,
+      email: "retry@example.test",
+    });
+    expect(await counts()).toEqual([{ owners: 1, audits: 1, sessions: 0 }]);
+  });
+
+  it("keeps owner and audit intact through repeated roles and migration setup", async () => {
+    const owner = await bootstrap.bootstrapOwner(fixture.db, {
+      ...input,
+      email: "owner@example.test",
+    });
+    const history = await fixture.rows(sql`select * from audit_log`);
+    await fixture.postgres.bootstrap();
+    await fixture.postgres.migrate();
+    expect(
+      await bootstrap.bootstrapOwner(fixture.db, {
+        ...input,
+        email: owner.email,
+      }),
+    ).toEqual(owner);
+    expect(await fixture.rows(sql`select * from audit_log`)).toEqual(history);
+    expect(await counts()).toEqual([{ owners: 1, audits: 1, sessions: 0 }]);
   });
 
   it.each([
@@ -182,25 +299,25 @@ describe("DNA bootstrap on disposable Postgres", () => {
     "create schema forbidden_bootstrap",
   ])("denies runtime %s", async (query) => {
     await expect(
-      db.transaction((tx) => tx.execute(sql.raw(query))),
+      fixture.db.transaction((tx) => tx.execute(sql.raw(query))),
     ).rejects.toMatchObject({ cause: { code: "42501" } });
   });
 
-  it("refuses privileged platform connections and exposes no pool", async () => {
-    expect(Object.keys(db).sort()).toEqual(["close", "transaction"]);
-    for (const key of ["ANAR_TEST_ADMIN_URL", "ANAR_TEST_MIGRATION_URL"]) {
-      const url = process.env[key];
-      if (!url) throw new Error("Disposable role URL is required");
+  it("refuses privileged connections and exposes no pool", async () => {
+    expect(Object.keys(fixture.db).sort()).toEqual(["close", "transaction"]);
+    for (const url of [
+      fixture.postgres.adminUrl,
+      fixture.postgres.migrationUrl,
+    ])
       await expect(createPlatformDb(url)).rejects.toThrow(
         "Database connection requires anar_app",
       );
-    }
   });
 
   it.each([false, true])(
-    "keeps platform and tenant writes together with rollback=%s",
+    "keeps scope and platform writes together with rollback=%s",
     async (rollback) => {
-      const isolated = await createPlatformDb(appUrl);
+      const isolated = await createPlatformDb(fixture.postgres.appUrl);
       const email = `bridge-${rollback}@example.test`;
       let pid: number | undefined;
       try {
@@ -216,134 +333,202 @@ describe("DNA bootstrap on disposable Postgres", () => {
           await withPlatformTenant(tx, scope, async (scoped) => {
             expect(scoped).toBe(tx);
             await scoped.execute(
-              sql`insert into bootstrap_scope_fixture (company_id, value) values (${scope.companyId}, ${email})`,
+              sql`insert into bootstrap_scope_fixture values (${scope.companyId}, ${email})`,
             );
-            expect(
-              (
-                await scoped.execute(
-                  sql`select value from bootstrap_scope_fixture where company_id = ${scope.companyId} and value = ${email}`,
-                )
-              ).rows,
-            ).toEqual([{ value: email }]);
           });
           if (rollback) throw new Error("Rollback both writes");
         });
         if (rollback)
           await expect(result).rejects.toThrow("Rollback both writes");
         else await result;
-        const settings = await isolated.transaction(
-          async (tx) =>
-            (
-              await tx.execute(sql`
-        select pg_backend_pid() as pid,
-        nullif(current_setting('app.company_id', true), '') as company,
-        nullif(current_setting('app.user_id', true), '') as usr`)
-            ).rows,
-        );
-        expect(settings).toEqual([{ pid, company: null, usr: null }]);
-        expect(await counts(email)).toEqual({
-          users: rollback ? 0 : 1,
-          audits: 0,
-        });
-        const scopedRows = await isolated.transaction((tx) =>
-          withPlatformTenant(
-            tx,
-            scope,
-            async (scoped) =>
+        expect(
+          await isolated.transaction(
+            async (tx) =>
               (
-                await scoped.execute(
-                  sql`select value from bootstrap_scope_fixture where company_id = ${scope.companyId} and value = ${email}`,
+                await tx.execute(
+                  sql`select pg_backend_pid() as pid, nullif(current_setting('app.company_id', true), '') as company, nullif(current_setting('app.user_id', true), '') as usr`,
                 )
               ).rows,
           ),
-        );
-        expect(scopedRows).toEqual(rollback ? [] : [{ value: email }]);
+        ).toEqual([{ pid, company: null, usr: null }]);
+        expect(
+          await fixture.rows(
+            sql`select email from users where email = ${email}`,
+          ),
+        ).toEqual(rollback ? [] : [{ email }]);
+        expect(
+          await isolated.transaction((tx) =>
+            withPlatformTenant(
+              tx,
+              scope,
+              async (scoped) =>
+                (
+                  await scoped.execute(
+                    sql`select value from bootstrap_scope_fixture where company_id = ${scope.companyId}`,
+                  )
+                ).rows,
+            ),
+          ),
+        ).toEqual(rollback ? [] : [{ value: email }]);
       } finally {
         await isolated.close();
       }
     },
   );
 
-  it("prints only completion when the compiled operator command repeats", async () => {
-    const args = [
-      "--environment",
-      "proof",
-      "--email",
-      "cli@example.test",
-      "--name",
-      "CLI identity",
-    ];
-    for (let i = 0; i < 2; i++) {
-      expect(await cli(args)).toMatchObject({
-        stdout: "DNA bootstrap complete\n",
+  it("prints only completion on CLI repeat and registers only bootstrap:owner", async () => {
+    for (let i = 0; i < 2; i++)
+      expect(await fixture.cli(args("cli@example.test"))).toMatchObject({
+        stdout: "Owner bootstrap complete\n",
         stderr: "",
       });
-    }
-    expect(await counts("cli@example.test")).toEqual({ users: 1, audits: 1 });
+    const manifest = JSON.parse(
+      await readFile(new URL("../../package.json", import.meta.url), "utf8"),
+    );
+    expect(manifest.scripts["bootstrap:owner"]).toBe(
+      "node dist/modules/auth/bootstrap.js",
+    );
+    expect(manifest.scripts).not.toHaveProperty("bootstrap:dna");
+    expect(await counts()).toEqual([{ owners: 1, audits: 1, sessions: 0 }]);
+  });
+
+  it("allows one owner across competing CLI processes", async () => {
+    const results = await Promise.allSettled([
+      fixture.cli(args("cli-a@example.test")),
+      fixture.cli(args("cli-b@example.test")),
+    ]);
+    expect(
+      results.filter((result) => result.status === "fulfilled"),
+    ).toHaveLength(1);
+    const refused = results.find((result) => result.status === "rejected");
+    expect(refused?.status === "rejected" && refused.reason).toMatchObject({
+      code: 1,
+      stdout: "",
+      stderr: "An owner already exists\n",
+    });
+    expect(await counts()).toEqual([{ owners: 1, audits: 1, sessions: 0 }]);
   });
 
   it.each([
     { args: [], env: {}, message: "Use --environment, --email and --name" },
     {
-      args: [
-        "--environment",
-        "production",
-        "--email",
-        "invalid-cli@example.test",
-        "--name",
-        "CLI identity",
-      ],
+      args: args("invalid@example.test", "production"),
       env: {},
       message: "--environment must match ANAR_ENV",
     },
     {
-      args: [
-        "--environment",
-        "proof",
-        "--email",
-        "invalid-cli@example.test",
-        "--name",
-        "CLI identity",
-      ],
+      args: args("invalid@example.test"),
       env: { ANAR_ENV: "" },
       message: "--environment must match ANAR_ENV",
     },
     {
-      args: [
-        "--environment",
-        "proof",
-        "--email",
-        "invalid-cli@example.test",
-        "--name",
-        "CLI identity",
-      ],
+      args: args("invalid@example.test"),
       env: { DATABASE_URL: "" },
       message: "DATABASE_URL is required",
     },
     {
-      args: [
-        "--environment",
-        "proof",
-        "--email",
-        "existing@example.test",
-        "--name",
-        "CLI identity",
-      ],
+      args: args("existing@example.test"),
       env: {},
       message: "Bootstrap cannot promote an existing user",
     },
   ])(
-    "rejects invalid operator input with $message",
+    "rejects invalid CLI input with $message",
     async ({ args, env, message }) => {
-      await expect(cli(args, env)).rejects.toMatchObject({
+      await expect(fixture.cli(args, env)).rejects.toMatchObject({
         code: 1,
         stdout: "",
         stderr: `${message}\n`,
       });
-      expect(await counts("invalid-cli@example.test")).toEqual({
-        users: 0,
-        audits: 0,
+      expect(await counts()).toEqual([{ owners: 0, audits: 0, sessions: 0 }]);
+    },
+  );
+
+  it("upgrades ordinary identities and historical audit without rewriting them", async () => {
+    const previous = await startBootstrapFixture(true);
+    try {
+      const actorId = v7();
+      const auditId = v7();
+      await previous.rows(
+        sql`insert into users (id,email,name) values (${actorId},'historical@example.test','Historical user')`,
+      );
+      await previous.rows(
+        sql`insert into audit_log (id,actor_user_id,actor_role,action,target_type,target_id,data) values (${auditId},${actorId},'dna','auth.bootstrap_dna','user',${actorId},'{}'::jsonb)`,
+      );
+      const identities = await previous.rows(sql`select * from users`);
+      const history = await previous.rows(
+        sql`select id,actor_user_id,actor_role,action,target_type,target_id,data,created_at from audit_log`,
+      );
+      await previous.postgres.migrate();
+      expect(await previous.rows(sql`select * from users`)).toEqual(identities);
+      expect(
+        await previous.rows(
+          sql`select id,actor_user_id,actor_role,action,target_type,target_id,data,created_at from audit_log`,
+        ),
+      ).toEqual(history);
+      expect(
+        await previous.rows(sql`select agency_id,company_id from audit_log`),
+      ).toEqual([{ agency_id: null, company_id: null }]);
+      await bootstrap.bootstrapOwner(previous.db, {
+        ...input,
+        email: "new-owner@example.test",
       });
+      await previous.postgres.bootstrap();
+      await previous.postgres.migrate();
+      expect(
+        await previous.rows(
+          sql`select count(*)::int as count from users where platform_role = 'owner'`,
+        ),
+      ).toEqual([{ count: 1 }]);
+      expect(
+        await previous.rows(
+          sql`select actor_role,action from audit_log where id = ${auditId}`,
+        ),
+      ).toEqual([{ actor_role: "dna", action: "auth.bootstrap_dna" }]);
+    } finally {
+      await previous.close();
+    }
+  });
+
+  it.each(["legacy-role", "multiple-owners"])(
+    "refuses an unreviewed %s upgrade atomically",
+    async (kind) => {
+      const previous = await startBootstrapFixture(true);
+      try {
+        if (kind === "legacy-role")
+          await previous.owner(
+            `INSERT INTO users (id,email,name,platform_role) VALUES ('${v7()}','legacy@example.test','Legacy','dna')`,
+          );
+        else
+          await previous.owner(
+            `ALTER TABLE users DROP CONSTRAINT users_platform_role_check; INSERT INTO users (id,email,name,platform_role) VALUES ('${v7()}','one@example.test','One','owner'), ('${v7()}','two@example.test','Two','owner')`,
+          );
+        const before = await previous.rows(
+          sql`select * from users order by email`,
+        );
+        const message =
+          kind === "legacy-role"
+            ? "Owner migration refused: unreviewed privileged roles"
+            : "Owner migration refused: multiple existing owners";
+        await expect(previous.postgres.migrate()).rejects.toMatchObject({
+          code: 1,
+          stderr: expect.stringContaining(message),
+        });
+        expect(
+          await previous.rows(sql`select * from users order by email`),
+        ).toEqual(before);
+        expect(
+          await previous.rows(
+            sql`select column_name from information_schema.columns where table_schema = 'public' and table_name = 'audit_log' and column_name = 'agency_id'`,
+          ),
+        ).toEqual([]);
+        expect(
+          await previous.rows(
+            sql`select indexname from pg_indexes where schemaname = 'public' and indexname = 'users_single_owner_idx'`,
+          ),
+        ).toEqual([]);
+      } finally {
+        await previous.close();
+      }
     },
   );
 });

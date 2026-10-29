@@ -64,7 +64,11 @@ describe("production OTP delivery through the compiled worker", () => {
     expect(message.To.map((recipient) => recipient.Address)).toEqual([
       issued.user.email,
     ]);
+    expect(message.Subject).toBe(`${issued.code} is your Anar sign-in code`);
     expect(message.Text).toBe(issued.message.text);
+    expect((message as typeof message & { HTML: string }).HTML).toBe(
+      issued.message.html,
+    );
     expect(
       (await fixture.mailpit.headers(summary.ID))["X-Anar-Delivery-Key"],
     ).toEqual([issued.job.key]);

@@ -13,5 +13,6 @@ export const emailMessageSchema = z.strictObject({
   to: z.email(),
   subject: z.string().min(1),
   text: z.string().min(1),
+  html: z.string().min(1),
 });
 export type EmailMessage = z.infer<typeof emailMessageSchema>;

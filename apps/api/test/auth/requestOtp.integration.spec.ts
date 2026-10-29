@@ -213,7 +213,7 @@ describe("OTP requests on Postgres", () => {
         await fixture.post("requestOtp", {
           email: user.email,
           userId: user.id,
-          platformRole: "dna",
+          platformRole: "owner",
         })
       ).statusCode,
     ).toBe(400);

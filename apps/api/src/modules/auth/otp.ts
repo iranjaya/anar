@@ -15,6 +15,7 @@ import {
 import { AppError } from "@anar/domain/errors";
 import { v7 } from "uuid";
 import type { createMailCodec } from "../../lib/email/crypto.js";
+import signInCode from "../../lib/email/templates/signInCode.js";
 import { enqueue } from "../../lib/jobs/index.js";
 import type { CookieTransport } from "./cookies.js";
 import rateLimits from "./rateLimits.js";
@@ -90,11 +91,7 @@ const otp = {
               referenceId: id,
               expiresAt: expiresAt.toISOString(),
               encryptedMessage: deps.mailCodec.encryptMessage(
-                {
-                  to: user.email,
-                  subject: "Your Anar sign-in code",
-                  text: `Your Anar sign-in code is ${code}. It expires in 10 minutes.`,
-                },
+                { to: user.email, ...signInCode.render({ code }) },
                 key,
               ),
             },

@@ -30,7 +30,7 @@ describe("encrypted delivery through the real worker", () => {
   let codec: ReturnType<typeof createMailCodec>;
   let name: string;
   let key: string;
-  let message: { to: string; subject: string; text: string };
+  let message: { to: string; subject: string; text: string; html: string };
   let logs: ReturnType<typeof vi.spyOn>[];
 
   beforeAll(async () => {
@@ -49,6 +49,7 @@ describe("encrypted delivery through the real worker", () => {
       to: `${key}@example.test`,
       subject: `Subject ${key}`,
       text: `Synthetic OTP 583921 ${key}`,
+      html: `<p>Synthetic OTP <strong>583921</strong> ${key}</p>`,
     };
     logs = [
       vi.spyOn(console, "log"),
@@ -116,6 +117,7 @@ describe("encrypted delivery through the real worker", () => {
     expect(received).toMatchObject({
       Subject: message.subject,
       Text: message.text,
+      HTML: message.html,
     });
     expect(received.To.map((recipient) => recipient.Address)).toEqual([
       message.to,
