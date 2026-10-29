@@ -33,6 +33,86 @@ test.describe("shell", () => {
     ).toHaveCount(2);
   });
 
+  test("shows company columns on desktop and cards on phone", async ({
+    page,
+    isMobile,
+  }) => {
+    const main = page.getByRole("main");
+    const cards = main.getByRole("article");
+    await expect(cards).toHaveCount(2);
+    await expect(
+      main.getByRole("button", { name: "Enter company", exact: true }),
+    ).toHaveCount(2);
+    const mainBox = await main.boundingBox();
+    expect(mainBox).not.toBeNull();
+    if (!mainBox) throw new Error("Companies page is not visible");
+    if (!isMobile) expect(mainBox.width).toBeGreaterThan(1000);
+
+    const headers = [
+      "Company",
+      "Status",
+      "Members",
+      "Leads",
+      "Last import",
+      "Open",
+    ];
+    for (const name of headers) {
+      const header = main.getByText(name, { exact: true });
+      if (isMobile) {
+        await expect(header).toBeHidden();
+      } else {
+        await expect(header).toBeVisible();
+        const headerBox = await header.boundingBox();
+        expect(headerBox).not.toBeNull();
+        if (!headerBox) throw new Error(`${name} header is not visible`);
+        for (const card of await cards.all()) {
+          const cardBox = await card.boundingBox();
+          expect(cardBox).not.toBeNull();
+          if (!cardBox) throw new Error("Company card is not visible");
+          expect(headerBox.y + headerBox.height).toBeLessThan(cardBox.y);
+        }
+      }
+    }
+
+    let previousBottom = 0;
+    for (const card of await cards.all()) {
+      const cardBox = await card.boundingBox();
+      const titleBox = await card.getByRole("heading").boundingBox();
+      const buttonBox = await card
+        .getByRole("button", { name: "Enter company", exact: true })
+        .boundingBox();
+      expect(cardBox).not.toBeNull();
+      expect(titleBox).not.toBeNull();
+      expect(buttonBox).not.toBeNull();
+      if (!cardBox || !titleBox || !buttonBox)
+        throw new Error("Company card content is not visible");
+      expect(cardBox.y).toBeGreaterThanOrEqual(previousBottom);
+      previousBottom = cardBox.y + cardBox.height;
+      if (isMobile) {
+        expect(buttonBox.y).toBeGreaterThan(titleBox.y + titleBox.height);
+        expect(cardBox.width).toBeLessThanOrEqual(mainBox.width);
+      } else {
+        expect(buttonBox.x).toBeGreaterThan(titleBox.x + titleBox.width);
+        expect(titleBox.y).toBeLessThan(buttonBox.y + buttonBox.height);
+        expect(titleBox.y + titleBox.height).toBeGreaterThan(buttonBox.y);
+      }
+    }
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(page.viewportSize()?.width ?? 0);
+
+    await cards
+      .filter({
+        has: page.getByRole("heading", { name: "Sundar Heights", exact: true }),
+      })
+      .getByRole("button", { name: "Enter company", exact: true })
+      .click();
+    await expect(page).toHaveURL("/sundar-heights/imports/new");
+    await expect(
+      page.getByRole("complementary", { name: "Company access", exact: true }),
+    ).toContainText("DNA · Inside Sundar Heights");
+  });
+
   for (const { userId, role, path } of [
     { userId: "sunaina", role: "Admin", path: "/sundar-heights/today" },
     {
@@ -368,9 +448,18 @@ test.describe("Today", () => {
       } else {
         expect(main.width).toBeGreaterThan(1000);
         expect(overdue.x).toBeGreaterThan(filters.x + filters.width);
-        expect(due.x).toBeGreaterThan(overdue.x);
-        expect(fresh.x).toBeGreaterThan(due.x);
-        expect(Math.abs(overdue.y - due.y)).toBeLessThan(2);
+        expect(due.x).toBe(overdue.x);
+        expect(fresh.x).toBe(overdue.x);
+        expect(due.y).toBeGreaterThan(overdue.y + overdue.height);
+        expect(fresh.y).toBeGreaterThan(due.y + due.height);
+        const detail = await page
+          .getByRole("region", { name: "Lead detail", exact: true })
+          .boundingBox();
+        expect(detail).not.toBeNull();
+        if (detail) {
+          expect(detail.x).toBeGreaterThan(overdue.x + overdue.width);
+          expect(Math.abs(detail.y - overdue.y)).toBeLessThan(2);
+        }
       }
     }
     expect(

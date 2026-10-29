@@ -8,7 +8,11 @@ import {
 import type { Company } from "@/modules/tenant/types";
 
 export async function listCompanies(): Promise<
-  (Company & { memberCount: number; leadCount: number })[]
+  (Company & {
+    memberCount: number;
+    leadCount: number;
+    lastImportAt: Date | null;
+  })[]
 > {
   const ctx = await requireDemoContext();
   if (!can(ctx, "company.list"))
@@ -25,6 +29,15 @@ export async function listCompanies(): Promise<
         lead.deletedAt === null &&
         lead.mergedIntoId === null,
     ).length,
+    lastImportAt: data.importBatches
+      .filter((batch) => batch.companyId === company.id)
+      .reduce<Date | null>(
+        (latest, batch) =>
+          latest === null || batch.createdAt > latest
+            ? batch.createdAt
+            : latest,
+        null,
+      ),
   }));
 }
 

@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import { type ActionResult, AppError } from "@/lib/errors";
 import { getCompanyShell } from "../server";
 import { DnaBanner } from "./DnaBanner";
-import { ShellError } from "./ShellError";
 import { TopNav } from "./TopNav";
 
 export async function CompanyShell({
@@ -29,7 +28,7 @@ export async function CompanyShell({
             <header className="border-b border-line bg-surface p-4 font-display text-2xl font-bold text-brand">
               Anar
             </header>
-            <ShellError />
+            {children}
           </section>
         );
     }

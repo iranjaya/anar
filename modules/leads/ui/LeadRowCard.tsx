@@ -9,17 +9,23 @@ export function LeadRowCard({
   lead,
   slug,
   now,
+  selected = false,
 }: {
   lead: LeadRow;
   slug: string;
   now: Date;
+  selected?: boolean;
 }) {
   return (
-    <article className="min-w-0 rounded-2xl border border-line bg-surface p-4 transition-colors hover:border-line-strong">
+    <article
+      className={`relative min-w-0 rounded-2xl border p-4 transition-colors hover:border-line-strong ${selected ? "border-brand bg-brand-soft" : "border-line bg-surface"}`}
+    >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <Link
-          href={`/${slug}/leads/${lead.id}`}
-          className="min-h-11 min-w-0 flex-1 break-words py-2 font-display text-lg leading-snug font-semibold tracking-tight underline-offset-4 hover:text-brand hover:underline"
+          href={`/${slug}/today?lead=${lead.id}`}
+          scroll={false}
+          aria-current={selected ? "true" : undefined}
+          className="min-h-11 min-w-0 flex-1 break-words py-2 font-display text-lg leading-snug font-semibold tracking-tight underline-offset-4 after:absolute after:inset-0 after:rounded-2xl hover:text-brand hover:underline"
         >
           {lead.fullName ?? formatPhone(lead.phoneE164)}
         </Link>
@@ -56,12 +62,14 @@ export function LeadRowCard({
             </p>
           )}
         </div>
-        <CallButton
-          leadId={lead.id}
-          phoneE164={lead.phoneE164}
-          phoneValid={lead.phoneValid}
-          slug={slug}
-        />
+        <div className="relative z-10">
+          <CallButton
+            leadId={lead.id}
+            phoneE164={lead.phoneE164}
+            phoneValid={lead.phoneValid}
+            slug={slug}
+          />
+        </div>
       </div>
     </article>
   );

@@ -2,13 +2,16 @@
 
 import { tz } from "@date-fns/tz";
 import { differenceInCalendarDays } from "date-fns";
-import { useId, useState } from "react";
-import { Chip } from "@/components/Chip";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { type ReactNode, useId, useState } from "react";
 import { EmptyState } from "@/components/EmptyState";
+import { LoadError } from "@/components/LoadError";
 import { formatClock, formatDay } from "@/lib/dates";
 import type { Stage } from "@/modules/settings/types";
 import type { Bucket, LeadRow, Priority, TodayCounts } from "../types";
 import { LeadRowCard } from "./LeadRowCard";
+import { TodayFilters } from "./TodayFilters";
 
 const sections: { bucket: Bucket; title: string; style: string }[] = [
   { bucket: "overdue", title: "Overdue", style: "text-overdue" },
@@ -23,14 +26,21 @@ export function TodaySection({
   stages,
   slug,
   now,
+  selectedLeadId,
+  leadPicked,
+  detail,
 }: {
   rows: LeadRow[];
-  counts: TodayCounts;
+  counts: TodayCounts | null;
   hasAssignedLeads: boolean;
   stages: Pick<Stage, "id" | "name" | "position">[];
   slug: string;
   now: Date;
+  selectedLeadId: string | undefined;
+  leadPicked: boolean;
+  detail: ReactNode;
 }) {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [priority, setPriority] = useState<Priority | "all">("all");
   const [stage, setStage] = useState("");
@@ -45,9 +55,9 @@ export function TodaySection({
         row.phoneE164?.includes(search)),
   );
   const hasFilters = Boolean(search || stage || priority !== "all");
-  const isEmpty = !hasAssignedLeads;
+  const isEmpty = counts !== null && !hasAssignedLeads;
   let nextDue = "No calls scheduled next.";
-  if (counts.nextDueAt) {
+  if (counts?.nextDueAt) {
     const tomorrow =
       differenceInCalendarDays(counts.nextDueAt, now, {
         in: tz("Asia/Kathmandu"),
@@ -57,69 +67,33 @@ export function TodaySection({
       : `Next one is due ${formatDay(counts.nextDueAt, now)}`;
   }
   return (
-    <div className="grid min-w-0 gap-6 lg:grid-cols-[16rem_minmax(0,1fr)] lg:items-start lg:gap-7">
-      <aside
-        aria-label="Today filters"
-        className="min-w-0 space-y-5 lg:sticky lg:top-6"
+    <div className="grid min-w-0 gap-6 lg:grid-cols-[13rem_minmax(0,0.8fr)_minmax(0,1.2fr)] lg:items-start lg:gap-5">
+      <div
+        className={`min-w-0 lg:sticky lg:top-6 ${leadPicked ? "max-lg:hidden" : ""}`}
       >
-        <div className="rounded-2xl border border-brand/15 bg-surface p-5">
-          <p className="font-display text-xl font-semibold tracking-tight">
-            {counts.callsToday}
-            {counts.callsTarget !== null && ` of ${counts.callsTarget}`} calls
-            today
-          </p>
-          {counts.callsTarget !== null && counts.callsTarget > 0 && (
-            <progress
-              aria-label="Calls today against target"
-              value={Math.min(counts.callsToday, counts.callsTarget)}
-              max={counts.callsTarget}
-              className="mt-3 h-2 w-full appearance-none overflow-hidden rounded-full bg-line [&::-webkit-progress-bar]:bg-line [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-brand [&::-moz-progress-bar]:bg-brand"
-            />
-          )}
-        </div>
-        <div className="space-y-3">
-          <label className="block text-sm font-semibold">
-            Search leads
-            <input
-              type="search"
-              placeholder="Name or phone"
-              value={query}
-              onChange={(event) => setQuery(event.currentTarget.value)}
-              className="mt-1 min-h-11 w-full min-w-0 rounded-xl border border-line-strong bg-surface px-3 text-base focus-visible:outline-2 focus-visible:outline-brand"
-            />
-          </label>
-          <fieldset className="flex flex-wrap gap-2">
-            <legend className="sr-only">Score filter</legend>
-            {(["all", "hot", "warm", "cold"] as const).map((value) => (
-              <Chip
-                key={value}
-                selected={priority === value}
-                onClick={() => setPriority(value)}
-              >
-                {value[0].toUpperCase() + value.slice(1)}
-              </Chip>
-            ))}
-          </fieldset>
-          <label className="flex min-h-11 items-center gap-3 text-sm font-semibold">
-            Stage
-            <select
-              value={stage}
-              onChange={(event) => setStage(event.currentTarget.value)}
-              className="min-h-11 min-w-0 flex-1 rounded-xl border border-line-strong bg-surface px-3 text-base"
-            >
-              <option value="">All stages</option>
-              {stages.map((stage) => (
-                <option key={stage.id} value={stage.id}>
-                  {stage.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-      </aside>
-      <section className="min-w-0 space-y-5" aria-label="Today's leads">
+        <TodayFilters
+          counts={counts}
+          stages={stages}
+          query={query}
+          priority={priority}
+          stage={stage}
+          onQueryChange={setQuery}
+          onPriorityChange={setPriority}
+          onStageChange={setStage}
+        />
+      </div>
+      <section
+        className={`min-w-0 space-y-5 ${leadPicked ? "max-lg:hidden" : ""}`}
+        aria-label="Today's leads"
+      >
+        {!counts && (
+          <LoadError
+            message="Couldn't load this page"
+            onRetry={() => router.refresh()}
+          />
+        )}
         {isEmpty && <EmptyState title="No leads assigned to you yet" />}
-        {!isEmpty && hasFilters && filtered.length === 0 && (
+        {counts && !isEmpty && hasFilters && filtered.length === 0 && (
           <EmptyState
             title={
               priority === "all"
@@ -129,7 +103,7 @@ export function TodaySection({
             description="Try another search or filter."
           />
         )}
-        {!hasFilters && counts.overdue === 0 && !isEmpty && (
+        {counts && !hasFilters && counts.overdue === 0 && !isEmpty && (
           <div className="rounded-2xl border border-call/20 bg-call-soft p-5">
             <h2 className="font-display text-xl font-semibold text-call">
               Good day. Nothing overdue.
@@ -137,11 +111,11 @@ export function TodaySection({
             <p className="mt-2 text-sm text-call">{nextDue}</p>
           </div>
         )}
-        <div className="grid min-w-0 gap-6 lg:grid-cols-3 lg:items-start lg:gap-4">
+        <div className="min-w-0 space-y-6">
           {sections.map(({ bucket, title, style }) => {
             const items = filtered.filter((row) => row.bucket === bucket);
             if (hasFilters && items.length === 0) return null;
-            if (isEmpty) return null;
+            if (!counts || isEmpty) return null;
             return (
               <section
                 key={bucket}
@@ -163,6 +137,7 @@ export function TodaySection({
                     lead={lead}
                     slug={slug}
                     now={now}
+                    selected={lead.id === selectedLeadId}
                   />
                 ))}
                 {items.length === 0 && (
@@ -175,6 +150,19 @@ export function TodaySection({
           })}
         </div>
       </section>
+      <div
+        className={`min-w-0 space-y-4 lg:[&>section>header]:grid-cols-1 lg:[&>section>div]:grid-cols-1 ${leadPicked ? "" : "max-lg:hidden"}`}
+      >
+        {leadPicked && (
+          <Link
+            href={`/${slug}/today`}
+            className="inline-flex min-h-11 items-center font-semibold text-brand underline-offset-4 hover:underline lg:hidden"
+          >
+            Back to the list
+          </Link>
+        )}
+        {detail}
+      </div>
     </div>
   );
 }

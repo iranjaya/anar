@@ -1,7 +1,7 @@
 "use client";
 
 import { Phone } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 const style =
   "inline-flex min-h-14 items-center justify-center gap-2 rounded-xl bg-call px-5 font-semibold text-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-call";
@@ -18,6 +18,11 @@ export function CallButton({
   slug: string;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const logHref =
+    pathname === `/${slug}/today`
+      ? `/${slug}/today?lead=${leadId}&log=1`
+      : `/${slug}/leads/${leadId}?log=1`;
   if (!phoneValid || phoneE164 === null)
     return (
       <div>
@@ -30,7 +35,7 @@ export function CallButton({
   return (
     <a
       href={`tel:${phoneE164}`}
-      onClick={() => router.push(`/${slug}/leads/${leadId}?log=1`)}
+      onClick={() => router.push(logHref, { scroll: false })}
       className={style}
     >
       <Phone className="size-4" aria-hidden="true" />

@@ -10,7 +10,7 @@ export function PageShell({
     <main
       className={cn(
         "mx-auto w-full min-w-0 px-4 pt-6 pb-[calc(7rem+env(safe-area-inset-bottom))]",
-        wide ? "max-w-7xl" : "max-w-lg",
+        wide && "max-w-7xl",
         className,
       )}
       {...props}
