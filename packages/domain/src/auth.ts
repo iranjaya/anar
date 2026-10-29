@@ -18,10 +18,25 @@ export const verifyOtpSchema = z.strictObject({
   email: emailSchema,
   code: z.string().regex(/^\d{6}$/),
 });
+export const stepUpSchema = z.strictObject({
+  code: z.string().regex(/^\d{6}$/),
+});
+export type StepUpInput = z.infer<typeof stepUpSchema>;
 export const verifyOtpResultSchema = z.strictObject({
   redirectTo: z.literal("/workspaces"),
 });
 export const okSchema = z.strictObject({ ok: z.literal(true) });
+export const sessionListSchema = z.array(
+  z.strictObject({
+    id: z.uuid(),
+    deviceLabel: z.string(),
+    lastSeenAt: wireDateSchema,
+    current: z.boolean(),
+  }),
+);
+export const revokeSessionSchema = z.strictObject({ sessionId: z.uuid() });
+export type SessionList = z.infer<typeof sessionListSchema>;
+export type RevokeSessionInput = z.infer<typeof revokeSessionSchema>;
 export type RequestOtpInput = z.infer<typeof requestOtpSchema>;
 export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
 

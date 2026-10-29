@@ -25,6 +25,9 @@ const cookies = {
       issue(token: string, expiresAt: Date): string {
         return `anar_session=${token}; Path=/; HttpOnly; SameSite=Lax; Expires=${expiresAt.toUTCString()}${secure ? "; Secure" : ""}`;
       },
+      clear(): string {
+        return `anar_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT${secure ? "; Secure" : ""}`;
+      },
     };
   },
 };

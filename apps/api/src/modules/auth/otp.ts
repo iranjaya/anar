@@ -5,22 +5,31 @@ import {
   randomInt,
   timingSafeEqual,
 } from "node:crypto";
-import { createPlatformDb, type PlatformDb } from "@anar/db/platform";
 import {
+  createPlatformDb,
+  type PlatformDb,
+  type PlatformTx,
+} from "@anar/db/platform";
+import {
+  type AuthUser,
   type RequestOtpInput,
   requestOtpSchema,
+  type StepUpInput,
+  stepUpSchema,
   type VerifyOtpInput,
   verifyOtpSchema,
 } from "@anar/domain/auth";
 import { AppError } from "@anar/domain/errors";
 import { v7 } from "uuid";
 import type { createMailCodec } from "../../lib/email/crypto.js";
+import type { RenderedEmail } from "../../lib/email/templates/layout.js";
 import signInCode from "../../lib/email/templates/signInCode.js";
 import { enqueue } from "../../lib/jobs/index.js";
 import type { CookieTransport } from "./cookies.js";
 import rateLimits from "./rateLimits.js";
 import repository from "./repository.js";
 import sessions, {
+  type AuthSession,
   type RequestMeta,
   type SessionIssue,
   type SessionService,
@@ -51,6 +60,20 @@ export type OtpDeps = {
   mailCodec: Pick<ReturnType<typeof createMailCodec>, "encryptMessage">;
   now(): Date;
 };
+export type StepUpService = {
+  requestStepUp(
+    actor: AuthSession,
+    requestMeta: RequestMeta,
+  ): Promise<{ ok: true }>;
+  stepUp(actor: AuthSession, input: StepUpInput): Promise<{ ok: true }>;
+};
+export type StepUpDeps = OtpDeps & {
+  sessions: Pick<SessionService, "lockSessionActor" | "withPlatformSession">;
+  renderCode(input: { code: string }): RenderedEmail;
+};
+type OtpBinding =
+  | { purpose: "login"; sessionId: null }
+  | { purpose: "step_up"; sessionId: string };
 
 const otp = {
   create(deps: OtpDeps): OtpService {
@@ -72,30 +95,17 @@ const otp = {
             return { ok: true };
           const user = await repository.findOtpUser(tx, parsed.data.email);
           if (!user) return { ok: true };
-          const at = deps.now();
-          const id = v7();
-          const code = randomInt(1_000_000).toString().padStart(6, "0");
-          const codeHash = otp._hash(pepper, id, code);
-          const expiresAt = new Date(at.getTime() + 10 * 60 * 1000);
-          await repository.replaceOtp(
+          await otp._issue(
             tx,
-            { id, userId: user.id, codeHash, expiresAt, ip: requestMeta.ip },
-            at,
-          );
-          const key = `otp:${id}`;
-          await enqueue(
-            tx,
-            "notify.email",
+            deps,
+            pepper,
             {
-              kind: "otp",
-              referenceId: id,
-              expiresAt: expiresAt.toISOString(),
-              encryptedMessage: deps.mailCodec.encryptMessage(
-                { to: user.email, ...signInCode.render({ code }) },
-                key,
-              ),
+              user,
+              ip: requestMeta.ip,
+              purpose: "login",
+              sessionId: null,
             },
-            key,
+            signInCode.render,
           );
           return { ok: true };
         });
@@ -116,27 +126,18 @@ const otp = {
         const result = await deps.db.transaction(async (tx) => {
           const user = await repository.findOtpUser(tx, parsed.data.email);
           if (!user) return null;
-          const challenge = await repository.lockOtp(tx, user.id);
-          const at = deps.now();
-          if (
-            challenge?.purpose !== "login" ||
-            challenge.attempts >= 5 ||
-            at.getTime() >= challenge.expiresAt.getTime()
-          )
-            return null;
-          const valid = timingSafeEqual(
-            Buffer.from(
-              otp._hash(pepper, challenge.id, parsed.data.code),
-              "hex",
-            ),
-            Buffer.from(challenge.codeHash, "hex"),
+          const at = await otp._consume(
+            tx,
+            pepper,
+            {
+              userId: user.id,
+              code: parsed.data.code,
+              purpose: "login",
+              sessionId: null,
+            },
+            deps.now,
           );
-          const attempts = challenge.attempts + (valid ? 0 : 1);
-          await repository.saveOtpAttempt(tx, challenge.id, {
-            attempts,
-            consumedAt: valid || attempts === 5 ? at : null,
-          });
-          if (!valid) return null;
+          if (!at) return null;
           return deps.sessions.issue(tx, user, requestMeta, at);
         });
         if (!result)
@@ -146,10 +147,87 @@ const otp = {
     };
   },
 
+  createStepUp(deps: StepUpDeps): StepUpService {
+    const pepper = otp._pepper(deps.otpPepper);
+    return {
+      async requestStepUp(actor, requestMeta) {
+        return deps.db.transaction(async (tx) => {
+          const allowed = await rateLimits.requestOtp(
+            tx,
+            { email: actor.user.email, ip: requestMeta.ip },
+            pepper,
+            deps.now,
+          );
+          const current = await deps.sessions.lockSessionActor(tx, actor);
+          if (allowed) {
+            await otp._issue(
+              tx,
+              deps,
+              pepper,
+              {
+                user: current.user,
+                ip: requestMeta.ip,
+                purpose: "step_up",
+                sessionId: current.session.id,
+              },
+              deps.renderCode,
+            );
+          }
+          return { ok: true };
+        });
+      },
+
+      async stepUp(actor, input) {
+        const parsed = stepUpSchema.safeParse(input);
+        if (!parsed.success)
+          throw new AppError("validation", "A six-digit code is required");
+        const valid = await deps.sessions.withPlatformSession(
+          actor,
+          async (tx, current) => {
+            const at = await otp._consume(
+              tx,
+              pepper,
+              {
+                userId: current.user.id,
+                code: parsed.data.code,
+                purpose: "step_up",
+                sessionId: current.session.id,
+              },
+              deps.now,
+            );
+            if (!at) return false;
+            if (at.getTime() >= current.session.expiresAt.getTime()) {
+              throw new AppError("unauthorized", "Sign in is required");
+            }
+            await repository.markFreshOtp(
+              tx,
+              current.user.id,
+              current.session.id,
+              at,
+            );
+            return true;
+          },
+        );
+        if (!valid)
+          throw new AppError(
+            "unauthorized",
+            "Invalid or expired verification code",
+          );
+        return { ok: true };
+      },
+    };
+  },
+
   async start(options: Omit<OtpDeps, "db"> & { connectionString: string }) {
     const db = await createPlatformDb(options.connectionString);
     try {
-      return { service: otp.create({ ...options, db }), close: db.close };
+      return {
+        service: otp.create({ ...options, db }),
+        createStepUp(deps: Pick<StepUpDeps, "sessions" | "renderCode">) {
+          return otp.createStepUp({ ...options, db, ...deps });
+        },
+        close: db.close,
+      };
     } catch (error) {
       await db.close();
       throw error;
@@ -187,9 +265,87 @@ const otp = {
     return createSecretKey(bytes);
   },
 
-  _hash(pepper: KeyObject, id: string, code: string): string {
+  async _issue(
+    tx: PlatformTx,
+    deps: OtpDeps,
+    pepper: KeyObject,
+    input: OtpBinding & { user: AuthUser; ip: string },
+    renderCode: StepUpDeps["renderCode"],
+  ): Promise<void> {
+    const at = deps.now();
+    const id = v7();
+    const code = randomInt(1_000_000).toString().padStart(6, "0");
+    const codeHash = otp._hash(pepper, id, input.purpose, code);
+    const expiresAt = new Date(at.getTime() + 10 * 60 * 1000);
+    await repository.replaceOtp(
+      tx,
+      {
+        id,
+        userId: input.user.id,
+        codeHash,
+        expiresAt,
+        ip: input.ip,
+        purpose: input.purpose,
+        sessionId: input.sessionId,
+      },
+      at,
+    );
+    const key = `otp:${id}`;
+    await enqueue(
+      tx,
+      "notify.email",
+      {
+        kind: "otp",
+        referenceId: id,
+        expiresAt: expiresAt.toISOString(),
+        encryptedMessage: deps.mailCodec.encryptMessage(
+          { to: input.user.email, ...renderCode({ code }) },
+          key,
+        ),
+      },
+      key,
+    );
+  },
+
+  async _consume(
+    tx: PlatformTx,
+    pepper: KeyObject,
+    input: OtpBinding & { userId: string; code: string },
+    now: () => Date,
+  ): Promise<Date | null> {
+    const challenge = await repository.lockOtp(tx, input.userId);
+    const at = now();
+    if (
+      !challenge ||
+      challenge.purpose !== input.purpose ||
+      challenge.sessionId !== input.sessionId ||
+      challenge.attempts >= 5 ||
+      at.getTime() >= challenge.expiresAt.getTime()
+    )
+      return null;
+    const valid = timingSafeEqual(
+      Buffer.from(
+        otp._hash(pepper, challenge.id, challenge.purpose, input.code),
+        "hex",
+      ),
+      Buffer.from(challenge.codeHash, "hex"),
+    );
+    const attempts = challenge.attempts + (valid ? 0 : 1);
+    await repository.saveOtpAttempt(tx, challenge.id, {
+      attempts,
+      consumedAt: valid || attempts === 5 ? at : null,
+    });
+    return valid ? at : null;
+  },
+
+  _hash(
+    pepper: KeyObject,
+    id: string,
+    purpose: OtpBinding["purpose"],
+    code: string,
+  ): string {
     return createHmac("sha256", pepper)
-      .update(JSON.stringify(["otp", id, "login", code]))
+      .update(JSON.stringify(["otp", id, purpose, code]))
       .digest("hex");
   },
 };

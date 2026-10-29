@@ -4,6 +4,7 @@ export type AppErrorCode =
   | "not_found"
   | "validation"
   | "conflict"
+  | "step_up_required"
   | "unavailable";
 
 export class AppError extends Error {

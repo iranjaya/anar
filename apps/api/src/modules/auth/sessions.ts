@@ -4,7 +4,7 @@ import type {
   PlatformTx,
   sessions as sessionTable,
 } from "@anar/db/platform";
-import type { AuthUser } from "@anar/domain/auth";
+import type { AuthUser, SessionList } from "@anar/domain/auth";
 import { AppError } from "@anar/domain/errors";
 import type { FastifyRequest } from "fastify";
 import { v7 } from "uuid";
@@ -43,6 +43,12 @@ export type SessionService = {
   refreshSession(
     request: Pick<FastifyRequest, "headers">,
   ): Promise<SessionIssue>;
+  listSessions(actor: AuthSession): Promise<SessionList>;
+  revokeSession(actor: AuthSession, sessionId: string): Promise<void>;
+  revokeAllSessions(tx: PlatformTx, userId: string): Promise<void>;
+  logout(request: Pick<FastifyRequest, "headers">): Promise<void>;
+  clearCookie(): string;
+  lockSessionActor(tx: PlatformTx, actor: AuthSession): Promise<AuthSession>;
   withPlatformSession<T>(
     actor: AuthSession,
     fn: (tx: PlatformTx, current: AuthSession) => Promise<T>,
@@ -113,15 +119,83 @@ const sessions = {
         });
       },
 
-      async withPlatformSession(actor, fn) {
-        return deps.db.transaction(async (tx) => {
-          const user = await repository.lockUser(tx, actor.user.id);
+      async listSessions(actor) {
+        return service.withPlatformSession(actor, async (tx, current) => {
+          const rows = await repository.listSessions(
+            tx,
+            current.user.id,
+            deps.now(),
+          );
+          return rows.map((row) => ({
+            ...row,
+            lastSeenAt: row.lastSeenAt.toISOString(),
+            current: row.id === current.session.id,
+          }));
+        });
+      },
+
+      async revokeSession(actor, sessionId) {
+        await service.withPlatformSession(actor, async (tx, current) => {
+          const target = await repository.lockSession(
+            tx,
+            current.user.id,
+            sessionId,
+          );
+          if (!target) throw new AppError("not_found", "Session not found");
+          await repository.revokeSession(
+            tx,
+            current.user.id,
+            target.id,
+            deps.now(),
+          );
+        });
+      },
+
+      async revokeAllSessions(tx, userId) {
+        await repository.lockUser(tx, userId);
+        await repository.revokeAllSessions(tx, userId, deps.now());
+      },
+
+      async logout(request) {
+        const token = cookie.read(request);
+        if (!token) return;
+        const tokenHash = createHash("sha256").update(token).digest("hex");
+        await deps.db.transaction(async (tx) => {
+          const row = await repository.readSession(tx, tokenHash);
+          if (!row) return;
+          await repository.lockUser(tx, row.user.id);
           const session = await repository.lockSession(
             tx,
-            actor.user.id,
-            actor.session.id,
+            row.user.id,
+            row.session.id,
           );
-          return fn(tx, sessions._current(user, session, deps.now()));
+          if (session) {
+            await repository.revokeSession(
+              tx,
+              row.user.id,
+              session.id,
+              deps.now(),
+            );
+          }
+        });
+      },
+
+      clearCookie: cookie.clear,
+
+      async lockSessionActor(tx, actor) {
+        const user = await repository.lockUser(tx, actor.user.id);
+        const session = await repository.lockSession(
+          tx,
+          actor.user.id,
+          actor.session.id,
+        );
+        return sessions._current(user, session, deps.now());
+      },
+
+      async withPlatformSession(actor, fn) {
+        return deps.db.transaction(async (tx) => {
+          const current = await service.lockSessionActor(tx, actor);
+          return fn(tx, current);
         });
       },
     };

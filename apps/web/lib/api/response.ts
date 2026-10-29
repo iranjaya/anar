@@ -19,6 +19,7 @@ export async function parseApiResponse<T>(
         not_found: [404],
         validation: [400, 429],
         conflict: [409],
+        step_up_required: [428],
         unavailable: [500, 503],
       };
       if (expected[failure.data.error].includes(response.status))

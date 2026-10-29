@@ -2,6 +2,25 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildApp } from "../../src/app.js";
 import { originGuard } from "../../src/lib/http.js";
 
+function sessionFixture() {
+  return {
+    requireSession: vi.fn(async () => {
+      throw new Error("Unexpected session lookup");
+    }),
+    listSessions: vi.fn(async () => []),
+    revokeSession: vi.fn(async () => undefined),
+    logout: vi.fn(async () => undefined),
+    clearCookie: vi.fn(() => "expired-cookie"),
+  };
+}
+
+function stepUpFixture() {
+  return {
+    requestStepUp: vi.fn(async () => ({ ok: true as const })),
+    stepUp: vi.fn(async () => ({ ok: true as const })),
+  };
+}
+
 describe("auth HTTP guards", () => {
   const apps: ReturnType<typeof buildApp>[] = [];
   afterEach(async () => {
@@ -26,7 +45,8 @@ describe("auth HTTP guards", () => {
     const app = buildApp({
       otp: { requestOtp },
       verifier: { verifyOtp },
-      sessions: { refreshSession },
+      sessions: { ...sessionFixture(), refreshSession },
+      stepUp: stepUpFixture(),
       requireOrigin: originGuard("https://anar.example.test"),
       trustProxy: false,
     });
@@ -60,10 +80,12 @@ describe("auth HTTP guards", () => {
         },
       },
       sessions: {
+        ...sessionFixture(),
         async refreshSession() {
           throw new Error("Unexpected refresh");
         },
       },
+      stepUp: stepUpFixture(),
       requireOrigin: originGuard("https://anar.example.test"),
       trustProxy: false,
     });

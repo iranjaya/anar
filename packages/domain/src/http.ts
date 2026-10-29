@@ -7,6 +7,7 @@ const errorCodes = [
   "not_found",
   "validation",
   "conflict",
+  "step_up_required",
   "unavailable",
 ] as const satisfies readonly AppErrorCode[];
 

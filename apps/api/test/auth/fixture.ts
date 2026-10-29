@@ -11,6 +11,7 @@ import {
   sessions,
   users,
 } from "@anar/db/platform";
+import type { AuthUser } from "@anar/domain/auth";
 import type { JobPayload } from "@anar/domain/jobs";
 import { and, eq, isNull, type SQL, sql } from "drizzle-orm";
 import type { FastifyInstance, LightMyRequestResponse } from "fastify";
@@ -20,6 +21,7 @@ import { startMailpit } from "../../../../test/support/mailpit.js";
 import { startPostgres } from "../../../../test/support/postgres.js";
 import { buildApp } from "../../src/app.js";
 import { createMailCodec } from "../../src/lib/email/crypto.js";
+import stepUpCode from "../../src/lib/email/templates/stepUpCode.js";
 import { originGuard } from "../../src/lib/http.js";
 import bootstrap from "../../src/modules/auth/bootstrap.js";
 import type { CookieTransport } from "../../src/modules/auth/cookies.js";
@@ -129,6 +131,10 @@ export async function startAuthFixture() {
         otp: requester.service,
         verifier: verification.service,
         sessions: verification.sessions,
+        stepUp: requester.createStepUp({
+          sessions: verification.sessions,
+          renderCode: stepUpCode.render,
+        }),
         requireOrigin: originGuard(publicOrigin),
         trustProxy: false,
       });
@@ -325,6 +331,12 @@ export async function startAuthFixture() {
         options: { index?: number; ip?: string; owner?: boolean } = {},
       ) {
         const user = await fixture.seedUser(undefined, options.owner);
+        return fixture.loginAs(user, options);
+      },
+      async loginAs(
+        user: AuthUser,
+        options: { index?: number; ip?: string } = {},
+      ) {
         expect(
           (await post("requestOtp", { email: user.email }, options)).statusCode,
         ).toBe(200);

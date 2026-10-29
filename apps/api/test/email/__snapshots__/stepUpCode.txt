@@ -1,0 +1,20 @@
+Anar
+
+Your code to confirm
+
+Enter this code in Anar to confirm the sensitive action you started,
+like an invite or a settings change.
+
+    482913
+
+It works for 10 minutes and only once.
+
+Did not try this?
+Someone may have your session. Open Anar and sign out your other
+devices.
+
+--
+You got this email because someone signed in as you asked to confirm a
+sensitive action in Anar.
+Anar is a lead tracker for sales teams.
+Trouble with the code? Ask the person who invited you.

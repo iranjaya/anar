@@ -1,4 +1,4 @@
-import { getAuthReadiness } from "./server";
+import { getAuthReadiness, listSessions } from "./server";
 import { CodePage as CodeScreen } from "./ui/CodePage";
 import { InvitePage as InviteScreen } from "./ui/InvitePage";
 import { LoginPage as LoginScreen } from "./ui/LoginPage";
@@ -15,6 +15,11 @@ export function CodePage() {
 export function InvitePage() {
   return <InviteScreen readiness={getAuthReadiness("invite")} />;
 }
-export function SessionsPage() {
-  return <SessionsScreen readiness={getAuthReadiness("sessions")} />;
+export async function SessionsPage() {
+  return (
+    <SessionsScreen
+      readiness={getAuthReadiness("sessions")}
+      result={await listSessions()}
+    />
+  );
 }

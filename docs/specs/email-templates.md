@@ -71,6 +71,8 @@ Each of these rules has a case that needs it:
 | Email | Subject | Preheader |
 | --- | --- | --- |
 | Sign-in code | `482913 is your Anar sign-in code` | It works for 10 minutes. If you did not ask for it, ignore this email. |
+| Invite, first agency staff (from the owner) | `Kabir Acharya invited you to set up DNA on Anar` | Set up your agency on Anar. The link works for 7 days. |
+| Invite, agency colleague (from staff) | `Rohan Gautam invited you to the DNA team on Anar` | Join as agency staff. The link works for 7 days. |
 | Invite, Super Admin | `Rohan Gautam invited you to Sundar Heights on Anar` | Join as Super Admin, the sales manager. The link works for 7 days. |
 | Invite, Admin | `Prakash Joshi invited you to Sundar Heights on Anar` | Join as Admin, on the sales team. The link works for 7 days. |
 | Invite resent | `New invite link for Sundar Heights on Anar` | Your earlier link no longer works. Use this one within 7 days. |
@@ -87,7 +89,7 @@ What the summaries contain (fewest calls by name, deltas, which counts) is a bus
 apps/api/src/lib/email/
 + templates/layout.ts         Base layout and the blocks; each block gives its html and text together.
 + templates/signInCode.ts     Sign-in code email.
-+ templates/invite.ts         Invite and resent invite, for a Super Admin or an Admin.
++ templates/invite.ts         Invite and resent invite, for agency staff, a Super Admin or an Admin.
 + templates/dailySummary.ts   Daily summary for an Admin with push off. (summaries slice)
 + templates/weeklySummary.ts  Weekly summary for a Super Admin with push off. (summaries slice)
 ~ index.ts                    Sends the html part to Mailpit and Resend.
@@ -115,8 +117,11 @@ layout.button(label: string, url: string): Block   // and code, stats, rows, not
 signInCode.render(input: { code: string }): RenderedEmail
 
 // invite.ts
-invite.render(input: { name: string; inviterName: string; company: string; role: "super_admin" | "admin";
+invite.render(input: { name: string; role: "agency_staff" | "super_admin" | "admin"; agency: string;
+  company: string | null; inviter: { name: string; role: "owner" | "agency_staff" | "super_admin" };
   url: string; expiresAt: Date; timeZone: string; resent: boolean }): RenderedEmail
+// The inviter's role picks the copy: an owner invite is the agency's first staff, and agency staff
+// can invite an Admin into a company they entered, so "invited by" can't be read from the invitee's role.
 ```
 
 ```diff
@@ -143,10 +148,10 @@ Proof: `pnpm --filter @anar/api test` with the template test: sign-in snapshot (
 Size: ~170 lines of source. The layout carries all blocks even though the sign-in code uses only some, because the blocks are one job (the email look) and E2 needs the rest straight away.
 
 **E2. Invite and resent invite.**
-Files: `templates/invite.ts`, snapshots, test cases.
-Uses: E1 `layout`, `RenderedEmail`. Gives: `invite.render` for S1.9 (`inviteSuperAdmin`) and S2.2 (`inviteAdmin`, `resendInvite`) to call.
-Proof: snapshots for Super Admin, Admin and resent. `expiresAt` 2026-10-29T10:45Z with `Asia/Kathmandu` reads `Thu 5 Nov, 4:30 pm`. Resent shows the "earlier link no longer works" notice and drops the phone tip. Footer contact is the DNA person for a Super Admin and the inviter for an Admin.
-Size: ~60 lines.
+Files: `templates/invite.ts`, snapshots, test cases. Templates only; the invite steps wire them in.
+Uses: E1 `layout`, `RenderedEmail`. Gives: `invite.render` for S1.8a (`createAgency`, `resendFirstInvite`), S1.8b (`inviteStaff`, `resendStaffInvite`), S1.9 (`inviteSuperAdmin`) and S2.2 (`inviteAdmin`, `resendInvite`) to call.
+Proof: snapshots for first agency staff, agency colleague, Super Admin, Admin and resent. `expiresAt` 2026-11-05T10:45Z reads `Thu 5 Nov, 4:30 pm` in `Asia/Kathmandu` and `10:45 am` in UTC. Resent shows the "earlier link no longer works" notice and drops the phone tip. An Admin invited by agency staff is pointed back to that staff member.
+Size: ~150 lines, most of it the copy table for the four invite kinds.
 
 **E3. Daily and weekly summaries.** Built inside the summaries slice, not now: no caller exists yet, and the contents are still a business decision. It reuses `layout.stats` and `layout.rows` as designed. Test cases to carry over: zero overdue switches the preheader and line to "Nothing overdue"; the daily email is not sent when all three counts are zero.
 

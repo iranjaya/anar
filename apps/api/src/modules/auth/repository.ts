@@ -1,7 +1,7 @@
 import { otpCodes, type PlatformTx, sessions, users } from "@anar/db/platform";
 import type { AuthUser } from "@anar/domain/auth";
 import { AppError } from "@anar/domain/errors";
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, desc, eq, gt, isNull } from "drizzle-orm";
 
 const repository = {
   async findOtpUser(tx: PlatformTx, email: string) {
@@ -64,6 +64,53 @@ const repository = {
     return session;
   },
 
+  async listSessions(tx: PlatformTx, userId: string, at: Date) {
+    return tx
+      .select({
+        id: sessions.id,
+        deviceLabel: sessions.deviceLabel,
+        lastSeenAt: sessions.lastSeenAt,
+      })
+      .from(sessions)
+      .where(
+        and(
+          eq(sessions.userId, userId),
+          isNull(sessions.revokedAt),
+          gt(sessions.expiresAt, at),
+        ),
+      )
+      .orderBy(desc(sessions.lastSeenAt), desc(sessions.id));
+  },
+
+  async revokeSession(
+    tx: PlatformTx,
+    userId: string,
+    id: string,
+    at: Date,
+  ): Promise<void> {
+    await tx
+      .update(sessions)
+      .set({ revokedAt: at })
+      .where(
+        and(
+          eq(sessions.userId, userId),
+          eq(sessions.id, id),
+          isNull(sessions.revokedAt),
+        ),
+      );
+  },
+
+  async revokeAllSessions(
+    tx: PlatformTx,
+    userId: string,
+    at: Date,
+  ): Promise<void> {
+    await tx
+      .update(sessions)
+      .set({ revokedAt: at })
+      .where(and(eq(sessions.userId, userId), isNull(sessions.revokedAt)));
+  },
+
   async refreshSession(
     tx: PlatformTx,
     id: string,
@@ -80,7 +127,13 @@ const repository = {
     tx: PlatformTx,
     input: Pick<
       typeof otpCodes.$inferInsert,
-      "id" | "userId" | "codeHash" | "expiresAt" | "ip"
+      | "id"
+      | "userId"
+      | "codeHash"
+      | "expiresAt"
+      | "ip"
+      | "purpose"
+      | "sessionId"
     >,
     at: Date,
   ): Promise<void> {
@@ -90,7 +143,19 @@ const repository = {
       .where(
         and(eq(otpCodes.userId, input.userId), isNull(otpCodes.consumedAt)),
       );
-    await tx.insert(otpCodes).values({ ...input, purpose: "login" });
+    await tx.insert(otpCodes).values(input);
+  },
+
+  async markFreshOtp(
+    tx: PlatformTx,
+    userId: string,
+    sessionId: string,
+    at: Date,
+  ): Promise<void> {
+    await tx
+      .update(sessions)
+      .set({ lastOtpAt: at })
+      .where(and(eq(sessions.userId, userId), eq(sessions.id, sessionId)));
   },
 
   async findDeliverableOtp(tx: PlatformTx, id: string, at: Date) {

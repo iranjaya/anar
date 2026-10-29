@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { buildApp } from "./app.js";
 import { loadApiConfig } from "./lib/config.js";
 import { createMailCodec } from "./lib/email/crypto.js";
+import stepUpCode from "./lib/email/templates/stepUpCode.js";
 import { originGuard } from "./lib/http.js";
 import otp from "./modules/auth/otp.js";
 
@@ -39,6 +40,10 @@ export async function startApi(): Promise<void> {
       otp: runtime.service,
       verifier: verification.service,
       sessions: verification.sessions,
+      stepUp: runtime.createStepUp({
+        sessions: verification.sessions,
+        renderCode: stepUpCode.render,
+      }),
       requireOrigin: originGuard(config.publicOrigin),
       trustProxy: config.trustProxy,
       logging: true,

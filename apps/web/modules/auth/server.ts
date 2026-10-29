@@ -1,5 +1,7 @@
 import "server-only";
-import { AppError } from "@/lib/errors";
+import { type SessionList, sessionListSchema } from "@anar/domain/auth";
+import { apiRequest } from "@/lib/api/client";
+import { type ActionResult, AppError, actionFailure } from "@/lib/errors";
 import type { AuthReadiness, AuthScreen } from "./types";
 
 const readiness: Record<AuthScreen, AuthReadiness> = {
@@ -25,6 +27,19 @@ const readiness: Record<AuthScreen, AuthReadiness> = {
 
 export function getAuthReadiness(screen: AuthScreen): AuthReadiness {
   return readiness[screen];
+}
+
+export async function listSessions(): Promise<ActionResult<SessionList> | null> {
+  if (!getAuthReadiness("sessions").enabled) return null;
+  try {
+    const data = await apiRequest(
+      { path: "/api/auth/listSessions" },
+      sessionListSchema,
+    );
+    return { ok: true, data };
+  } catch (error) {
+    return actionFailure(error);
+  }
 }
 
 export async function requirePendingAuthScreen(

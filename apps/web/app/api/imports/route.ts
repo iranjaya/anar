@@ -20,6 +20,7 @@ export async function POST(request: Request) {
     not_found: 404,
     validation: 400,
     conflict: 409,
+    step_up_required: 428,
     unavailable: 503,
   }[result.error];
   return Response.json(result, { status });

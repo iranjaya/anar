@@ -24,7 +24,7 @@ const signInCode = {
         footer: {
           reason:
             "You got this email because someone asked to sign in to Anar with this email address.",
-          operator: "Anar is a lead tracker run by DNA.",
+          operator: "Anar is a lead tracker for sales teams.",
           contact: "Trouble signing in? Ask the person who invited you.",
         },
       }),

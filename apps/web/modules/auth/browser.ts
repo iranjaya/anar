@@ -1,9 +1,12 @@
 "use client";
 
 import {
+  emptySchema,
   okSchema,
   type RequestOtpInput,
+  type RevokeSessionInput,
   requestOtpSchema,
+  revokeSessionSchema,
   type VerifyOtpInput,
   verifyOtpResultSchema,
   verifyOtpSchema,
@@ -13,7 +16,11 @@ import { parseApiResponse } from "@/lib/api/response";
 import { AppError } from "@/lib/errors";
 
 async function post<T>(
-  path: "/api/auth/requestOtp" | "/api/auth/verifyOtp",
+  path:
+    | "/api/auth/requestOtp"
+    | "/api/auth/verifyOtp"
+    | "/api/auth/revokeSession"
+    | "/api/auth/logout",
   body: unknown,
   schema: z.ZodType<T>,
 ): Promise<T> {
@@ -52,4 +59,15 @@ export async function verifyOtp(input: VerifyOtpInput) {
   if (!parsed.success)
     throw new AppError("validation", "Enter your email and six-digit code.");
   return post("/api/auth/verifyOtp", parsed.data, verifyOtpResultSchema);
+}
+
+export async function revokeSession(input: RevokeSessionInput) {
+  const parsed = revokeSessionSchema.safeParse(input);
+  if (!parsed.success)
+    throw new AppError("validation", "Choose a device to sign out.");
+  return post("/api/auth/revokeSession", parsed.data, okSchema);
+}
+
+export async function logout() {
+  return post("/api/auth/logout", emptySchema.parse({}), okSchema);
 }
