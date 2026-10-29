@@ -1,65 +1,31 @@
-import { spawn } from "node:child_process";
-import { once } from "node:events";
-import { setTimeout as delay } from "node:timers/promises";
+import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 import { startWorker } from "../src/main.js";
 
-describe("worker lifecycle", () => {
+describe("worker startup", () => {
   it("returns when the signal is already aborted", async () => {
     await startWorker(AbortSignal.abort());
   });
 
-  it("stays running until aborted", async () => {
-    const controller = new AbortController();
-    let stopped = false;
-    const running = startWorker(controller.signal).then(() => {
-      stopped = true;
-    });
-    try {
-      await delay(50);
-      expect(stopped).toBe(false);
-    } finally {
-      controller.abort();
-      await running;
-    }
-    expect(stopped).toBe(true);
+  it("requires a DB URL before opening a queue", async () => {
+    await expect(
+      startWorker(new AbortController().signal, { databaseUrl: "" }),
+    ).rejects.toThrow("DATABASE_URL is required");
   });
 
-  it.each(["SIGTERM", "SIGINT"] as const)(
-    "keeps the compiled worker alive and exits 0 on %s",
-    async (signal) => {
-      const env = { ...process.env };
-      delete env.NODE_OPTIONS;
-      delete env.DATABASE_URL;
-      const child = spawn(
-        process.execPath,
-        [fileURLToPath(new URL("../dist/main.js", import.meta.url))],
-        { env, stdio: ["ignore", "pipe", "pipe"] },
-      );
-      let stderr = "";
-      child.stderr.on("data", (chunk: Buffer) => {
-        stderr += chunk.toString();
-      });
-      const closed = once(child, "close");
-      try {
-        await delay(500);
-        expect(child.exitCode).toBeNull();
-        expect(child.signalCode).toBeNull();
-        expect(child.kill(signal)).toBe(true);
-        await expect
-          .poll(() => child.exitCode ?? child.signalCode, {
-            timeout: 3000,
-          })
-          .not.toBeNull();
-        expect(await closed).toEqual([0, null]);
-        expect(stderr).toBe("");
-      } finally {
-        if (child.exitCode === null && child.signalCode === null) {
-          child.kill("SIGKILL");
-        }
-        await closed;
-      }
-    },
-  );
+  it("imports the public jobs entry without starting services", async () => {
+    const result = await promisify(execFile)(
+      process.execPath,
+      ["--input-type=module", "-e", 'await import("@anar/api/jobs")'],
+      {
+        cwd: fileURLToPath(new URL("../", import.meta.url)),
+        timeout: 3000,
+        env: { ...process.env, DATABASE_URL: "", NODE_OPTIONS: "" },
+      },
+    );
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toBe("");
+  });
 });

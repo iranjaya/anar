@@ -1,7 +1,7 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "rootDir": ".",
+    "rootDir": "../..",
     "noEmit": true
   },
   "include": ["drizzle.config.ts", "vitest.config.ts", "test/**/*.ts"]

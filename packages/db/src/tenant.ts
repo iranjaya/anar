@@ -1,5 +1,5 @@
-import { sql } from "drizzle-orm";
 import { createDb, type DbHandle } from "./connection.js";
+import tenantScope from "./tenantScope.js";
 
 export type TenantScope = { companyId: string; userId: string };
 export type TenantTx = Parameters<
@@ -12,8 +12,6 @@ export type TenantDb = {
   ): Promise<T>;
   close(): Promise<void>;
 };
-
-const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function createTenantDb(
   connectionString: string,
@@ -32,14 +30,9 @@ export async function createTenantDb(
       scope: TenantScope,
       fn: (tx: TenantTx) => Promise<T>,
     ): Promise<T> {
-      if (!uuid.test(scope.companyId) || !uuid.test(scope.userId)) {
-        throw new Error("Tenant companyId and userId must be UUIDs");
-      }
       return handle.withConnection((connection) =>
         connection.transaction(async (tx) => {
-          await tx.execute(sql`select
-            set_config('app.company_id', ${scope.companyId}, true),
-            set_config('app.user_id', ${scope.userId}, true)`);
+          await tenantScope.set(tx, scope);
           return fn(tx);
         }),
       );

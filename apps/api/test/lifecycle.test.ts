@@ -1,7 +1,6 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { once } from "node:events";
 import { type AddressInfo, createServer } from "node:net";
-import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -141,28 +140,11 @@ describe("compiled API", () => {
     },
   );
 
-  it("restarts API while the same worker keeps running", async () => {
+  it("refuses to start the worker without its DB URL", async () => {
     const worker = startProcess(
       new URL("../../worker/dist/main.js", import.meta.url),
     );
-    await delay(500);
-    expect(worker.child.exitCode).toBeNull();
-    expect(worker.child.signalCode).toBeNull();
-    const workerPid = worker.child.pid;
-    const port = await getFreePort();
-
-    for (let restart = 0; restart < 2; restart++) {
-      const api = startProcess(undefined, port);
-      await waitForHealth(api, port);
-      expect(api.child.kill("SIGTERM")).toBe(true);
-      expect(await waitForExit(api)).toEqual([0, null]);
-      expect(worker.child.pid).toBe(workerPid);
-      expect(worker.child.exitCode).toBeNull();
-      expect(worker.child.signalCode).toBeNull();
-    }
-
-    expect(worker.child.kill("SIGTERM")).toBe(true);
-    expect(await waitForExit(worker)).toEqual([0, null]);
-    expect(worker.stderr()).toBe("");
+    expect(await waitForExit(worker)).toEqual([1, null]);
+    expect(worker.stderr()).toBe("Worker stopped after a runtime failure\n");
   });
 });

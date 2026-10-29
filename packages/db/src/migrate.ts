@@ -2,6 +2,7 @@ import { readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { migrate as applyMigrations } from "drizzle-orm/node-postgres/migrator";
 import { createDb } from "./connection.js";
+import { setupQueue } from "./queueSetup.js";
 
 export async function migrate(): Promise<void> {
   const url = process.env.MIGRATION_DATABASE_URL;
@@ -18,10 +19,12 @@ export async function migrate(): Promise<void> {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
       throw error;
     });
-    if (files.length === 0) return;
-    await handle.withConnection((connection) =>
-      applyMigrations(connection, { migrationsFolder }),
-    );
+    if (files.length > 0) {
+      await handle.withConnection((connection) =>
+        applyMigrations(connection, { migrationsFolder }),
+      );
+    }
+    await setupQueue(handle);
   } finally {
     await handle.close();
   }

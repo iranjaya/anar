@@ -4,6 +4,14 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./platform": {
+      "types": "./dist/platform.d.ts",
+      "default": "./dist/platform.js"
+    },
+    "./queue": {
+      "types": "./dist/queue.d.ts",
+      "default": "./dist/queue.js"
+    },
     "./tenant": {
       "types": "./dist/tenant.d.ts",
       "default": "./dist/tenant.js"
@@ -18,7 +26,8 @@
   },
   "dependencies": {
     "drizzle-orm": "0.45.4",
-    "pg": "8.23.1"
+    "pg": "8.23.1",
+    "pg-boss": "12.38.0"
   },
   "devDependencies": {
     "@types/node": "24.19.2",

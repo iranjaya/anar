@@ -53,6 +53,10 @@ services:
       target: runtime
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://anar_app:anar_app_local@db:5432/anar}
+      EMAIL_TRANSPORT: ${EMAIL_TRANSPORT:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      MAIL_ENCRYPTION_KEY: ${MAIL_ENCRYPTION_KEY:-}
     init: true
 
   web:

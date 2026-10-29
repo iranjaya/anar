@@ -8,14 +8,20 @@ COPY apps/web/package.json apps/web/package.json
 COPY packages/domain/package.json packages/domain/package.json
 COPY packages/db/package.json packages/db/package.json
 RUN pnpm install --frozen-lockfile --filter @anar/worker...
+COPY packages/domain/src packages/domain/src
+COPY packages/domain/tsconfig.json packages/domain/tsconfig.json
+COPY packages/db/src packages/db/src
+COPY packages/db/tsconfig.json packages/db/tsconfig.json
+COPY apps/api/src apps/api/src
+COPY apps/api/tsconfig.json apps/api/tsconfig.json
 COPY apps/worker/src apps/worker/src
 COPY apps/worker/tsconfig.json apps/worker/tsconfig.json
 
 FROM base AS dev
-CMD ["pnpm", "--filter", "@anar/worker", "dev"]
+CMD ["sh", "-c", "pnpm --filter @anar/domain build && pnpm --filter @anar/db build && pnpm --filter @anar/api build && exec pnpm --filter @anar/worker dev"]
 
 FROM base AS build
-RUN pnpm --filter @anar/worker build
+RUN pnpm --filter @anar/domain build && pnpm --filter @anar/db build && pnpm --filter @anar/api build && pnpm --filter @anar/worker build
 RUN pnpm --filter @anar/worker deploy --legacy --prod /app
 
 FROM node:24.22.1-bookworm-slim AS runtime

@@ -10,14 +10,16 @@ COPY packages/db/package.json packages/db/package.json
 RUN pnpm install --frozen-lockfile --filter @anar/api... --filter @anar/db...
 COPY packages/domain/src packages/domain/src
 COPY packages/domain/tsconfig.json packages/domain/tsconfig.json
+COPY packages/db/src packages/db/src
+COPY packages/db/tsconfig.json packages/db/tsconfig.json
 COPY apps/api/src apps/api/src
 COPY apps/api/tsconfig.json apps/api/tsconfig.json
 
 FROM base AS dev
-CMD ["sh", "-c", "pnpm --filter @anar/domain build && (pnpm --filter @anar/domain watch & exec pnpm --filter @anar/api dev)"]
+CMD ["sh", "-c", "pnpm --filter @anar/domain build && pnpm --filter @anar/db build && (pnpm --filter @anar/domain watch & exec pnpm --filter @anar/api dev)"]
 
 FROM base AS build
-RUN pnpm --filter @anar/domain build && pnpm --filter @anar/api build
+RUN pnpm --filter @anar/domain build && pnpm --filter @anar/db build && pnpm --filter @anar/api build
 RUN pnpm --filter @anar/api deploy --legacy --prod /app
 
 FROM base AS migrate-build

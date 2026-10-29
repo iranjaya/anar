@@ -16,7 +16,7 @@ type Manifest = {
 const allowed: Record<string, string[]> = {
   "@anar/web": ["@anar/domain"],
   "@anar/api": ["@anar/domain", "@anar/db"],
-  "@anar/worker": ["@anar/domain", "@anar/db"],
+  "@anar/worker": ["@anar/domain", "@anar/db", "@anar/api"],
   "@anar/db": ["@anar/domain"],
   "@anar/domain": [],
 };
@@ -33,7 +33,7 @@ const ignored = new Set([
 ]);
 const backend = /^(pg|drizzle-orm|drizzle-kit|pg-boss)(\/|$)/;
 const credentials =
-  /^(DATABASE_URL|MIGRATION_DATABASE_URL|POSTGRES_\w+|APP_DATABASE_\w+|MIGRATION_DATABASE_\w+)$/;
+  /^(DATABASE_URL|MIGRATION_DATABASE_URL|POSTGRES_\w+|APP_DATABASE_\w+|MIGRATION_DATABASE_\w+|MAIL_ENCRYPTION_KEY|RESEND_API_KEY)$/;
 
 function files(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -266,6 +266,43 @@ export function checkBoundaries(root: string): string[] {
               if (resolved && existsSync(resolved))
                 resolved = realpathSync(resolved);
               const target = resolved ? owner(resolved) : undefined;
+              const platformEntry =
+                specifier === "@anar/db/platform" ||
+                (target?.manifest.name === "@anar/db" &&
+                  /\/(?:src|dist)\/(?:platform|tenantScope|schema\/(?:platform|audit|authLimits|index))\.(?:d\.)?[cm]?[jt]s$/.test(
+                    resolved?.replaceAll(path.sep, "/") ?? "",
+                  ));
+              if (
+                platformEntry &&
+                pkg.manifest.name !== "@anar/db" &&
+                !(
+                  pkg.manifest.name === "@anar/api" &&
+                  /^(?:src\/modules\/(?:auth|companies|tenant)\/|src\/modules\/notifications\/subscriptions(?:\/|\.ts$)|test\/(?:auth|companies|tenant)\/)/.test(
+                    local,
+                  )
+                )
+              )
+                fail(reference, "Platform DB is restricted to platform owners");
+              const queueEntry =
+                specifier === "@anar/db/queue" ||
+                (target?.manifest.name === "@anar/db" &&
+                  /\/(?:src|dist)\/queue\.(?:ts|js|d\.ts)$/.test(
+                    resolved?.replaceAll(path.sep, "/") ?? "",
+                  ));
+              if (
+                queueEntry &&
+                pkg.manifest.name !== "@anar/db" &&
+                !(
+                  (pkg.manifest.name === "@anar/api" &&
+                    /^(src\/lib\/jobs\/|test\/jobs\/)/.test(local)) ||
+                  (pkg.manifest.name === "@anar/worker" &&
+                    /^(src\/main\.ts$|test\/)/.test(local))
+                )
+              )
+                fail(
+                  reference,
+                  "Queue DB is restricted to jobs and worker composition",
+                );
               const external = resolved
                 ?.replaceAll(path.sep, "/")
                 .match(/node_modules\/((?:@[^/]+\/)?[^/]+)/g)
@@ -286,7 +323,14 @@ export function checkBoundaries(root: string): string[] {
                 resolved &&
                 target !== pkg &&
                 !targetPackage &&
-                !resolved.includes(`${path.sep}node_modules${path.sep}`)
+                !resolved.includes(`${path.sep}node_modules${path.sep}`) &&
+                !(
+                  local.startsWith("test/") &&
+                  ["@anar/api", "@anar/worker", "@anar/db"].includes(
+                    pkg.manifest.name,
+                  ) &&
+                  resolved.startsWith(path.join(root, "test/support/"))
+                )
               )
                 fail(
                   reference,

@@ -40,7 +40,7 @@ describe("database roles and tenant transactions", () => {
   let tenant: TenantDb;
   const bootstrapResults: string[] = [];
   const migrationResults: string[] = [];
-  let emptyTables: unknown[];
+  let productTables: unknown[];
 
   function readValues(scope: TenantScope) {
     return tenant.withTenant(
@@ -89,9 +89,9 @@ describe("database roles and tenant transactions", () => {
     } finally {
       createSpy.mockRestore();
     }
-    emptyTables = (
+    productTables = (
       await runtime.pool.query(
-        "SELECT tablename FROM pg_tables WHERE schemaname = 'public'",
+        "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename",
       )
     ).rows;
     await migration.pool.query(`
@@ -148,12 +148,16 @@ describe("database roles and tenant transactions", () => {
     }
   });
 
-  it("runs bootstrap and empty migrations twice", async () => {
+  it("runs bootstrap and identity migrations twice", async () => {
     expect(bootstrapResults).toHaveLength(2);
     for (const output of bootstrapResults)
       expect(output.split("\n").at(-1)).toBe("COMMIT");
     expect(migrationResults).toHaveLength(2);
-    expect(emptyTables).toEqual([]);
+    expect(productTables).toEqual([
+      { tablename: "audit_log" },
+      { tablename: "users" },
+      { tablename: "worker_heartbeats" },
+    ]);
     expect(
       (await runtime.pool.query("SHOW server_version_num")).rows[0]
         .server_version_num,

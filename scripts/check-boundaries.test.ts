@@ -231,3 +231,136 @@ test("rejects aliases pointing at backend libraries", () => {
   );
   assert.ok(errors.some((error) => error.includes("Forbidden backend import")));
 });
+
+function restrictedDbFixture(file: string, source: string): string[] {
+  return fixture("", (root) => {
+    for (const name of ["api", "worker"]) {
+      writeFileSync(
+        path.join(root, `apps/${name}/package.json`),
+        JSON.stringify({
+          name: `@anar/${name}`,
+          dependencies: { "@anar/db": "workspace:*" },
+        }),
+      );
+      mkdirSync(path.join(root, `apps/${name}/node_modules/@anar`), {
+        recursive: true,
+      });
+      symlinkSync(
+        path.join(root, "packages/db"),
+        path.join(root, `apps/${name}/node_modules/@anar/db`),
+      );
+    }
+    writeFileSync(
+      path.join(root, "packages/db/package.json"),
+      JSON.stringify({
+        name: "@anar/db",
+        exports: {
+          "./platform": "./src/platform.ts",
+          "./queue": "./src/queue.ts",
+        },
+      }),
+    );
+    writeFileSync(
+      path.join(root, "packages/db/src/platform.ts"),
+      "export type PlatformTx = string;",
+    );
+    writeFileSync(
+      path.join(root, "packages/db/src/queue.ts"),
+      "export type QueueTx = string;",
+    );
+    mkdirSync(path.join(root, "packages/db/src/schema"), { recursive: true });
+    writeFileSync(
+      path.join(root, "packages/db/src/schema/audit.ts"),
+      "export type Audit = string;",
+    );
+    mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+    writeFileSync(path.join(root, file), source);
+  });
+}
+
+for (const module of [
+  "auth",
+  "companies",
+  "tenant",
+  "notifications/subscriptions",
+]) {
+  test(`allows ${module} to use the platform entry`, () => {
+    assert.deepEqual(
+      restrictedDbFixture(
+        `apps/api/src/modules/${module}/probe.ts`,
+        'import type { PlatformTx } from "@anar/db/platform";',
+      ),
+      [],
+    );
+  });
+}
+
+for (const source of [
+  'import type { PlatformTx } from "@anar/db/platform";',
+  'export type { PlatformTx } from "@anar/db/platform";',
+  'type Tx = import("@anar/db/platform").PlatformTx;',
+  'void import("@anar/db/platform");',
+  'const db = require("@anar/db/platform");',
+  'import type { PlatformTx } from "../../../../../packages/db/src/platform";',
+  'import type { Audit } from "@escape/schema/audit";',
+]) {
+  test(`denies members platform access: ${source}`, () => {
+    assert.ok(
+      restrictedDbFixture("apps/api/src/modules/members/probe.ts", source).some(
+        (error) => error.includes("Platform DB is restricted"),
+      ),
+    );
+  });
+}
+
+test("denies the worker platform access", () => {
+  assert.ok(
+    restrictedDbFixture(
+      "apps/worker/src/main.ts",
+      'import type { PlatformTx } from "@anar/db/platform";',
+    ).some((error) => error.includes("Platform DB is restricted")),
+  );
+});
+
+test("denies auth direct queue access", () => {
+  assert.ok(
+    restrictedDbFixture(
+      "apps/api/src/modules/auth/probe.ts",
+      'import type { QueueTx } from "@anar/db/queue";',
+    ).some((error) => error.includes("Queue DB is restricted")),
+  );
+});
+
+test("allows jobs to use the queue entry", () => {
+  assert.deepEqual(
+    restrictedDbFixture(
+      "apps/api/src/lib/jobs/probe.ts",
+      'import type { QueueTx } from "@anar/db/queue";',
+    ),
+    [],
+  );
+});
+
+for (const [file, allowed] of [
+  ["apps/api/test/probe.ts", true],
+  ["apps/api/src/probe.ts", false],
+  ["apps/web/test/probe.ts", false],
+] as const) {
+  test(`${allowed ? "allows" : "denies"} shared test fixtures from ${file}`, () => {
+    const errors = fixture("", (root) => {
+      mkdirSync(path.join(root, "test/support"), { recursive: true });
+      writeFileSync(
+        path.join(root, "test/support/fixture.ts"),
+        "export const value = 1;",
+      );
+      mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+      writeFileSync(
+        path.join(root, file),
+        'import { value } from "../../../test/support/fixture";',
+      );
+    });
+    if (allowed) assert.deepEqual(errors, []);
+    else
+      assert.ok(errors.some((error) => error.includes("Cross-package path")));
+  });
+}

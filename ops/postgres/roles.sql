@@ -33,4 +33,11 @@ ALTER DEFAULT PRIVILEGES FOR ROLE anar_migrate IN SCHEMA public
 ALTER DEFAULT PRIVILEGES FOR ROLE anar_migrate IN SCHEMA public
   GRANT USAGE, SELECT ON SEQUENCES TO anar_app;
 
+SELECT 'REVOKE DELETE, TRUNCATE ON TABLE public.users FROM anar_app'
+WHERE to_regclass('public.users') IS NOT NULL
+\gexec
+SELECT 'REVOKE UPDATE, DELETE, TRUNCATE ON TABLE public.audit_log FROM anar_app'
+WHERE to_regclass('public.audit_log') IS NOT NULL
+\gexec
+
 COMMIT;
