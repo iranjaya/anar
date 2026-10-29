@@ -70,6 +70,7 @@ test.describe("shell", () => {
     try {
       await failure.click();
       await expect(failure).toBeChecked();
+      await page.reload();
       await expect(page.getByRole("main").getByRole("alert")).toHaveText(
         "Couldn't load this page",
       );
@@ -177,6 +178,7 @@ test.describe("shell", () => {
     try {
       await failure.click();
       await expect(failure).toBeChecked();
+      await page.reload();
       const shell = page.getByRole("region", { name: "Company shell" });
       await expect(shell.getByRole("alert")).toHaveText(
         "Couldn't load this page",
@@ -190,6 +192,7 @@ test.describe("shell", () => {
       );
       await failure.click();
       await expect(failure).not.toBeChecked();
+      await shell.getByRole("button", { name: "Retry", exact: true }).click();
       await expect(shell.getByRole("alert")).toHaveCount(0);
     } finally {
       await expect(failure).toBeEnabled();
@@ -389,6 +392,7 @@ test.describe("Today", () => {
     try {
       await failure.click();
       await expect(failure).toBeChecked();
+      await page.reload();
       const shell = page.getByRole("region", {
         name: "Company shell",
         exact: true,
@@ -406,6 +410,7 @@ test.describe("Today", () => {
       );
       await failure.click();
       await expect(failure).not.toBeChecked();
+      await shell.getByRole("button", { name: "Retry", exact: true }).click();
       await expect(
         page.getByRole("heading", { name: "My Leads Today", exact: true }),
       ).toBeVisible();

@@ -48,7 +48,6 @@ export async function setDemoFailureAction(input: {
     };
   try {
     await setDemoFailure(parsed.data.on);
-    revalidatePath("/", "layout");
     return { ok: true, data: undefined };
   } catch (error) {
     return actionFailure(error);

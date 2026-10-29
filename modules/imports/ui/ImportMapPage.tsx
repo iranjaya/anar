@@ -1,10 +1,12 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useState, useTransition } from "react";
 import { PageShell } from "@/components/PageShell";
 import type { Field } from "@/modules/settings/types";
-import type { Mapping, NewField, UploadResult } from "../types";
+import { commitImportAction, dryRunImportAction } from "../actions";
+import type { DryRun, Mapping, NewField, UploadResult } from "../types";
+import { CheckStep } from "./CheckStep";
 import { ImportRail } from "./ImportRail";
 import { type MappingProps, MappingRows } from "./MappingRows";
 
@@ -12,15 +14,68 @@ export function ImportMapPage({
   slug,
   upload,
   fields,
+  initialReview,
+  templateName,
 }: {
   slug: string;
   upload: UploadResult;
   fields: Field[];
+  initialReview: DryRun | null;
+  templateName: string;
 }) {
   const router = useRouter();
+  const checking = useSearchParams().get("step") === "check";
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState("");
+  const [review, setReview] = useState(initialReview);
   const [mapping, setMapping] = useState<Mapping>(upload.suggestedMapping);
   const [newFields, setNewFields] = useState<NewField[]>(upload.proposedFields);
   const [saveTemplate, setSaveTemplate] = useState(false);
+  const mapUrl = `/${slug}/imports/${upload.batchId}/map`;
+  const report = review ?? initialReview;
+
+  function checkColumns() {
+    setError("");
+    startTransition(async () => {
+      try {
+        const result = await dryRunImportAction({
+          slug,
+          batchId: upload.batchId,
+          mapping,
+        });
+        if (!result.ok) {
+          setError(result.message);
+          return;
+        }
+        setReview(result.data);
+        router.push(`${mapUrl}?step=check`);
+      } catch {
+        setError("Couldn't check this file. Try again.");
+      }
+    });
+  }
+
+  function importLeads() {
+    setError("");
+    startTransition(async () => {
+      try {
+        const result = await commitImportAction({
+          slug,
+          batchId: upload.batchId,
+          mapping,
+          newFields,
+          saveTemplate: saveTemplate ? { name: templateName } : undefined,
+        });
+        if (!result.ok) {
+          setError(result.message);
+          return;
+        }
+        router.push(`/${slug}/imports/${result.data.jobId}`);
+      } catch {
+        setError("Couldn't import these leads. Try again.");
+      }
+    });
+  }
   const onMap: MappingProps["onMap"] = (header, value) => {
     let target = value as Mapping[number]["target"];
     if (value === "new") {
@@ -79,6 +134,8 @@ export function ImportMapPage({
       reason = "Give each dropdown option a label.";
     keys.add(field.key);
   }
+  if (mapping.filter((row) => row.target === "system:phone").length !== 1)
+    reason = "Match exactly one column to Phone.";
   const props: MappingProps = {
     headers: upload.headers,
     sample: upload.sample,
@@ -91,35 +148,68 @@ export function ImportMapPage({
   return (
     <PageShell wide>
       <header className="mb-6">
-        <h1 className="font-display text-3xl font-bold">Match columns</h1>
+        <h1 className="font-display text-3xl font-bold">
+          {checking ? "Check your import" : "Match columns"}
+        </h1>
         <p className="mt-2 text-muted">
-          Choose where each column goes. Answer codes stay unchanged.
+          {checking
+            ? "Review what will be added and what is already in."
+            : "Choose where each column goes. Answer codes stay unchanged."}
         </p>
       </header>
       <div className="min-w-0 lg:flex lg:gap-8">
-        <ImportRail step={2} />
+        <ImportRail step={checking ? 3 : 2} />
         <div className="min-w-0 flex-1">
-          <MappingRows {...props} />
-          <label className="mt-5 flex min-h-11 items-center gap-3">
-            <input
-              type="checkbox"
-              checked={saveTemplate}
-              onChange={(event) => setSaveTemplate(event.currentTarget.checked)}
-              className="size-5"
+          {checking && report ? (
+            <CheckStep
+              slug={slug}
+              review={report}
+              pending={pending}
+              error={error}
+              templateName={saveTemplate ? templateName : null}
+              onBack={() => {
+                setError("");
+                router.push(mapUrl);
+              }}
+              onImport={importLeads}
             />
-            Save this mapping for next time
-          </label>
-          {reason && <p className="mt-3 text-sm text-muted">{reason}</p>}
-          <button
-            type="button"
-            disabled={Boolean(reason)}
-            onClick={() =>
-              router.push(`/${slug}/imports/${upload.batchId}/map?step=check`)
-            }
-            className="mt-4 min-h-14 w-full rounded-xl bg-brand px-5 font-semibold text-surface disabled:opacity-50 lg:w-auto lg:min-w-64"
-          >
-            Check {upload.rowCount} rows
-          </button>
+          ) : (
+            <>
+              <fieldset disabled={pending} className="min-w-0">
+                <MappingRows {...props} />
+                <label className="mt-5 flex min-h-11 items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={saveTemplate}
+                    onChange={(event) =>
+                      setSaveTemplate(event.currentTarget.checked)
+                    }
+                    className="size-5"
+                  />
+                  Save this mapping for next time
+                </label>
+              </fieldset>
+              {reason && <p className="mt-3 text-sm text-muted">{reason}</p>}
+              {error && (
+                <p role="alert" className="mt-3 text-sm text-overdue">
+                  {error}
+                </p>
+              )}
+              {pending && (
+                <p role="status" className="mt-3 text-sm text-muted">
+                  Checking your file…
+                </p>
+              )}
+              <button
+                type="button"
+                disabled={pending || Boolean(reason)}
+                onClick={checkColumns}
+                className="mt-4 min-h-14 w-full rounded-xl bg-brand px-5 font-semibold text-surface disabled:opacity-50 lg:w-auto lg:min-w-64"
+              >
+                Check {upload.rowCount} rows
+              </button>
+            </>
+          )}
         </div>
       </div>
     </PageShell>

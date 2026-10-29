@@ -1,7 +1,19 @@
+import { mkdirSync, writeFileSync } from "node:fs";
 import { defineConfig } from "@playwright/test";
 
 const port = Number(process.env.E2E_PORT ?? 3100);
 const baseURL = `http://127.0.0.1:${port}`;
+const tsconfigPath = `.cache/e2e-${port}.tsconfig.json`;
+
+mkdirSync(".cache", { recursive: true });
+writeFileSync(
+  tsconfigPath,
+  JSON.stringify({
+    extends: "../tsconfig.json",
+    include: ["../next-env.d.ts", "../**/*.ts", "../**/*.tsx"],
+    exclude: ["../node_modules", "../.cache"],
+  }),
+);
 
 export default defineConfig({
   testDir: "./e2e",

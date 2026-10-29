@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import type { ActionResult } from "@/lib/errors";
 import {
   resetDemoAction,
@@ -23,6 +23,8 @@ export function DemoBar({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
+  const [failureOn, setFailureOn] = useState(failure);
+  useEffect(() => setFailureOn(failure), [failure]);
 
   function run<T>(
     operation: () => Promise<ActionResult<T>>,
@@ -82,6 +84,7 @@ export function DemoBar({
           disabled={pending}
           onClick={() =>
             run(resetDemoAction, () => {
+              setFailureOn(false);
               router.push("/");
               router.refresh();
             })
@@ -93,13 +96,13 @@ export function DemoBar({
         <label className="flex min-h-11 items-center gap-2 text-sm">
           <input
             type="checkbox"
-            checked={failure}
+            checked={failureOn}
             disabled={pending}
             onChange={(event) => {
               const on = event.currentTarget.checked;
               run(
                 () => setDemoFailureAction({ on }),
-                () => router.refresh(),
+                () => setFailureOn(on),
               );
             }}
             className="size-5"

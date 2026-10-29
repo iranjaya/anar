@@ -90,6 +90,7 @@ export type LeadRow = Pick<
 };
 export type LeadDetail = {
   lead: Lead;
+  hotMin: number;
   fields: { key: string; label: string; value: string }[];
   followUps: FollowUp[];
   events: LeadEvent[];
