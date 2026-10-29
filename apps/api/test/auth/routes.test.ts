@@ -14,6 +14,25 @@ function sessionFixture() {
   };
 }
 
+function contextFixture() {
+  return {
+    context: {
+      requireContext: vi.fn(async (): Promise<never> => {
+        throw new Error("Unexpected context lookup");
+      }),
+      view: vi.fn((): never => {
+        throw new Error("Unexpected context view");
+      }),
+    },
+    discovery: {
+      getSession: vi.fn(async (): Promise<never> => {
+        throw new Error("Unexpected session discovery");
+      }),
+      listWorkspaces: vi.fn(async () => ({ items: [], nextCursor: null })),
+    },
+  };
+}
+
 function stepUpFixture() {
   return {
     requestStepUp: vi.fn(async () => ({ ok: true as const })),
@@ -96,6 +115,7 @@ describe("auth HTTP guards", () => {
       redirectTo: "/workspaces" as const,
     }));
     const app = buildApp({
+      ...contextFixture(),
       otp: { requestOtp },
       verifier: { verifyOtp },
       sessions: { ...sessionFixture(), refreshSession },
@@ -126,6 +146,7 @@ describe("auth HTTP guards", () => {
 
   it("returns a safe failure when an auth dependency fails", async () => {
     const app = buildApp({
+      ...contextFixture(),
       otp: {
         async requestOtp() {
           throw new Error("sensitive@example.test 123456");

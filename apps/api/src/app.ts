@@ -6,6 +6,9 @@ import agencyRoutes, {
 import staffRoutes, {
   type StaffRouteOptions,
 } from "./modules/agencies/staffRoutes.js";
+import discoveryRoutes, {
+  type DiscoveryRouteOptions,
+} from "./modules/auth/discoveryRoutes.js";
 import inviteRoutes, {
   type InviteRouteOptions,
 } from "./modules/auth/inviteRoutes.js";
@@ -20,9 +23,14 @@ import routes from "./modules/auth/routes.js";
 import companyRoutes, {
   type CompanyRouteOptions,
 } from "./modules/companies/routes.js";
+import contextRoutes, {
+  type ContextRouteOptions,
+} from "./modules/tenant/routes.js";
 import healthRoutes from "./routes/health.js";
 
 export type AppDeps = AuthRouteOptions &
+  DiscoveryRouteOptions &
+  ContextRouteOptions &
   VerifyRouteOptions &
   RefreshRouteOptions &
   SessionRouteOptions &
@@ -45,6 +53,8 @@ export function buildApp(deps?: AppDeps): FastifyInstance {
   registerHttp(app);
   app.register(healthRoutes);
   if (deps) {
+    app.register(discoveryRoutes.register, { discovery: deps.discovery });
+    app.register(contextRoutes.register, { context: deps.context });
     app.register(companyRoutes.register, {
       companies: deps.companies,
       requireOrigin: deps.requireOrigin,

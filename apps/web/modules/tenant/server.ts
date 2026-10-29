@@ -1,4 +1,47 @@
 import "server-only";
+import {
+  contextViewSchema,
+  type ContextView,
+  contextQuerySchema,
+} from "@anar/domain/context";
+import { cache } from "react";
+import { apiRequest } from "@/lib/api/client";
+import { authEnabled } from "@/lib/api/mode";
+import { type ActionResult, AppError, actionFailure } from "@/lib/errors";
+
+const contextSchema = contextViewSchema.transform(
+  (view): ContextView => ({
+    ...view,
+    agency: { ...view.agency, createdAt: new Date(view.agency.createdAt) },
+    session: {
+      ...view.session,
+      actingUntil:
+        view.session.actingUntil === null
+          ? null
+          : new Date(view.session.actingUntil),
+    },
+  }),
+);
+
+export const getCompanyContext = cache(
+  async (slug: string): Promise<ActionResult<ContextView> | null> => {
+    if (!authEnabled()) return null;
+    try {
+      const parsed = contextQuerySchema.safeParse({ company: slug });
+      if (!parsed.success)
+        throw new AppError("not_found", "Company not found.");
+      return {
+        ok: true,
+        data: await apiRequest(
+          { path: "/api/context", query: parsed.data },
+          contextSchema,
+        ),
+      };
+    } catch (error) {
+      return actionFailure(error);
+    }
+  },
+);
 
 export { requireContext } from "./data/context";
 export { resolveContext } from "./data/context";

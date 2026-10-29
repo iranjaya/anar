@@ -19,9 +19,15 @@ export type ReadInitialInviteAgency = (
   agencyId: string,
   ownerId: string,
 ) => Promise<{ name: string } | undefined>;
+export type CompanyInviteTargetInput = {
+  agencyId: string;
+  companyId: string;
+  issuerId: string;
+  role: "super_admin" | "admin";
+};
 export type ReadCompanyInviteTarget = (
   tx: PlatformTx,
-  input: { agencyId: string; companyId: string; issuerId: string },
+  input: CompanyInviteTargetInput,
 ) => Promise<{ agencyName: string; companyName: string } | undefined>;
 export type InviteDeps = {
   publicOrigin: string;
@@ -190,7 +196,7 @@ const invites = {
       if (!(await readAgency(tx, row.agencyId, row.createdBy)))
         return undefined;
     } else if (
-      row.role === "super_admin" &&
+      (row.role === "super_admin" || row.role === "admin") &&
       row.companyId !== null &&
       row.issuerRole === null
     ) {
@@ -199,6 +205,7 @@ const invites = {
           agencyId: row.agencyId,
           companyId: row.companyId,
           issuerId: row.createdBy,
+          role: row.role,
         }))
       )
         return undefined;

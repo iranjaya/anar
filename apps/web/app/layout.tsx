@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { Bricolage_Grotesque, Figtree, JetBrains_Mono } from "next/font/google";
 import { headers } from "next/headers";
+import { dataMode } from "@/lib/api/mode";
+import { SessionRefresh } from "@/modules/auth/components";
+import { getSession } from "@/modules/auth/server";
 import { DemoBar } from "@/modules/tenant/pages";
 import { getDemoControls } from "@/modules/tenant/server";
 import "./globals.css";
@@ -29,11 +32,14 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const authScreen = (await headers()).get("x-anar-auth-screen") === "1";
-  const controls = authScreen ? null : await getDemoControls();
+  const controls =
+    authScreen || dataMode() !== "demo" ? null : await getDemoControls();
+  const session = await getSession();
   return (
     <html lang="en">
       <body className={`${title.variable} ${body.variable} ${mono.variable}`}>
         {controls && <DemoBar {...controls} />}
+        {session?.ok && <SessionRefresh />}
         {children}
       </body>
     </html>

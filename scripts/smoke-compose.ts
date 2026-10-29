@@ -39,7 +39,7 @@ async function waitForStack(): Promise<void> {
   for (;;) {
     try {
       await health();
-      await mock();
+      await frontDoor();
       return;
     } catch (error) {
       if (Date.now() >= deadline) throw error;
@@ -48,11 +48,15 @@ async function waitForStack(): Promise<void> {
   }
 }
 
-async function mock(): Promise<void> {
-  const companies = await request("/companies");
-  assert.match(await companies.text(), /Sundar Heights/);
-  const upload = await request("/sundar-heights/imports/new");
-  assert.match(await upload.text(), /Import leads/);
+async function frontDoor(): Promise<void> {
+  const login = await request("/login");
+  assert.match(await login.text(), /Sign in to Anar/);
+  const companies = await fetch(`${origin}/companies`, {
+    headers: { cookie },
+    signal: AbortSignal.timeout(10000),
+  });
+  await companies.body?.cancel();
+  assert.equal(companies.status, 404);
 }
 
 function running(id: string): boolean {
@@ -93,21 +97,16 @@ for (const service of ["api", "worker", "web"]) {
   }
 }
 await waitForStack();
-const upload = await request("/api/imports", {
+const upload = await fetch(`${origin}/api/imports`, {
   method: "POST",
-  headers: { "content-type": "application/json" },
-  body: JSON.stringify({
-    slug: "sundar-heights",
-    fileName: "Sundar Heights 2 3 BHK October_Leads_2026-10-14_2026-10-28.csv",
-    fileSize: 19,
-  }),
+  headers: { cookie, "content-type": "application/json" },
+  body: JSON.stringify({}),
+  signal: AbortSignal.timeout(10000),
 });
 const result = await upload.json();
-assert.equal(result.ok, true);
-assert.equal(typeof result.data.batchId, "string");
-assert.equal(result.data.rowCount, 412);
-assert.equal(result.data.encoding, "utf-16le");
-assert.equal(result.data.delimiter, "\t");
+assert.equal(upload.status, 403);
+assert.equal(result.ok, false);
+assert.equal(result.error, "forbidden");
 
 const workerId = compose("ps", "-q", "worker");
 assert.ok(workerId, "Worker container is missing");
@@ -118,7 +117,7 @@ try {
     signal: AbortSignal.timeout(10_000),
   });
   assert.equal(unavailable.status, 502);
-  await mock();
+  await frontDoor();
   assert.equal(running(workerId), true);
 } finally {
   compose("start", "api");
@@ -129,11 +128,11 @@ try {
   compose("stop", "worker");
   assert.equal(running(workerId), false);
   await health();
-  await mock();
+  await frontDoor();
 } finally {
   compose("start", "worker");
 }
 assert.equal(running(workerId), true);
 console.log(
-  "Compose smoke passed: health, mock upload, independent API/worker stops.",
+  "Compose smoke passed: health, real front door, mock refusal, independent API/worker stops.",
 );

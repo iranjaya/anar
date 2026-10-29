@@ -16,6 +16,10 @@
       "types": "./dist/companies.d.ts",
       "default": "./dist/companies.js"
     },
+    "./context": {
+      "types": "./dist/context.d.ts",
+      "default": "./dist/context.js"
+    },
     "./members": {
       "types": "./dist/members.d.ts",
       "default": "./dist/members.js"

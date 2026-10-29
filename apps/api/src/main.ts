@@ -12,6 +12,7 @@ import invites from "./modules/auth/invites.js";
 import otp from "./modules/auth/otp.js";
 import companies from "./modules/companies/service.js";
 import members from "./modules/members/service.js";
+import tenantContext from "./modules/tenant/index.js";
 
 export async function startApi(): Promise<void> {
   const host = process.env.HOST ?? "0.0.0.0";
@@ -42,6 +43,9 @@ export async function startApi(): Promise<void> {
     now,
   });
   let app: FastifyInstance | undefined;
+  let tenantRuntime:
+    | Awaited<ReturnType<typeof tenantContext.start>>
+    | undefined;
   let agencyRuntime:
     | Awaited<ReturnType<typeof agencyContext.start>>
     | undefined;
@@ -57,6 +61,17 @@ export async function startApi(): Promise<void> {
       now,
     });
     const verification = verifier;
+    tenantRuntime = await tenantContext.start({
+      connectionString: config.connectionString,
+      sessions: verification.sessions,
+      readStaffMembership: agencies.readStaffMembership,
+      readActiveAgency: agencies.readActiveAgency,
+      readAgencyCompanyBySlug: companies.readAgencyCompanyBySlug,
+      discoverWorkspaces: companies.discoverWorkspaces,
+      lockActiveCompany: companies.lockActiveCompany,
+      readActiveMember: members.readActiveForUser,
+    });
+    const tenant = tenantRuntime;
     agencyRuntime = await agencyContext.start({
       connectionString: config.connectionString,
       sessions: verification.sessions,
@@ -67,6 +82,9 @@ export async function startApi(): Promise<void> {
       otpPepper: config.otpPepper,
       now,
       readInitialInviteAgency: agencies.readInitialInviteAgency,
+      readCompanyInviteTarget: companies.readCompanyInviteTarget,
+      lockCompanyInviteTarget: companies.lockCompanyInviteTarget,
+      activateInvitedMember: members.activateInvitedMember,
       lockInitialInviteAgency: agencies.lockInitialInviteAgency,
       hasStaffMembership: agencies.hasStaffMembership,
       hasCompanyMembership: members.hasMembership,
@@ -74,6 +92,8 @@ export async function startApi(): Promise<void> {
     });
     const inviteRuntime = acceptance;
     app = buildApp({
+      context: tenant.service,
+      discovery: tenant.service,
       staff: staff.create(contextRuntime.service),
       companies: companies.create({
         context: contextRuntime.service,
@@ -113,6 +133,7 @@ export async function startApi(): Promise<void> {
         verification.close(),
         inviteRuntime.close(),
         contextRuntime.close(),
+        tenant.close(),
       ]);
     });
     process.once("SIGINT", stop);
@@ -124,6 +145,7 @@ export async function startApi(): Promise<void> {
       await Promise.all([
         runtime.close(),
         verifier?.close(),
+        tenantRuntime?.close(),
         acceptance?.close(),
         agencyRuntime?.close(),
       ]);

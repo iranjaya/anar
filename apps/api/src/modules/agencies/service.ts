@@ -155,10 +155,28 @@ const agencies = {
   readInitialInviteAgency(tx: PlatformTx, agencyId: string, ownerId: string) {
     return repository.readInitialInviteAgency(tx, agencyId, ownerId);
   },
-  readActiveStaffAgency(tx: PlatformTx, agencyId: string, userId: string) {
-    return withPlatformAgency(tx, { agencyId, userId }, (scoped) =>
-      repository.readActiveStaffAgency(scoped, agencyId, userId),
-    );
+  async readActiveAgency(
+    tx: PlatformTx,
+    agencyId: string,
+    lock = false,
+  ): Promise<Agency | undefined> {
+    const agency = lock
+      ? await repository.lockAgency(tx, agencyId)
+      : await repository.readAgency(tx, agencyId);
+    return agency?.status === "active" ? agency : undefined;
+  },
+  hasActiveStaff(
+    tx: PlatformTx,
+    agencyId: string,
+    userId: string,
+    lock = false,
+  ): Promise<boolean> {
+    return withPlatformAgency(tx, { agencyId, userId }, async (scoped) => {
+      const staff = lock
+        ? await repository.lockStaff(scoped, agencyId, userId)
+        : await repository.readOwnStaff(scoped, userId);
+      return staff?.agencyId === agencyId && staff.status === "active";
+    });
   },
 
   async lockInitialInviteAgency(
@@ -173,8 +191,14 @@ const agencies = {
   },
 
   async hasStaffMembership(tx: PlatformTx, userId: string): Promise<boolean> {
-    return withPlatformIdentity(tx, userId, async (scoped) =>
-      Boolean(await repository.readOwnStaff(scoped, userId)),
+    return Boolean(await agencies.readStaffMembership(tx, userId));
+  },
+  readStaffMembership(
+    tx: PlatformTx,
+    userId: string,
+  ): Promise<AgencyMember | undefined> {
+    return withPlatformIdentity(tx, userId, (scoped) =>
+      repository.readOwnStaff(scoped, userId),
     );
   },
 

@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { z } from "zod";
+import { requireDemoMode } from "@/lib/api/mode";
 import { AppError } from "@/lib/errors";
 import {
   resetDemoStore,
@@ -43,6 +44,7 @@ export async function resolveContext(
 }
 
 export async function readDemoIdentity(): Promise<DemoIdentity> {
+  requireDemoMode();
   const cookie = (await cookies()).get("anar_demo");
   let identity: unknown = { userId: "sunaina", actingCompanyId: null };
   if (cookie) {

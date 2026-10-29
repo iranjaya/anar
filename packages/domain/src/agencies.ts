@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { emailSchema } from "./auth.js";
-import { permissionSchema } from "./context.js";
+import { emailSchema } from "./identity.js";
+import { permissionSchema } from "./permissions.js";
 
-export type { Permission } from "./context.js";
+export type { Permission } from "./permissions.js";
 
 import { wireDateSchema } from "./http.js";
 import type { Company } from "./tenant.js";

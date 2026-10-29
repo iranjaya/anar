@@ -12,7 +12,7 @@ export function AgencyFrame({
   children,
 }: {
   title: string;
-  active: "/agency" | "/agency/staff" | "/agency/invites";
+  active: "/agency" | "/agency/staff" | "/agency/invites" | "/agency/companies";
   result: ActionResult<AgencyView> | null;
   readiness: { enabled: boolean; message: string };
   children: ReactNode;
@@ -42,6 +42,7 @@ export function AgencyFrame({
       >
         {[
           ["/agency", "Overview"],
+          ["/agency/companies", "Companies"],
           ["/agency/staff", "Staff"],
           ["/agency/invites", "Pending invites"],
         ].map(([href, label]) => (

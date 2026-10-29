@@ -9,25 +9,6 @@ const agencyFields = {
   createdAt: agencies.createdAt,
 };
 const repository = {
-  async readActiveStaffAgency(
-    tx: PlatformTx,
-    agencyId: string,
-    userId: string,
-  ) {
-    const [agency] = await tx
-      .select({ name: agencies.name })
-      .from(agencies)
-      .innerJoin(agencyMembers, eq(agencyMembers.agencyId, agencies.id))
-      .where(
-        and(
-          eq(agencies.id, agencyId),
-          eq(agencies.status, "active"),
-          eq(agencyMembers.userId, userId),
-          eq(agencyMembers.status, "active"),
-        ),
-      );
-    return agency;
-  },
   async create(tx: PlatformTx, input: typeof agencies.$inferInsert) {
     const [agency] = await tx
       .insert(agencies)

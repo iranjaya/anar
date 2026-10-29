@@ -5,21 +5,30 @@ import {
   type PlatformDb,
   type PlatformTx,
   withPlatformIdentity,
+  withPlatformTenant,
 } from "@anar/db/platform";
 import type { Agency, AgencyMember } from "@anar/domain/agencies";
 import {
   type AcceptInviteInput,
   type AcceptInviteResult,
+  type AuthUser,
   acceptInviteSchema,
   type InviteTokenInput,
   type InviteView,
   inviteTokenSchema,
 } from "@anar/domain/auth";
 import { AppError } from "@anar/domain/errors";
+import type {
+  ActivateInvitedMemberInput,
+  CompanyMember,
+} from "@anar/domain/members";
 import { v7 } from "uuid";
 import audit from "../tenant/audit.js";
 import repository from "./inviteRepository.js";
-import type { ReadInitialInviteAgency } from "./invites.js";
+import type {
+  ReadCompanyInviteTarget,
+  ReadInitialInviteAgency,
+} from "./invites.js";
 import rateLimits, {
   type InviteOperation,
   type RateLimitResult,
@@ -32,6 +41,12 @@ export type InviteAcceptanceDeps = {
   otpPepper: string;
   now(): Date;
   readInitialInviteAgency: ReadInitialInviteAgency;
+  readCompanyInviteTarget: ReadCompanyInviteTarget;
+  lockCompanyInviteTarget: ReadCompanyInviteTarget;
+  activateInvitedMember(
+    tx: PlatformTx,
+    input: ActivateInvitedMemberInput,
+  ): Promise<CompanyMember>;
   lockInitialInviteAgency(
     tx: PlatformTx,
     agencyId: string,
@@ -52,6 +67,12 @@ export type InviteAcceptanceService = {
     meta: RequestMeta,
   ): Promise<AcceptInviteResult>;
 };
+type StoredInvite = typeof inviteTable.$inferSelect;
+type ValidInvite = Omit<StoredInvite, "role" | "companyId"> &
+  (
+    | { role: "agency_staff"; companyId: null }
+    | { role: "super_admin" | "admin"; companyId: string }
+  );
 
 const inviteAcceptance = {
   create(deps: InviteAcceptanceDeps): InviteAcceptanceService {
@@ -83,25 +104,21 @@ const inviteAcceptance = {
             deps.now(),
           );
           const issuer = await identities.readUser(tx, invite.createdBy);
-          if (
-            issuer?.platformRole !== "owner" ||
-            issuer.deactivatedAt !== null
-          ) {
-            throw new AppError("not_found", "Invitation is unavailable");
-          }
-          const agency = await deps.readInitialInviteAgency(
+          inviteAcceptance._requireIssuer(invite, issuer);
+          const target = await inviteAcceptance._target(
+            deps,
             tx,
-            invite.agencyId,
-            invite.createdBy,
+            invite,
+            false,
           );
-          if (!agency)
-            throw new AppError("not_found", "Invitation is unavailable");
           return {
-            kind: "agency_staff",
+            kind:
+              invite.role === "agency_staff"
+                ? "agency_staff"
+                : "company_member",
             email: invite.email,
             name: invite.name,
-            agencyName: agency.name,
-            companyName: null,
+            ...target,
             expiresAt: invite.expiresAt,
           };
         });
@@ -134,68 +151,128 @@ const inviteAcceptance = {
           ]);
           const issuer = users.find((row) => row.id === candidate.createdBy);
           const user = users.find((row) => row.id === recipient.id);
-          if (
-            issuer?.platformRole !== "owner" ||
-            issuer.deactivatedAt !== null
-          ) {
-            throw new AppError("not_found", "Invitation is unavailable");
-          }
+          inviteAcceptance._requireIssuer(candidate, issuer);
           if (
             !user ||
             user.email.toLowerCase() !== candidate.email.toLowerCase() ||
             user.platformRole !== null ||
             user.deactivatedAt !== null ||
             (await deps.hasStaffMembership(tx, user.id)) ||
-            (await withPlatformIdentity(tx, user.id, (scoped) =>
-              deps.hasCompanyMembership(scoped, user.id),
-            ))
+            (candidate.role === "agency_staff" &&
+              (await withPlatformIdentity(tx, user.id, (scoped) =>
+                deps.hasCompanyMembership(scoped, user.id),
+              )))
           ) {
             throw new AppError(
               "conflict",
               "Invite cannot be accepted by this account",
             );
           }
-          const agency = await deps.lockInitialInviteAgency(
-            tx,
-            candidate.agencyId,
-            issuer.id,
-          );
-          if (!agency)
-            throw new AppError("not_found", "Invitation is unavailable");
+          await inviteAcceptance._target(deps, tx, candidate, true);
           const locked = await repository.lock(tx, candidate.id);
           const at = deps.now();
           const invite = inviteAcceptance._valid(locked, tokenHash, at);
           if (
-            invite.agencyId !== agency.id ||
-            invite.createdBy !== issuer.id ||
+            invite.agencyId !== candidate.agencyId ||
+            invite.companyId !== candidate.companyId ||
+            invite.role !== candidate.role ||
+            invite.createdBy !== candidate.createdBy ||
             invite.email.toLowerCase() !== user.email.toLowerCase()
           ) {
             throw new AppError("not_found", "Invitation is unavailable");
           }
-          const staff = await deps.activateInvitedStaff(tx, {
-            agencyId: agency.id,
-            userId: user.id,
-            invitedBy: issuer.id,
-            at,
-          });
+          const member =
+            invite.role === "agency_staff"
+              ? await deps.activateInvitedStaff(tx, {
+                  agencyId: invite.agencyId,
+                  userId: user.id,
+                  invitedBy: invite.createdBy,
+                  at,
+                })
+              : await withPlatformTenant(
+                  tx,
+                  {
+                    agencyId: invite.agencyId,
+                    companyId: invite.companyId,
+                    userId: user.id,
+                  },
+                  (scoped) =>
+                    deps.activateInvitedMember(scoped, {
+                      agencyId: invite.agencyId,
+                      companyId: invite.companyId,
+                      userId: user.id,
+                      name: user.name,
+                      role: invite.role,
+                      at,
+                    }),
+                );
           await repository.consume(tx, invite.id, at);
-          await audit.audit(
-            tx,
-            {
-              user,
-              role: "agency_staff",
-              agencyId: agency.id,
-              companyId: null,
-              ip: meta.ip,
-            },
-            "agency.staff_accepted",
-            { type: "agency_member", id: staff.id },
-            { inviteId: invite.id, inviterId: issuer.id },
-          );
+          const actor = {
+            user,
+            role: invite.role,
+            agencyId: invite.agencyId,
+            companyId: invite.companyId,
+            ip: meta.ip,
+          };
+          const data = { inviteId: invite.id, inviterId: invite.createdBy };
+          if (invite.role === "agency_staff") {
+            await audit.audit(
+              tx,
+              actor,
+              "agency.staff_accepted",
+              { type: "agency_member", id: member.id },
+              data,
+            );
+          } else {
+            await audit.audit(
+              tx,
+              actor,
+              "company.member_accepted",
+              { type: "company_member", id: member.id },
+              data,
+            );
+          }
           return { userId: user.id };
         });
       },
     };
+  },
+
+  _requireIssuer(invite: ValidInvite, issuer: AuthUser | undefined): void {
+    const expected = invite.role === "agency_staff" ? "owner" : null;
+    if (
+      !issuer ||
+      issuer.platformRole !== expected ||
+      issuer.deactivatedAt !== null
+    )
+      throw new AppError("not_found", "Invitation is unavailable");
+  },
+
+  async _target(
+    deps: InviteAcceptanceDeps,
+    tx: PlatformTx,
+    invite: ValidInvite,
+    lock: boolean,
+  ) {
+    if (invite.role === "agency_staff") {
+      const read = lock
+        ? deps.lockInitialInviteAgency
+        : deps.readInitialInviteAgency;
+      const agency = await read(tx, invite.agencyId, invite.createdBy);
+      if (!agency) throw new AppError("not_found", "Invitation is unavailable");
+      return { agencyName: agency.name, companyName: null };
+    }
+    const read = lock
+      ? deps.lockCompanyInviteTarget
+      : deps.readCompanyInviteTarget;
+    const target = await read(tx, {
+      agencyId: invite.agencyId,
+      companyId: invite.companyId,
+      issuerId: invite.createdBy,
+      role: invite.role,
+    });
+    if (!target) throw new AppError("not_found", "Invitation is unavailable");
+    return target;
   },
 
   async start(
@@ -214,22 +291,27 @@ const inviteAcceptance = {
   },
 
   _valid(
-    invite: typeof inviteTable.$inferSelect | undefined,
+    invite: StoredInvite | undefined,
     tokenHash: string,
     at: Date,
-  ) {
+  ): ValidInvite {
     if (
       !invite ||
       invite.tokenHash !== tokenHash ||
-      invite.role !== "agency_staff" ||
-      invite.companyId !== null ||
       invite.acceptedAt !== null ||
       invite.revokedAt !== null ||
       at.getTime() >= invite.expiresAt.getTime()
     ) {
       throw new AppError("not_found", "Invitation is unavailable");
     }
-    return invite;
+    if (invite.role === "agency_staff" && invite.companyId === null)
+      return { ...invite, role: invite.role, companyId: invite.companyId };
+    if (
+      (invite.role === "super_admin" || invite.role === "admin") &&
+      invite.companyId !== null
+    )
+      return { ...invite, role: invite.role, companyId: invite.companyId };
+    throw new AppError("not_found", "Invitation is unavailable");
   },
 };
 

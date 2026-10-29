@@ -8,8 +8,21 @@ import { v7 } from "uuid";
 import repository from "./repository.js";
 
 const members = {
+  ownActiveCompanyIds: repository.ownActiveCompanyIds,
+  readActiveForUser: repository.readActiveForUser,
   hasMembership: repository.hasMembership,
   countActive: repository.countActive,
+  async hasActiveSuperAdmin(
+    tx: TenantTx,
+    companyId: string,
+    userId: string,
+    lock = false,
+  ): Promise<boolean> {
+    return (
+      (await repository.readActiveForUser(tx, companyId, userId, lock))
+        ?.role === "super_admin"
+    );
+  },
   async activateInvitedMember(
     tx: TenantTx,
     input: ActivateInvitedMemberInput,

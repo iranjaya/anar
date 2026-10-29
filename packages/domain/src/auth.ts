@@ -1,4 +1,14 @@
 import { z } from "zod";
+import {
+  type Agency,
+  type AgencyCompany,
+  agencyCompanySchema,
+  agencyListQuerySchema,
+  agencySchema,
+} from "./agencies.js";
+import { emailSchema } from "./identity.js";
+
+export { emailSchema } from "./identity.js";
 
 export const inviteResultSchema = z.strictObject({ inviteId: z.uuid() });
 export const resendInviteSchema = z.strictObject({ inviteId: z.uuid() });
@@ -17,7 +27,6 @@ export type AuthUser = {
   createdAt: Date;
 };
 
-export const emailSchema = z.string().trim().toLowerCase().pipe(z.email());
 export const emptySchema = z.strictObject({});
 export const requestOtpSchema = z.strictObject({ email: emailSchema });
 export const verifyOtpSchema = z.strictObject({
@@ -104,3 +113,55 @@ export const bootstrapOwnerSchema = z.strictObject({
 });
 
 export type BootstrapOwnerInput = z.infer<typeof bootstrapOwnerSchema>;
+
+export const sessionUserSchema = z.strictObject({
+  id: z.uuid(),
+  email: emailSchema,
+  name: z.string().trim().min(1).max(120),
+  platformRole: z.literal("owner").nullable(),
+});
+export const sessionStateViewSchema = z.strictObject({
+  id: z.uuid(),
+  expiresAt: wireDateSchema,
+  lastOtpAt: wireDateSchema,
+  actingCompanyId: z.uuid().nullable(),
+  actingReason: z.string().nullable(),
+  actingUntil: wireDateSchema.nullable(),
+});
+export const workspaceSchema = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("owner") }),
+  z.strictObject({ kind: z.literal("agency"), agency: agencySchema }),
+  z.strictObject({ kind: z.literal("company") }),
+  z.strictObject({ kind: z.literal("none") }),
+]);
+export const sessionViewSchema = z.strictObject({
+  user: sessionUserSchema,
+  session: sessionStateViewSchema,
+  workspace: workspaceSchema,
+  redirectTo: z.string().regex(/^\/(?:[a-z0-9-]+\/?)*$/),
+});
+export const workspaceListQuerySchema = agencyListQuerySchema;
+export const workspacePageSchema = z.strictObject({
+  items: z.array(agencyCompanySchema),
+  nextCursor: z.string().nullable(),
+});
+export type SessionUser = z.infer<typeof sessionUserSchema>;
+export type SessionView = Omit<
+  z.infer<typeof sessionViewSchema>,
+  "session" | "workspace"
+> & {
+  session: Omit<
+    z.infer<typeof sessionStateViewSchema>,
+    "expiresAt" | "lastOtpAt" | "actingUntil"
+  > & { expiresAt: Date; lastOtpAt: Date; actingUntil: Date | null };
+  workspace:
+    | { kind: "owner" }
+    | { kind: "agency"; agency: Agency }
+    | { kind: "company" }
+    | { kind: "none" };
+};
+export type WorkspaceListQuery = z.infer<typeof workspaceListQuerySchema>;
+export type WorkspacePage = {
+  items: AgencyCompany[];
+  nextCursor: string | null;
+};

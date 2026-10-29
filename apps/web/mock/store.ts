@@ -1,3 +1,4 @@
+import { requireDemoMode } from "@/lib/api/mode";
 import type {
   ImportBatch,
   ImportRow,
@@ -36,11 +37,13 @@ export type MockStore = {
 const globalStore = globalThis as typeof globalThis & { anarStore?: MockStore };
 
 export function db(): MockStore {
+  requireDemoMode();
   globalStore.anarStore ??= buildSeed(new Date());
   return globalStore.anarStore;
 }
 
 export function resetStore(now: Date): MockStore {
+  requireDemoMode();
   globalStore.anarStore = buildSeed(now);
   return globalStore.anarStore;
 }

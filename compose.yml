@@ -74,6 +74,8 @@ services:
       HOSTNAME: 0.0.0.0
       PORT: "3000"
       API_INTERNAL_URL: http://api:3001
+      ANAR_DATA_MODE: real
+      ANAR_AUTH_ENABLED: ${ANAR_AUTH_ENABLED:-false}
     init: true
 
   proxy:

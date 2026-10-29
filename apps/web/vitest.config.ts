@@ -11,6 +11,11 @@ export default defineConfig({
     },
   },
   test: {
+    env: {
+      ANAR_DATA_MODE: "demo",
+      ANAR_ENV: "test",
+      ANAR_AUTH_ENABLED: "false",
+    },
     environment: "node",
     include: ["**/*.test.{ts,tsx}"],
     exclude: [...configDefaults.exclude, ".cache/**", ".next/**", "e2e/**"],

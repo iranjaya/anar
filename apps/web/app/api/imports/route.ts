@@ -1,6 +1,15 @@
 import { createImportBatchAction } from "@/modules/imports/actions";
 
 export async function POST(request: Request) {
+  if (dataMode() !== "demo")
+    return Response.json(
+      {
+        ok: false,
+        error: "forbidden",
+        message: "Imports are not available yet.",
+      },
+      { status: 403 },
+    );
   let input: unknown;
   try {
     input = await request.json();
@@ -25,3 +34,5 @@ export async function POST(request: Request) {
   }[result.error];
   return Response.json(result, { status });
 }
+
+import { dataMode } from "@/lib/api/mode";

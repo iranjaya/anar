@@ -20,7 +20,8 @@ async function post<T>(
     | "/api/auth/requestOtp"
     | "/api/auth/verifyOtp"
     | "/api/auth/revokeSession"
-    | "/api/auth/logout",
+    | "/api/auth/logout"
+    | "/api/auth/refresh",
   body: unknown,
   schema: z.ZodType<T>,
 ): Promise<T> {
@@ -70,4 +71,8 @@ export async function revokeSession(input: RevokeSessionInput) {
 
 export async function logout() {
   return post("/api/auth/logout", emptySchema.parse({}), okSchema);
+}
+
+export async function refreshSession() {
+  return post("/api/auth/refresh", emptySchema.parse({}), okSchema);
 }

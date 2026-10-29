@@ -35,6 +35,68 @@ const backend = /^(pg|drizzle-orm|drizzle-kit|pg-boss)(\/|$)/;
 const credentials =
   /^(DATABASE_URL|MIGRATION_DATABASE_URL|POSTGRES_\w+|APP_DATABASE_\w+|MIGRATION_DATABASE_\w+|MAIL_ENCRYPTION_KEY|RESEND_API_KEY|OTP_PEPPER)$/;
 
+function typeOnlyReference(node: ast.Node): boolean {
+  if (ast.isImportTypeNode(node)) return true;
+  if (ast.isImportDeclaration(node)) {
+    const clause = node.importClause;
+    const bindings = clause?.namedBindings;
+    return !!(
+      clause?.phaseModifier === ast.SyntaxKind.TypeKeyword ||
+      (!clause?.name &&
+        bindings &&
+        ast.isNamedImports(bindings) &&
+        bindings.elements.length > 0 &&
+        bindings.elements.every((element) => element.isTypeOnly))
+    );
+  }
+  if (ast.isExportDeclaration(node)) {
+    const clause = node.exportClause;
+    return (
+      node.isTypeOnly ||
+      !!(
+        clause &&
+        ast.isNamedExports(clause) &&
+        clause.elements.length > 0 &&
+        clause.elements.every((element) => element.isTypeOnly)
+      )
+    );
+  }
+  return (
+    ast.isExternalModuleReference(node) &&
+    ast.isImportEqualsDeclaration(node.parent) &&
+    node.parent.isTypeOnly
+  );
+}
+
+function foundationBoundary(from: string, to: string): string | undefined {
+  const service =
+    /^(?:src|dist)\/modules\/([^/]+)\/(?:service|index)\.(?:d\.)?[cm]?[jt]sx?$/.exec(
+      to,
+    );
+  const tenantContext =
+    /^(?:src|dist)\/modules\/tenant\/(?:context|index)\.(?:d\.)?[cm]?[jt]sx?$/.test(
+      to,
+    );
+  if (
+    from.startsWith("src/modules/auth/") &&
+    (tenantContext ||
+      (service && ["agencies", "companies", "members"].includes(service[1])))
+  )
+    return "Auth cannot runtime-import feature services or tenant context/index";
+  if (
+    /^src\/modules\/tenant\/(?:context|discovery)\.[cm]?[jt]sx?$/.test(from) &&
+    service &&
+    service[1] !== "tenant"
+  )
+    return "Tenant context/discovery cannot runtime-import feature services";
+  if (
+    /^src\/modules\/tenant\/audit\.[cm]?[jt]sx?$/.test(from) &&
+    (tenantContext || /^(?:src|dist)\/modules\/auth\//.test(to))
+  )
+    return "Tenant audit cannot runtime-import auth or tenant context/index";
+  return undefined;
+}
+
 function files(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     if (ignored.has(entry.name)) return [];
@@ -266,6 +328,18 @@ export function checkBoundaries(root: string): string[] {
               if (resolved && existsSync(resolved))
                 resolved = realpathSync(resolved);
               const target = resolved ? owner(resolved) : undefined;
+              if (
+                pkg.manifest.name === "@anar/api" &&
+                target === pkg &&
+                resolved &&
+                !typeOnlyReference(node)
+              ) {
+                const violation = foundationBoundary(
+                  local,
+                  path.relative(pkg.dir, resolved).replaceAll(path.sep, "/"),
+                );
+                if (violation) fail(reference, violation);
+              }
               const platformEntry =
                 specifier === "@anar/db/platform" ||
                 (target?.manifest.name === "@anar/db" &&

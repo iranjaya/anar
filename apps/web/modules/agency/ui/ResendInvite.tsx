@@ -1,8 +1,8 @@
 "use client";
 
 import { useActionState } from "react";
-import { resendStaffInviteAction } from "../actions";
-import { FreshCodeForm } from "./FreshCodeForm";
+import { FreshCodeForm } from "@/modules/auth/components";
+import { freshCodeAction, resendStaffInviteAction } from "../actions";
 
 export function ResendInvite({
   inviteId,
@@ -37,7 +37,7 @@ export function ResendInvite({
         )}
       </form>
       {state && !state.ok && state.error === "step_up_required" && (
-        <FreshCodeForm enabled={enabled && !pending} />
+        <FreshCodeForm enabled={enabled && !pending} submit={freshCodeAction} />
       )}
     </div>
   );

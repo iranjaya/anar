@@ -15,16 +15,13 @@ import { v7 } from "uuid";
 import type context from "../agencies/context.js";
 import pagination from "../agencies/pagination.js";
 import type { AgencyCtx } from "../agencies/service.js";
-import agencies from "../agencies/service.js";
-import type {
-  InviteService,
-  ReadCompanyInviteTarget,
-} from "../auth/invites.js";
+import type { InviteService } from "../auth/invites.js";
 import type { RequestMeta } from "../auth/sessions.js";
 import members from "../members/service.js";
 import audit from "../tenant/audit.js";
 import stepUp from "../tenant/stepUp.js";
-import repository from "./repository.js";
+import inviteTargets from "./inviteTargets.js";
+import repository, { type WorkspaceSelection } from "./repository.js";
 
 export type CompanyDeps = {
   context: ReturnType<typeof context.create>;
@@ -51,6 +48,18 @@ export type CompanyService = {
   ): Promise<CompanyPage>;
 };
 const companies = {
+  discoverWorkspaces(
+    tx: PlatformTx,
+    userId: string,
+    options: WorkspaceSelection,
+  ) {
+    return repository.discoverWorkspaces(
+      tx,
+      members.ownActiveCompanyIds(tx, userId),
+      options,
+    );
+  },
+  readAgencyCompanyBySlug: repository.readAgencyCompanyBySlug,
   create(deps: CompanyDeps): CompanyService {
     return {
       requireAgencyContext: deps.context.requireAgencyContext,
@@ -163,26 +172,7 @@ const companies = {
   lockActiveCompany(tx: PlatformTx, agencyId: string, companyId: string) {
     return repository.readActive(tx, agencyId, companyId, true);
   },
-  readCompanyInviteTarget: (async (tx, input) => {
-    const agency = await agencies.readActiveStaffAgency(
-      tx,
-      input.agencyId,
-      input.issuerId,
-    );
-    if (!agency) return undefined;
-    const company = await withPlatformTenant(
-      tx,
-      {
-        agencyId: input.agencyId,
-        companyId: input.companyId,
-        userId: input.issuerId,
-      },
-      (scoped) =>
-        repository.readActive(scoped, input.agencyId, input.companyId, false),
-    );
-    return company
-      ? { agencyName: agency.name, companyName: company.name }
-      : undefined;
-  }) satisfies ReadCompanyInviteTarget,
+  readCompanyInviteTarget: inviteTargets.read,
+  lockCompanyInviteTarget: inviteTargets.lock,
 };
 export default companies;

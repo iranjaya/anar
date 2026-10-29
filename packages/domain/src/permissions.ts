@@ -1,0 +1,33 @@
+import { z } from "zod";
+
+export const permissionSchema = z.enum([
+  "agency.create",
+  "agency.list",
+  "agency.resend_first_invite",
+  "agency.staff.list",
+  "agency.staff.invite",
+  "agency.staff.resend",
+  "agency.staff.deactivate",
+  "company.create",
+  "company.list",
+  "company.enter",
+  "members.invite_super_admin",
+  "members.invite_admin",
+  "members.deactivate",
+  "members.list",
+  "settings.manage",
+  "leads.assign",
+  "leads.bulk",
+  "leads.merge",
+  "leads.export",
+  "imports.upload",
+  "imports.commit",
+  "leads.view",
+  "leads.update",
+  "followups.log",
+  "reports.view_all",
+  "reports.compare",
+  "reports.view_own",
+  "sessions.manage_own",
+]);
+export type Permission = z.infer<typeof permissionSchema>;

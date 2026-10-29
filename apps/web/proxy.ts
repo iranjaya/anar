@@ -1,8 +1,28 @@
+import { slugSchema } from "@anar/domain/agencies";
 import { type NextRequest, NextResponse } from "next/server";
+import { dataMode } from "./lib/api/mode";
 
 export function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
+  const real = dataMode() === "real";
+  const realRoute =
+    [
+      "/",
+      "/login",
+      "/login/code",
+      "/invite",
+      "/account",
+      "/account/sessions",
+      "/workspaces",
+      "/owner/agencies",
+      "/agency",
+      "/agency/staff",
+      "/agency/invites",
+      "/agency/companies",
+    ].includes(path) || slugSchema.safeParse(path.slice(1)).success;
+  if (real && !realRoute) return new NextResponse(null, { status: 404 });
   const authScreen =
+    real ||
     path === "/login" ||
     path.startsWith("/login/") ||
     path === "/invite" ||
@@ -39,5 +59,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!api/|_next/|favicon.ico).*)"],
 };

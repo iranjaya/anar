@@ -54,6 +54,7 @@ services:
       - ./apps/web/modules:/workspace/apps/web/modules:ro
       - ./apps/web/next.config.ts:/workspace/apps/web/next.config.ts:ro
       - ./apps/web/proxy.ts:/workspace/apps/web/proxy.ts:ro
+      - ./apps/web/instrumentation.ts:/workspace/apps/web/instrumentation.ts:ro
       - ./packages/domain/src:/workspace/packages/domain/src:ro
       - /workspace/node_modules
       - /workspace/apps/web/node_modules

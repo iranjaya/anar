@@ -1,6 +1,10 @@
-import { redirect } from "next/navigation";
-import { homeFor, requireDemoContext } from "../server";
+import { dataMode } from "@/lib/api/mode";
+import { SessionHomePage } from "@/modules/auth/pages";
 
 export async function HomePage() {
-  redirect(homeFor(await requireDemoContext()));
+  if (dataMode() === "demo") {
+    const { DemoHomePage } = await import("./DemoHomePage");
+    return <DemoHomePage />;
+  }
+  return <SessionHomePage />;
 }

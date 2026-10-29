@@ -1,6 +1,9 @@
 import type { Permission } from "@anar/domain/agencies";
 
 const permissions = {
+  companyCapabilities(): Permission[] {
+    return ["sessions.manage_own"];
+  },
   agencyCapabilities(actor: { role: "owner" | "agency_staff" }): Permission[] {
     return [...permissions._agencyCapabilities[actor.role]];
   },

@@ -16,7 +16,7 @@ COPY apps/web/components apps/web/components
 COPY apps/web/lib apps/web/lib
 COPY apps/web/mock apps/web/mock
 COPY apps/web/modules apps/web/modules
-COPY apps/web/next.config.ts apps/web/postcss.config.mjs apps/web/tsconfig.json apps/web/proxy.ts apps/web/
+COPY apps/web/next.config.ts apps/web/postcss.config.mjs apps/web/tsconfig.json apps/web/proxy.ts apps/web/instrumentation.ts apps/web/
 
 FROM base AS dev
 CMD ["sh", "-c", "pnpm --filter @anar/domain build && (pnpm --filter @anar/domain watch & exec pnpm --filter @anar/web dev --hostname 0.0.0.0)"]

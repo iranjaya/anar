@@ -12,6 +12,7 @@ import {
 } from "@anar/domain/agencies";
 import { okSchema } from "@anar/domain/auth";
 import { apiDateSchema, apiRequest } from "@/lib/api/client";
+import { authEnabled } from "@/lib/api/mode";
 import { type ActionResult, AppError, actionFailure } from "@/lib/errors";
 
 const readiness = {
@@ -24,17 +25,17 @@ const pageSchema = agencyPageSchema.extend({
 });
 
 export function getOwnerReadiness() {
-  return readiness;
+  return { ...readiness, enabled: authEnabled() };
 }
 
 function requireReady() {
-  if (!readiness.enabled) throw new AppError("unavailable", readiness.message);
+  if (!authEnabled()) throw new AppError("unavailable", readiness.message);
 }
 
 export async function listAgencies(
   query: unknown,
 ): Promise<ActionResult<AgencyPage> | null> {
-  if (!readiness.enabled) return null;
+  if (!authEnabled()) return null;
   try {
     const parsed = agencyListQuerySchema.safeParse(query);
     if (!parsed.success)

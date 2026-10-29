@@ -5,7 +5,7 @@ export function PageLinks({
   hasCursor,
   nextCursor,
 }: {
-  path: "/agency/staff" | "/agency/invites";
+  path: "/agency/staff" | "/agency/invites" | "/agency/companies";
   hasCursor: boolean;
   nextCursor: string | null;
 }) {

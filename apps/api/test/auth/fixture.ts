@@ -37,6 +37,7 @@ import otp from "../../src/modules/auth/otp.js";
 import type { SessionService } from "../../src/modules/auth/sessions.js";
 import companies from "../../src/modules/companies/service.js";
 import members from "../../src/modules/members/service.js";
+import tenantContext from "../../src/modules/tenant/index.js";
 
 const run = promisify(execFile);
 export const publicOrigin = "http://anar.example.test";
@@ -51,6 +52,7 @@ export type StoredJob = {
 type ApiInstance = {
   app: FastifyInstance;
   sessions: SessionService;
+  tenant: ReturnType<typeof tenantContext.create>;
   close(): Promise<void>;
 };
 type ProofProcess = {
@@ -144,7 +146,19 @@ export async function startAuthFixture() {
         now,
       });
       const verification = verifier;
+      const tenant = tenantContext.create({
+        db,
+        sessions: verification.sessions,
+        readStaffMembership: agencies.readStaffMembership,
+        readActiveAgency: agencies.readActiveAgency,
+        readAgencyCompanyBySlug: companies.readAgencyCompanyBySlug,
+        discoverWorkspaces: companies.discoverWorkspaces,
+        lockActiveCompany: companies.lockActiveCompany,
+        readActiveMember: members.readActiveForUser,
+      });
       const app = buildApp({
+        context: tenant,
+        discovery: tenant,
         companies: companies.create({
           createCompanyInvite: invitations.createCompanyInvite,
           context: agencyContext.create({
@@ -161,6 +175,9 @@ export async function startAuthFixture() {
           otpPepper: pepper,
           now,
           readInitialInviteAgency: agencies.readInitialInviteAgency,
+          readCompanyInviteTarget: companies.readCompanyInviteTarget,
+          lockCompanyInviteTarget: companies.lockCompanyInviteTarget,
+          activateInvitedMember: members.activateInvitedMember,
           lockInitialInviteAgency: agencies.lockInitialInviteAgency,
           hasStaffMembership: agencies.hasStaffMembership,
           hasCompanyMembership: members.hasMembership,
@@ -184,6 +201,7 @@ export async function startAuthFixture() {
       });
       await app.ready();
       const instance = {
+        tenant,
         app,
         sessions: verification.sessions,
         async close() {

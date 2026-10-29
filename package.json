@@ -6,6 +6,7 @@
   "packageManager": "pnpm@11.28.2",
   "scripts": {
     "dev": "pnpm --filter @anar/domain build && pnpm --filter @anar/web dev",
+    "dev:demo": "pnpm --filter @anar/domain build && pnpm --filter @anar/web dev:demo",
     "dev:stack": "docker compose -f compose.yml -f compose.dev.yml run --build --rm migrate && docker compose -f compose.yml -f compose.dev.yml up --build -d api worker web proxy",
     "build": "pnpm -r build && node scripts/check-build.ts",
     "start": "pnpm --filter @anar/domain build && pnpm --filter @anar/web start",

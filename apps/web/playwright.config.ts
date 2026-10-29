@@ -47,7 +47,12 @@ export default defineConfig({
   ],
   webServer: {
     command: `pnpm dev --hostname 127.0.0.1 --port ${port}`,
-    env: { E2E_PORT: String(port) },
+    env: {
+      E2E_PORT: String(port),
+      ANAR_DATA_MODE: "demo",
+      ANAR_ENV: "test",
+      ANAR_AUTH_ENABLED: "false",
+    },
     url: baseURL,
     reuseExistingServer: false,
   },

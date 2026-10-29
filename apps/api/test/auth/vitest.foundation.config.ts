@@ -16,6 +16,8 @@ export default defineConfig({
       "test/agencies/staffLists.integration.spec.ts",
       "test/companies/companies.integration.spec.ts",
       "test/auth/invite.integration.spec.ts",
+      "test/auth/acceptCompanyInvite.integration.spec.ts",
+      "test/tenant/context.integration.spec.ts",
       "test/companies/members.integration.spec.ts",
     ],
     hookTimeout: 60000,

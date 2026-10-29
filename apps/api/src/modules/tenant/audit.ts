@@ -3,6 +3,10 @@ import type { AuthUser } from "@anar/domain/auth";
 import { v7 } from "uuid";
 
 type AuditEvents = {
+  "company.member_accepted": {
+    target: { type: "company_member"; id: string };
+    data: { inviteId: string; inviterId: string };
+  };
   "company.super_admin_invited": {
     target: { type: "invite"; id: string };
     data: { inviteId: string };
@@ -32,7 +36,7 @@ export type AuditAction = keyof AuditEvents;
 export type AuditData = AuditEvents[AuditAction]["data"];
 export type AuditActor = {
   user: AuthUser;
-  role: "owner" | "agency_staff";
+  role: "owner" | "agency_staff" | "super_admin" | "admin";
   agencyId: string | null;
   companyId: string | null;
   ip: string | null;

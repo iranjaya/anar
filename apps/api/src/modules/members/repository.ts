@@ -1,7 +1,38 @@
 import { companyMembers, type TenantTx } from "@anar/db/tenant";
-import { and, count, eq } from "drizzle-orm";
+import { and, count, eq, type SQL, sql } from "drizzle-orm";
 
 const repository = {
+  ownActiveCompanyIds(tx: TenantTx, userId: string): SQL {
+    const query = tx
+      .select({ id: companyMembers.companyId })
+      .from(companyMembers)
+      .where(
+        and(
+          eq(companyMembers.userId, userId),
+          eq(companyMembers.status, "active"),
+        ),
+      );
+    return sql`(${query.getSQL()})`;
+  },
+  async readActiveForUser(
+    tx: TenantTx,
+    companyId: string,
+    userId: string,
+    lock: boolean,
+  ) {
+    const query = tx
+      .select()
+      .from(companyMembers)
+      .where(
+        and(
+          eq(companyMembers.companyId, companyId),
+          eq(companyMembers.userId, userId),
+          eq(companyMembers.status, "active"),
+        ),
+      );
+    const [member] = await (lock ? query.for("update") : query);
+    return member;
+  },
   async hasMembership(tx: TenantTx, userId: string): Promise<boolean> {
     const rows = await tx
       .select({ id: companyMembers.id })

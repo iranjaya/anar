@@ -11,16 +11,19 @@ import {
   inviteStaffSchema,
 } from "@anar/domain/agencies";
 import {
-  emptySchema,
   inviteResultSchema,
   okSchema,
   type ResendInviteInput,
   resendInviteSchema,
-  stepUpSchema,
 } from "@anar/domain/auth";
 import type { z } from "zod";
 import { apiDateSchema, apiRequest } from "@/lib/api/client";
+import { authEnabled } from "@/lib/api/mode";
 import { type ActionResult, AppError, actionFailure } from "@/lib/errors";
+import {
+  requestFreshCode as requestCode,
+  verifyFreshCode as verifyCode,
+} from "@/modules/auth/server";
 
 const readiness = {
   enabled: false,
@@ -46,11 +49,11 @@ const invitePageSchema = agencyInvitePageSchema.extend({
 });
 
 export function getAgencyReadiness() {
-  return readiness;
+  return { ...readiness, enabled: authEnabled() };
 }
 
 function requireReady() {
-  if (!readiness.enabled) throw new AppError("unavailable", readiness.message);
+  if (!authEnabled()) throw new AppError("unavailable", readiness.message);
 }
 
 async function read<T>(
@@ -58,7 +61,7 @@ async function read<T>(
   schema: z.ZodType<T>,
   query?: unknown,
 ): Promise<ActionResult<T> | null> {
-  if (!readiness.enabled) return null;
+  if (!authEnabled()) return null;
   try {
     const parsed = agencyListQuerySchema.safeParse(query ?? {});
     if (!parsed.success)
@@ -108,23 +111,10 @@ export async function resendStaffInvite(input: ResendInviteInput) {
 
 export async function requestFreshCode() {
   requireReady();
-  return apiRequest(
-    {
-      path: "/api/auth/requestStepUp",
-      method: "POST",
-      body: emptySchema.parse({}),
-    },
-    okSchema,
-  );
+  return requestCode();
 }
 
 export async function verifyFreshCode(code: string) {
   requireReady();
-  const parsed = stepUpSchema.safeParse({ code });
-  if (!parsed.success)
-    throw new AppError("validation", "Enter your six-digit code.");
-  return apiRequest(
-    { path: "/api/auth/stepUp", method: "POST", body: parsed.data },
-    okSchema,
-  );
+  return verifyCode(code);
 }

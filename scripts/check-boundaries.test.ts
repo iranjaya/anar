@@ -364,3 +364,159 @@ for (const [file, allowed] of [
       assert.ok(errors.some((error) => error.includes("Cross-package path")));
   });
 }
+
+function foundationFixture(
+  from: string,
+  to: string,
+  statement: string,
+  alias?: string,
+): string[] {
+  return fixture("", (root) => {
+    const base = path.join(root, "apps/api/src/modules");
+    for (const file of [from, to])
+      mkdirSync(path.dirname(path.join(base, file)), { recursive: true });
+    writeFileSync(
+      path.join(base, to),
+      "export type Contract = string; export const value = 1; export default value;",
+    );
+    const relative = path
+      .relative(path.dirname(from), to)
+      .replace(/\.ts$/, ".js");
+    const specifier =
+      alias ?? (relative.startsWith(".") ? relative : `./${relative}`);
+    writeFileSync(
+      path.join(base, from),
+      statement.replaceAll("TARGET", JSON.stringify(specifier)),
+    );
+  });
+}
+
+const foundationEdges = [
+  ...["agencies", "companies", "members"].flatMap((module) =>
+    ["service", "index"].map((entry) => [
+      "auth/probe.ts",
+      `${module}/${entry}.ts`,
+      "Auth cannot runtime-import",
+    ]),
+  ),
+  ...["context", "index"].map((entry) => [
+    "auth/probe.ts",
+    `tenant/${entry}.ts`,
+    "Auth cannot runtime-import",
+  ]),
+  ...["context", "discovery"].flatMap((entry) =>
+    ["agencies", "companies", "members", "leads", "auth"].map((module) => [
+      `tenant/${entry}.ts`,
+      `${module}/service.ts`,
+      "Tenant context/discovery cannot runtime-import",
+    ]),
+  ),
+  ...["auth/sessions.ts", "tenant/context.ts", "tenant/index.ts"].map(
+    (target) => [
+      "tenant/audit.ts",
+      target,
+      "Tenant audit cannot runtime-import",
+    ],
+  ),
+];
+
+for (const [from, to, message] of foundationEdges) {
+  test(`denies runtime ${from} -> ${to}`, () => {
+    const errors = foundationFixture(from, to, "import value from TARGET;");
+    assert.equal(errors.length, 1, errors.join("\n"));
+    assert.ok(errors[0].includes(message), errors.join("\n"));
+  });
+  test(`allows type-only ${from} -> ${to}`, () => {
+    assert.deepEqual(
+      foundationFixture(from, to, "import type { Contract } from TARGET;"),
+      [],
+    );
+  });
+}
+
+for (const [name, statement, allowed] of [
+  ["named import", "import { value } from TARGET;", false],
+  ["namespace import", "import * as service from TARGET;", false],
+  ["side-effect import", "import TARGET;", false],
+  ["empty import", "import {} from TARGET;", false],
+  ["mixed import", "import { type Contract, value } from TARGET;", false],
+  [
+    "default with inline types",
+    "import value, { type Contract } from TARGET;",
+    false,
+  ],
+  ["named re-export", "export { value } from TARGET;", false],
+  ["star re-export", "export * from TARGET;", false],
+  ["mixed re-export", "export { type Contract, value } from TARGET;", false],
+  ["dynamic import", "void import(TARGET);", false],
+  ["require", "const service = require(TARGET);", false],
+  ["import equals", "import service = require(TARGET);", false],
+  ["inline type import", "import { type Contract } from TARGET;", true],
+  ["type namespace", "import type * as service from TARGET;", true],
+  ["type re-export", "export type { Contract } from TARGET;", true],
+  ["inline type re-export", "export { type Contract } from TARGET;", true],
+  ["type star re-export", "export type * from TARGET;", true],
+  ["import type expression", "type Contract = import(TARGET).Contract;", true],
+  ["typeof import expression", "type Service = typeof import(TARGET);", true],
+  ["type import equals", "import type service = require(TARGET);", true],
+] as const) {
+  test(`${allowed ? "allows" : "denies"} foundation ${name} through an alias`, () => {
+    const errors = foundationFixture(
+      "auth/probe.ts",
+      "companies/service.ts",
+      statement,
+      "@/src/modules/companies/service",
+    );
+    if (allowed) assert.deepEqual(errors, []);
+    else {
+      assert.equal(errors.length, 1, errors.join("\n"));
+      assert.ok(
+        errors[0].includes("Auth cannot runtime-import"),
+        errors.join("\n"),
+      );
+    }
+  });
+}
+
+test("denies a feature barrel imported by directory", () => {
+  assert.ok(
+    foundationFixture(
+      "tenant/context.ts",
+      "companies/index.ts",
+      "export * from TARGET;",
+      "../companies",
+    ).some((error) =>
+      error.includes("Tenant context/discovery cannot runtime-import"),
+    ),
+  );
+});
+
+test("denies runtime imports resolved through compiled declarations", () => {
+  const errors = foundationFixture(
+    "auth/probe.ts",
+    "../../dist/modules/companies/service.d.ts",
+    "import value from TARGET;",
+    "@/dist/modules/companies/service",
+  );
+  assert.equal(errors.length, 1, errors.join("\n"));
+  assert.ok(
+    errors[0].includes("Auth cannot runtime-import"),
+    errors.join("\n"),
+  );
+});
+
+for (const [from, to] of [
+  ["auth/probe.ts", "tenant/audit.ts"],
+  ["tenant/discovery.ts", "agencies/pagination.ts"],
+  ["tenant/context.ts", "tenant/views.ts"],
+  ["tenant/index.ts", "tenant/context.ts"],
+  ["tenant/audit.ts", "tenant/permissions.ts"],
+  ["companies/service.ts", "auth/sessions.ts"],
+]) {
+  test(`allows runtime ${from} -> ${to}`, () => {
+    assert.deepEqual(
+      foundationFixture(from, to, "import value from TARGET;"),
+      [],
+    );
+  });
+}

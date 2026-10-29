@@ -1,12 +1,21 @@
 "use client";
 
 import { useActionState, useId, useState } from "react";
-import { freshCodeAction } from "../actions";
+import type { ActionResult } from "@/lib/errors";
 
-export function FreshCodeForm({ enabled }: { enabled: boolean }) {
+export function FreshCodeForm({
+  enabled,
+  submit,
+}: {
+  enabled: boolean;
+  submit(
+    previous: ActionResult<{ verified: boolean }> | null,
+    form: FormData,
+  ): Promise<ActionResult<{ verified: boolean }>>;
+}) {
   const id = useId();
   const [code, setCode] = useState("");
-  const [state, action, pending] = useActionState(freshCodeAction, null);
+  const [state, action, pending] = useActionState(submit, null);
   return (
     <section
       aria-busy={pending}
@@ -15,7 +24,7 @@ export function FreshCodeForm({ enabled }: { enabled: boolean }) {
       <p className="text-sm font-semibold">Confirm with a fresh code</p>
       <p className="text-sm text-muted">
         Send a code to your signed-in email, verify it here, then retry your
-        invitation. Your details stay in the form.
+        action. Your details stay in the form.
       </p>
       <form action={action}>
         <input type="hidden" name="intent" value="request" />
@@ -61,7 +70,7 @@ export function FreshCodeForm({ enabled }: { enabled: boolean }) {
       {state?.ok && (
         <p role="status" className="text-sm text-brand">
           {state.data.verified
-            ? "Code verified. Retry your invitation."
+            ? "Code verified. Retry your action."
             : "Code requested. Check your email."}
         </p>
       )}
