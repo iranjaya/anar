@@ -59,11 +59,12 @@ describe("session-bound step-up on Postgres", () => {
     const actor = await fixture.apps[0].sessions.requireSession({
       headers: { cookie: own.cookie },
     });
+    const company = await fixture.seedCompany(own.user.id);
     await fixture.db.transaction((tx) =>
       tx
         .update(sessions)
         .set({
-          actingCompanyId: v7(),
+          actingCompanyId: company.id,
           actingReason: "Proof entry",
           actingUntil: new Date(fixture.now().getTime() + 8 * 3600000),
         })

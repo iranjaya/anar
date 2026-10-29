@@ -78,6 +78,11 @@ export const agencyMembers = pgTable(
         table.agencyId,
         table.status,
       ),
+      index("agency_members_agency_created_idx").on(
+        table.agencyId,
+        table.createdAt,
+        table.id,
+      ),
       pgPolicy("agency_members_select", {
         for: "select",
         to: "anar_app",

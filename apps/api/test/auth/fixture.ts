@@ -4,12 +4,15 @@ import { createServer } from "node:net";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import {
+  agencies as agencyRows,
   authRateLimits,
+  companies as companyRows,
   createPlatformDb,
   otpCodes,
   type PlatformTx,
   sessions,
   users,
+  withPlatformAgency,
 } from "@anar/db/platform";
 import type { AuthUser } from "@anar/domain/auth";
 import type { JobPayload } from "@anar/domain/jobs";
@@ -23,13 +26,17 @@ import { buildApp } from "../../src/app.js";
 import { createMailCodec } from "../../src/lib/email/crypto.js";
 import stepUpCode from "../../src/lib/email/templates/stepUpCode.js";
 import { originGuard } from "../../src/lib/http.js";
+import agencyContext from "../../src/modules/agencies/context.js";
 import agencies from "../../src/modules/agencies/service.js";
+import staff from "../../src/modules/agencies/staff.js";
 import bootstrap from "../../src/modules/auth/bootstrap.js";
 import type { CookieTransport } from "../../src/modules/auth/cookies.js";
 import inviteAcceptance from "../../src/modules/auth/inviteAcceptance.js";
 import invites from "../../src/modules/auth/invites.js";
 import otp from "../../src/modules/auth/otp.js";
 import type { SessionService } from "../../src/modules/auth/sessions.js";
+import companies from "../../src/modules/companies/service.js";
+import members from "../../src/modules/members/service.js";
 
 const run = promisify(execFile);
 export const publicOrigin = "http://anar.example.test";
@@ -61,6 +68,12 @@ export async function startAuthFixture() {
   const pepper = randomBytes(32).toString("base64");
   const mailKey = randomBytes(32).toString("base64");
   const codec = createMailCodec(mailKey);
+  const invitations = invites.create({
+    publicOrigin,
+    otpPepper: pepper,
+    mailCodec: codec,
+    now,
+  });
   const apps: ApiInstance[] = [];
   const processes: ProofProcess[] = [];
   const processLogs: string[] = [];
@@ -132,6 +145,17 @@ export async function startAuthFixture() {
       });
       const verification = verifier;
       const app = buildApp({
+        companies: companies.create({
+          createCompanyInvite: invitations.createCompanyInvite,
+          context: agencyContext.create({
+            db,
+            sessions: verification.sessions,
+          }),
+          now,
+        }),
+        staff: staff.create(
+          agencyContext.create({ db, sessions: verification.sessions }),
+        ),
         invites: inviteAcceptance.create({
           db,
           otpPepper: pepper,
@@ -139,15 +163,13 @@ export async function startAuthFixture() {
           readInitialInviteAgency: agencies.readInitialInviteAgency,
           lockInitialInviteAgency: agencies.lockInitialInviteAgency,
           hasStaffMembership: agencies.hasStaffMembership,
+          hasCompanyMembership: members.hasMembership,
           activateInvitedStaff: agencies.activateInvitedStaff,
         }),
         agencies: agencies.create({
           sessions: verification.sessions,
-          createInitialInvite: invites.create({
-            publicOrigin,
-            mailCodec: codec,
-            now,
-          }).createInitialInvite,
+          createInitialInvite: invitations.createInitialInvite,
+          resendInitialInvite: invitations.resendInitialInvite,
           now,
         }),
         otp: requester.service,
@@ -295,6 +317,7 @@ export async function startAuthFixture() {
       db: runtime,
       apps,
       codec,
+      invitations,
       now,
       rows,
       owner,
@@ -338,6 +361,37 @@ export async function startAuthFixture() {
             .returning(),
         );
         return user;
+      },
+      async seedCompany(userId: string) {
+        return runtime.transaction(async (tx) => {
+          const agencyId = v7();
+          await tx.insert(agencyRows).values({
+            id: agencyId,
+            name: "Proof agency",
+            slug: `agency-${agencyId}`,
+            status: "active",
+            createdBy: userId,
+          });
+          return withPlatformAgency(
+            tx,
+            { agencyId, userId },
+            async (scoped) => {
+              const [company] = await scoped
+                .insert(companyRows)
+                .values({
+                  id: v7(),
+                  agencyId,
+                  name: "Proof company",
+                  slug: `company-${v7()}`,
+                  status: "active",
+                  defaultCountry: "NP",
+                  timezone: "Asia/Kathmandu",
+                })
+                .returning();
+              return company;
+            },
+          );
+        });
       },
       limits: () =>
         runtime.transaction((tx) => tx.select().from(authRateLimits)),

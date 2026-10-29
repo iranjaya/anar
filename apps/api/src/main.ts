@@ -4,10 +4,14 @@ import { loadApiConfig } from "./lib/config.js";
 import { createMailCodec } from "./lib/email/crypto.js";
 import stepUpCode from "./lib/email/templates/stepUpCode.js";
 import { originGuard } from "./lib/http.js";
+import agencyContext from "./modules/agencies/context.js";
 import agencies from "./modules/agencies/service.js";
+import staff from "./modules/agencies/staff.js";
 import inviteAcceptance from "./modules/auth/inviteAcceptance.js";
 import invites from "./modules/auth/invites.js";
 import otp from "./modules/auth/otp.js";
+import companies from "./modules/companies/service.js";
+import members from "./modules/members/service.js";
 
 export async function startApi(): Promise<void> {
   const host = process.env.HOST ?? "0.0.0.0";
@@ -27,6 +31,7 @@ export async function startApi(): Promise<void> {
   const now = () => new Date();
   const invitations = invites.create({
     publicOrigin: config.publicOrigin,
+    otpPepper: config.otpPepper,
     mailCodec,
     now,
   });
@@ -37,6 +42,9 @@ export async function startApi(): Promise<void> {
     now,
   });
   let app: FastifyInstance | undefined;
+  let agencyRuntime:
+    | Awaited<ReturnType<typeof agencyContext.start>>
+    | undefined;
   let verifier: Awaited<ReturnType<typeof otp.startVerifier>> | undefined;
   let acceptance:
     | Awaited<ReturnType<typeof inviteAcceptance.start>>
@@ -49,6 +57,11 @@ export async function startApi(): Promise<void> {
       now,
     });
     const verification = verifier;
+    agencyRuntime = await agencyContext.start({
+      connectionString: config.connectionString,
+      sessions: verification.sessions,
+    });
+    const contextRuntime = agencyRuntime;
     acceptance = await inviteAcceptance.start({
       connectionString: config.connectionString,
       otpPepper: config.otpPepper,
@@ -56,14 +69,22 @@ export async function startApi(): Promise<void> {
       readInitialInviteAgency: agencies.readInitialInviteAgency,
       lockInitialInviteAgency: agencies.lockInitialInviteAgency,
       hasStaffMembership: agencies.hasStaffMembership,
+      hasCompanyMembership: members.hasMembership,
       activateInvitedStaff: agencies.activateInvitedStaff,
     });
     const inviteRuntime = acceptance;
     app = buildApp({
+      staff: staff.create(contextRuntime.service),
+      companies: companies.create({
+        context: contextRuntime.service,
+        now,
+        createCompanyInvite: invitations.createCompanyInvite,
+      }),
       invites: inviteRuntime.service,
       agencies: agencies.create({
         sessions: verification.sessions,
         createInitialInvite: invitations.createInitialInvite,
+        resendInitialInvite: invitations.resendInitialInvite,
         now,
       }),
       otp: runtime.service,
@@ -91,6 +112,7 @@ export async function startApi(): Promise<void> {
         runtime.close(),
         verification.close(),
         inviteRuntime.close(),
+        contextRuntime.close(),
       ]);
     });
     process.once("SIGINT", stop);
@@ -103,6 +125,7 @@ export async function startApi(): Promise<void> {
         runtime.close(),
         verifier?.close(),
         acceptance?.close(),
+        agencyRuntime?.close(),
       ]);
     throw error;
   }

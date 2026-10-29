@@ -160,6 +160,8 @@ describe("database roles and tenant transactions", () => {
       { tablename: "agency_members" },
       { tablename: "audit_log" },
       { tablename: "auth_rate_limits" },
+      { tablename: "companies" },
+      { tablename: "company_members" },
       { tablename: "invites" },
       { tablename: "otp_codes" },
       { tablename: "sessions" },
@@ -206,7 +208,12 @@ describe("database roles and tenant transactions", () => {
         AND c.relname NOT IN ('agencies', 'audit_log', 'auth_rate_limits', 'invites', 'otp_codes', 'sessions', 'users', 'worker_heartbeats')
       ORDER BY c.relname`);
     expect(owner.rows).toEqual(
-      ["agency_members", "tenant_scope_fixture"].map((table_name) => ({
+      [
+        "agency_members",
+        "companies",
+        "company_members",
+        "tenant_scope_fixture",
+      ].map((table_name) => ({
         table_name,
         table_owner: "anar_migrate",
         schema_owner: "anar_migrate",
@@ -214,6 +221,36 @@ describe("database roles and tenant transactions", () => {
         relforcerowsecurity: true,
       })),
     );
+    const companyGrants = await runtime.pool.query(`SELECT
+      has_table_privilege(current_user, 'public.companies', 'SELECT') AS select,
+      has_table_privilege(current_user, 'public.companies', 'INSERT') AS insert,
+      has_table_privilege(current_user, 'public.companies', 'UPDATE') AS update,
+      has_table_privilege(current_user, 'public.companies', 'DELETE') AS delete,
+      has_table_privilege(current_user, 'public.companies', 'TRUNCATE') AS truncate`);
+    expect(companyGrants.rows).toEqual([
+      {
+        select: true,
+        insert: true,
+        update: true,
+        delete: false,
+        truncate: false,
+      },
+    ]);
+    const memberGrants = await runtime.pool.query(`SELECT
+      has_table_privilege(current_user, 'public.company_members', 'SELECT') AS select,
+      has_table_privilege(current_user, 'public.company_members', 'INSERT') AS insert,
+      has_table_privilege(current_user, 'public.company_members', 'UPDATE') AS update,
+      has_table_privilege(current_user, 'public.company_members', 'DELETE') AS delete,
+      has_table_privilege(current_user, 'public.company_members', 'TRUNCATE') AS truncate`);
+    expect(memberGrants.rows).toEqual([
+      {
+        select: true,
+        insert: true,
+        update: true,
+        delete: false,
+        truncate: false,
+      },
+    ]);
   });
 
   it.each([
@@ -222,9 +259,15 @@ describe("database roles and tenant transactions", () => {
     "CREATE TEMP TABLE forbidden (id integer)",
     "CREATE DATABASE forbidden",
     "TRUNCATE public.tenant_scope_fixture",
+    "DELETE FROM public.companies",
+    "TRUNCATE public.companies",
+    "DELETE FROM public.company_members",
+    "TRUNCATE public.company_members",
     "SET ROLE anar_migrate",
     "SET ROLE postgres",
     "ALTER TABLE public.tenant_scope_fixture DISABLE ROW LEVEL SECURITY",
+    "ALTER TABLE public.companies DISABLE ROW LEVEL SECURITY",
+    "ALTER TABLE public.company_members DISABLE ROW LEVEL SECURITY",
   ])("denies runtime %s", async (query) => {
     await expect(runtime.pool.query(query)).rejects.toMatchObject({
       code: "42501",

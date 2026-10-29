@@ -12,6 +12,14 @@
       "types": "./dist/auth.d.ts",
       "default": "./dist/auth.js"
     },
+    "./companies": {
+      "types": "./dist/companies.d.ts",
+      "default": "./dist/companies.js"
+    },
+    "./members": {
+      "types": "./dist/members.d.ts",
+      "default": "./dist/members.js"
+    },
     "./http": {
       "types": "./dist/http.d.ts",
       "default": "./dist/http.js"

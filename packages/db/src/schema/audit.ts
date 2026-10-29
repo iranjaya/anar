@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   check,
+  foreignKey,
   index,
   jsonb,
   pgTable,
@@ -9,7 +10,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { agencies } from "./agencies.js";
-import { users } from "./platform.js";
+import { companies, users } from "./platform.js";
 
 export const auditLog = pgTable(
   "audit_log",
@@ -33,6 +34,10 @@ export const auditLog = pgTable(
       .defaultNow(),
   },
   (table) => [
+    foreignKey({
+      columns: [table.agencyId, table.companyId],
+      foreignColumns: [companies.agencyId, companies.id],
+    }).onDelete("restrict"),
     check(
       "audit_log_company_agency_check",
       sql`${table.companyId} IS NULL OR ${table.agencyId} IS NOT NULL`,

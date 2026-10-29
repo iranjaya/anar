@@ -49,6 +49,43 @@ CREATE TABLE "auth_rate_limits" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "companies" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"agency_id" uuid NOT NULL,
+	"name" text NOT NULL,
+	"slug" text NOT NULL,
+	"status" text NOT NULL,
+	"default_country" text NOT NULL,
+	"timezone" text NOT NULL,
+	"settings" jsonb DEFAULT '{"super_admin_can_import":false}'::jsonb NOT NULL,
+	"created_at" timestamp (3) with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp (3) with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "companies_slug_unique" UNIQUE("slug"),
+	CONSTRAINT "companies_agency_id_idx" UNIQUE("agency_id","id"),
+	CONSTRAINT "companies_status_check" CHECK ("companies"."status" IN ('active', 'suspended', 'closing')),
+	CONSTRAINT "companies_country_check" CHECK ("companies"."default_country" = 'NP'),
+	CONSTRAINT "companies_timezone_check" CHECK ("companies"."timezone" = 'Asia/Kathmandu')
+);
+--> statement-breakpoint
+ALTER TABLE "companies" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+CREATE TABLE "company_members" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"agency_id" uuid NOT NULL,
+	"company_id" uuid NOT NULL,
+	"user_id" uuid NOT NULL,
+	"name" text NOT NULL,
+	"role" text NOT NULL,
+	"status" text NOT NULL,
+	"deactivated_at" timestamp (3) with time zone,
+	"created_at" timestamp (3) with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp (3) with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "company_members_company_user_key" UNIQUE("company_id","user_id"),
+	CONSTRAINT "company_members_company_id_key" UNIQUE("company_id","id"),
+	CONSTRAINT "company_members_role_check" CHECK ("company_members"."role" IN ('super_admin', 'admin')),
+	CONSTRAINT "company_members_status_check" CHECK ("company_members"."status" IN ('invited', 'active', 'deactivated'))
+);
+--> statement-breakpoint
+ALTER TABLE "company_members" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "invites" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"agency_id" uuid NOT NULL,
@@ -61,9 +98,9 @@ CREATE TABLE "invites" (
 	"accepted_at" timestamp with time zone,
 	"revoked_at" timestamp with time zone,
 	"created_by" uuid NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"created_at" timestamp (3) with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "invites_token_hash_unique" UNIQUE("token_hash"),
-	CONSTRAINT "invites_target_check" CHECK ("invites"."role" = 'agency_staff' AND "invites"."company_id" IS NULL)
+	CONSTRAINT "invites_target_check" CHECK (("invites"."role" = 'agency_staff' AND "invites"."company_id" IS NULL) OR ("invites"."role" IN ('super_admin', 'admin') AND "invites"."company_id" IS NOT NULL))
 );
 --> statement-breakpoint
 CREATE TABLE "otp_codes" (
@@ -128,18 +165,29 @@ ALTER TABLE "agency_members" ADD CONSTRAINT "agency_members_user_id_users_id_fk"
 ALTER TABLE "agency_members" ADD CONSTRAINT "agency_members_invited_by_users_id_fk" FOREIGN KEY ("invited_by") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "audit_log" ADD CONSTRAINT "audit_log_agency_id_agencies_id_fk" FOREIGN KEY ("agency_id") REFERENCES "public"."agencies"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "audit_log" ADD CONSTRAINT "audit_log_actor_user_id_users_id_fk" FOREIGN KEY ("actor_user_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "audit_log" ADD CONSTRAINT "audit_log_agency_id_company_id_companies_agency_id_id_fk" FOREIGN KEY ("agency_id","company_id") REFERENCES "public"."companies"("agency_id","id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "companies" ADD CONSTRAINT "companies_agency_id_agencies_id_fk" FOREIGN KEY ("agency_id") REFERENCES "public"."agencies"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "company_members" ADD CONSTRAINT "company_members_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "company_members" ADD CONSTRAINT "company_members_agency_id_company_id_companies_agency_id_id_fk" FOREIGN KEY ("agency_id","company_id") REFERENCES "public"."companies"("agency_id","id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "invites" ADD CONSTRAINT "invites_agency_id_agencies_id_fk" FOREIGN KEY ("agency_id") REFERENCES "public"."agencies"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "invites" ADD CONSTRAINT "invites_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "invites" ADD CONSTRAINT "invites_agency_id_company_id_companies_agency_id_id_fk" FOREIGN KEY ("agency_id","company_id") REFERENCES "public"."companies"("agency_id","id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "otp_codes" ADD CONSTRAINT "otp_codes_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "otp_codes" ADD CONSTRAINT "otp_codes_session_id_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."sessions"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "sessions" ADD CONSTRAINT "sessions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "sessions" ADD CONSTRAINT "sessions_acting_company_id_companies_id_fk" FOREIGN KEY ("acting_company_id") REFERENCES "public"."companies"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "agencies_created_idx" ON "agencies" USING btree ("created_at","id");--> statement-breakpoint
 CREATE UNIQUE INDEX "agency_members_agency_id_idx" ON "agency_members" USING btree ("agency_id","id");--> statement-breakpoint
 CREATE INDEX "agency_members_agency_status_idx" ON "agency_members" USING btree ("agency_id","status");--> statement-breakpoint
+CREATE INDEX "agency_members_agency_created_idx" ON "agency_members" USING btree ("agency_id","created_at","id");--> statement-breakpoint
 CREATE INDEX "audit_log_agency_time_idx" ON "audit_log" USING btree ("agency_id","created_at","id");--> statement-breakpoint
 CREATE INDEX "audit_log_company_time_idx" ON "audit_log" USING btree ("company_id","created_at","id");--> statement-breakpoint
 CREATE INDEX "audit_log_actor_time_idx" ON "audit_log" USING btree ("actor_user_id","created_at","id");--> statement-breakpoint
-CREATE UNIQUE INDEX "invites_pending_staff_idx" ON "invites" USING btree ("agency_id","email") WHERE "invites"."accepted_at" IS NULL AND "invites"."revoked_at" IS NULL;--> statement-breakpoint
+CREATE INDEX "companies_agency_created_idx" ON "companies" USING btree ("agency_id","created_at","id");--> statement-breakpoint
+CREATE INDEX "company_members_user_idx" ON "company_members" USING btree ("user_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "invites_pending_staff_idx" ON "invites" USING btree ("agency_id","email") WHERE "invites"."role" = 'agency_staff' AND "invites"."accepted_at" IS NULL AND "invites"."revoked_at" IS NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "invites_pending_company_idx" ON "invites" USING btree ("company_id","email") WHERE "invites"."company_id" IS NOT NULL AND "invites"."accepted_at" IS NULL AND "invites"."revoked_at" IS NULL;--> statement-breakpoint
+CREATE INDEX "invites_agency_created_idx" ON "invites" USING btree ("agency_id","created_at","id");--> statement-breakpoint
 CREATE UNIQUE INDEX "otp_codes_live_user_idx" ON "otp_codes" USING btree ("user_id") WHERE "otp_codes"."consumed_at" IS NULL;--> statement-breakpoint
 CREATE INDEX "sessions_user_idx" ON "sessions" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "sessions_expiry_idx" ON "sessions" USING btree ("expires_at");--> statement-breakpoint
@@ -147,7 +195,35 @@ CREATE UNIQUE INDEX "users_single_owner_idx" ON "users" USING btree ((true)) WHE
 CREATE POLICY "agency_members_select" ON "agency_members" AS PERMISSIVE FOR SELECT TO "anar_app" USING ((current_setting('app.scope_kind', true) IN ('agency', 'company') AND "agency_members"."agency_id" = NULLIF(current_setting('app.agency_id', true), '')::uuid) OR (current_setting('app.scope_kind', true) = 'identity' AND "agency_members"."user_id" = NULLIF(current_setting('app.user_id', true), '')::uuid));--> statement-breakpoint
 CREATE POLICY "agency_members_insert" ON "agency_members" AS PERMISSIVE FOR INSERT TO "anar_app" WITH CHECK (current_setting('app.scope_kind', true) IN ('agency', 'company') AND "agency_members"."agency_id" = NULLIF(current_setting('app.agency_id', true), '')::uuid);--> statement-breakpoint
 CREATE POLICY "agency_members_update" ON "agency_members" AS PERMISSIVE FOR UPDATE TO "anar_app" USING (current_setting('app.scope_kind', true) IN ('agency', 'company') AND "agency_members"."agency_id" = NULLIF(current_setting('app.agency_id', true), '')::uuid) WITH CHECK (current_setting('app.scope_kind', true) IN ('agency', 'company') AND "agency_members"."agency_id" = NULLIF(current_setting('app.agency_id', true), '')::uuid);--> statement-breakpoint
-CREATE POLICY "agency_members_delete" ON "agency_members" AS PERMISSIVE FOR DELETE TO "anar_app" USING (current_setting('app.scope_kind', true) IN ('agency', 'company') AND "agency_members"."agency_id" = NULLIF(current_setting('app.agency_id', true), '')::uuid);
+CREATE POLICY "agency_members_delete" ON "agency_members" AS PERMISSIVE FOR DELETE TO "anar_app" USING (current_setting('app.scope_kind', true) IN ('agency', 'company') AND "agency_members"."agency_id" = NULLIF(current_setting('app.agency_id', true), '')::uuid);--> statement-breakpoint
+CREATE POLICY "companies_select" ON "companies" AS PERMISSIVE FOR SELECT TO "anar_app" USING ("companies"."agency_id" = NULLIF(current_setting('app.agency_id', true), '')::uuid AND (
+    current_setting('app.scope_kind', true) = 'agency' OR (
+      current_setting('app.scope_kind', true) = 'company' AND "companies"."id" = NULLIF(current_setting('app.company_id', true), '')::uuid
+    )));--> statement-breakpoint
+CREATE POLICY "companies_identity_select" ON "companies" AS PERMISSIVE FOR SELECT TO "anar_app" USING (current_setting('app.scope_kind', true) = 'identity' AND EXISTS (
+          SELECT 1 FROM public.company_members AS member
+          WHERE member.agency_id = "companies"."agency_id" AND member.company_id = "companies"."id"
+          AND member.user_id = NULLIF(current_setting('app.user_id', true), '')::uuid AND member.status = 'active'
+        ));--> statement-breakpoint
+CREATE POLICY "companies_insert" ON "companies" AS PERMISSIVE FOR INSERT TO "anar_app" WITH CHECK ("companies"."agency_id" = NULLIF(current_setting('app.agency_id', true), '')::uuid AND (
+    current_setting('app.scope_kind', true) = 'agency' OR (
+      current_setting('app.scope_kind', true) = 'company' AND "companies"."id" = NULLIF(current_setting('app.company_id', true), '')::uuid
+    )));--> statement-breakpoint
+CREATE POLICY "companies_update" ON "companies" AS PERMISSIVE FOR UPDATE TO "anar_app" USING ("companies"."agency_id" = NULLIF(current_setting('app.agency_id', true), '')::uuid AND (
+    current_setting('app.scope_kind', true) = 'agency' OR (
+      current_setting('app.scope_kind', true) = 'company' AND "companies"."id" = NULLIF(current_setting('app.company_id', true), '')::uuid
+    ))) WITH CHECK ("companies"."agency_id" = NULLIF(current_setting('app.agency_id', true), '')::uuid AND (
+    current_setting('app.scope_kind', true) = 'agency' OR (
+      current_setting('app.scope_kind', true) = 'company' AND "companies"."id" = NULLIF(current_setting('app.company_id', true), '')::uuid
+    )));--> statement-breakpoint
+CREATE POLICY "companies_delete" ON "companies" AS PERMISSIVE FOR DELETE TO "anar_app" USING ("companies"."agency_id" = NULLIF(current_setting('app.agency_id', true), '')::uuid AND (
+    current_setting('app.scope_kind', true) = 'agency' OR (
+      current_setting('app.scope_kind', true) = 'company' AND "companies"."id" = NULLIF(current_setting('app.company_id', true), '')::uuid
+    )));--> statement-breakpoint
+CREATE POLICY "company_members_select" ON "company_members" AS PERMISSIVE FOR SELECT TO "anar_app" USING ((current_setting('app.scope_kind', true) = 'company' AND "company_members"."agency_id" = NULLIF(current_setting('app.agency_id', true), '')::uuid AND "company_members"."company_id" = NULLIF(current_setting('app.company_id', true), '')::uuid) OR (current_setting('app.scope_kind', true) = 'identity' AND "company_members"."user_id" = NULLIF(current_setting('app.user_id', true), '')::uuid));--> statement-breakpoint
+CREATE POLICY "company_members_insert" ON "company_members" AS PERMISSIVE FOR INSERT TO "anar_app" WITH CHECK (current_setting('app.scope_kind', true) = 'company' AND "company_members"."agency_id" = NULLIF(current_setting('app.agency_id', true), '')::uuid AND "company_members"."company_id" = NULLIF(current_setting('app.company_id', true), '')::uuid);--> statement-breakpoint
+CREATE POLICY "company_members_update" ON "company_members" AS PERMISSIVE FOR UPDATE TO "anar_app" USING (current_setting('app.scope_kind', true) = 'company' AND "company_members"."agency_id" = NULLIF(current_setting('app.agency_id', true), '')::uuid AND "company_members"."company_id" = NULLIF(current_setting('app.company_id', true), '')::uuid) WITH CHECK (current_setting('app.scope_kind', true) = 'company' AND "company_members"."agency_id" = NULLIF(current_setting('app.agency_id', true), '')::uuid AND "company_members"."company_id" = NULLIF(current_setting('app.company_id', true), '')::uuid);--> statement-breakpoint
+CREATE POLICY "company_members_delete" ON "company_members" AS PERMISSIVE FOR DELETE TO "anar_app" USING (current_setting('app.scope_kind', true) = 'company' AND "company_members"."agency_id" = NULLIF(current_setting('app.agency_id', true), '')::uuid AND "company_members"."company_id" = NULLIF(current_setting('app.company_id', true), '')::uuid);
 --> statement-breakpoint
 REVOKE ALL ON TABLE public.users, public.otp_codes, public.auth_rate_limits, public.sessions, public.agencies, public.invites FROM PUBLIC, anar_app;
 --> statement-breakpoint
@@ -162,3 +238,15 @@ ALTER TABLE public.agency_members FORCE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE public.agency_members FROM PUBLIC, anar_app;
 --> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE ON TABLE public.agency_members TO anar_app;
+--> statement-breakpoint
+ALTER TABLE public.companies FORCE ROW LEVEL SECURITY;
+--> statement-breakpoint
+REVOKE ALL ON TABLE public.companies FROM PUBLIC, anar_app;
+--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE ON TABLE public.companies TO anar_app;
+--> statement-breakpoint
+ALTER TABLE public.company_members FORCE ROW LEVEL SECURITY;
+--> statement-breakpoint
+REVOKE ALL ON TABLE public.company_members FROM PUBLIC, anar_app;
+--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE ON TABLE public.company_members TO anar_app;

@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { emailSchema } from "./auth.js";
+import { permissionSchema } from "./context.js";
+
+export type { Permission } from "./context.js";
+
 import { wireDateSchema } from "./http.js";
+import type { Company } from "./tenant.js";
 
 const reservedSlugs = new Set([
   "owner",
@@ -84,3 +89,63 @@ export type CreateAgencyResult = z.infer<typeof createAgencyResultSchema>;
 export type AgencyListQuery = z.infer<typeof agencyListQuerySchema>;
 export type AgencyPage = { items: Agency[]; nextCursor: string | null };
 export type ResendFirstInviteInput = z.infer<typeof resendFirstInviteSchema>;
+
+export const agencyStaffViewSchema = agencyMemberSchema.extend({
+  name: z.string().trim().min(1).max(120),
+  email: emailSchema,
+});
+export type AgencyStaffView = AgencyMember & { name: string; email: string };
+export const agencyViewSchema = z.strictObject({
+  agency: agencySchema,
+  staff: agencyStaffViewSchema,
+  capabilities: z.array(permissionSchema),
+});
+export type AgencyView = {
+  agency: Agency;
+  staff: AgencyStaffView;
+  capabilities: z.infer<typeof permissionSchema>[];
+};
+export const agencyInviteViewSchema = z.strictObject({
+  id: z.uuid(),
+  email: emailSchema,
+  name: agencyStaffViewSchema.shape.name,
+  role: z.literal("agency_staff"),
+  expiresAt: wireDateSchema,
+  createdAt: wireDateSchema,
+});
+export type AgencyInviteView = Omit<
+  z.infer<typeof agencyInviteViewSchema>,
+  "expiresAt" | "createdAt"
+> & { expiresAt: Date; createdAt: Date };
+export const agencyStaffPageSchema = z.strictObject({
+  items: z.array(agencyStaffViewSchema),
+  nextCursor: z.string().nullable(),
+});
+export const agencyInvitePageSchema = z.strictObject({
+  items: z.array(agencyInviteViewSchema),
+  nextCursor: z.string().nullable(),
+});
+export type AgencyStaffPage = {
+  items: AgencyStaffView[];
+  nextCursor: string | null;
+};
+export type AgencyInvitePage = {
+  items: AgencyInviteView[];
+  nextCursor: string | null;
+};
+export const inviteStaffSchema = z.strictObject({
+  email: emailSchema,
+  name: agencyStaffViewSchema.shape.name,
+});
+export type InviteStaffInput = z.infer<typeof inviteStaffSchema>;
+
+export const agencyCompanySchema = z.strictObject({
+  id: z.uuid(),
+  agencyId: z.uuid(),
+  name: agencySchema.shape.name,
+  slug: slugSchema,
+  status: z.enum(["active", "suspended", "closing"]),
+  defaultCountry: z.literal("NP"),
+  timezone: z.literal("Asia/Kathmandu"),
+});
+export type AgencyCompany = Company & { agencyId: string };

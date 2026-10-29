@@ -1,6 +1,8 @@
 import { createDb, type DbHandle } from "./connection.js";
 import tenantScope from "./tenantScope.js";
 
+export { companyMembers } from "./schema/members.js";
+
 export type AgencyScope = { agencyId: string; userId: string };
 export type TenantScope = AgencyScope & { companyId: string };
 export type TenantTx = Parameters<

@@ -9,6 +9,25 @@ const agencyFields = {
   createdAt: agencies.createdAt,
 };
 const repository = {
+  async readActiveStaffAgency(
+    tx: PlatformTx,
+    agencyId: string,
+    userId: string,
+  ) {
+    const [agency] = await tx
+      .select({ name: agencies.name })
+      .from(agencies)
+      .innerJoin(agencyMembers, eq(agencyMembers.agencyId, agencies.id))
+      .where(
+        and(
+          eq(agencies.id, agencyId),
+          eq(agencies.status, "active"),
+          eq(agencyMembers.userId, userId),
+          eq(agencyMembers.status, "active"),
+        ),
+      );
+    return agency;
+  },
   async create(tx: PlatformTx, input: typeof agencies.$inferInsert) {
     const [agency] = await tx
       .insert(agencies)
@@ -78,6 +97,32 @@ const repository = {
       .from(agencyMembers)
       .where(eq(agencyMembers.userId, userId));
     return staff;
+  },
+
+  async listStaff(
+    tx: PlatformTx,
+    agencyId: string,
+    cursor?: { createdAt: Date; id: string },
+  ) {
+    return tx
+      .select()
+      .from(agencyMembers)
+      .where(
+        and(
+          eq(agencyMembers.agencyId, agencyId),
+          cursor
+            ? or(
+                lt(agencyMembers.createdAt, cursor.createdAt),
+                and(
+                  eq(agencyMembers.createdAt, cursor.createdAt),
+                  lt(agencyMembers.id, cursor.id),
+                ),
+              )
+            : undefined,
+        ),
+      )
+      .orderBy(desc(agencyMembers.createdAt), desc(agencyMembers.id))
+      .limit(51);
   },
 
   async lockStaff(tx: PlatformTx, agencyId: string, userId: string) {

@@ -2,17 +2,101 @@ import { sql } from "drizzle-orm";
 import {
   check,
   customType,
+  foreignKey,
   index,
+  jsonb,
+  pgPolicy,
   pgTable,
   smallint,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { agencies } from "./agencies.js";
 
 const citext = customType<{ data: string }>({ dataType: () => "citext" });
+
+export const companies = pgTable(
+  "companies",
+  {
+    id: uuid("id").primaryKey(),
+    agencyId: uuid("agency_id")
+      .notNull()
+      .references(() => agencies.id, { onDelete: "restrict" }),
+    name: text("name").notNull(),
+    slug: text("slug").notNull().unique(),
+    status: text("status")
+      .notNull()
+      .$type<"active" | "suspended" | "closing">(),
+    defaultCountry: text("default_country").notNull().$type<"NP">(),
+    timezone: text("timezone").notNull().$type<"Asia/Kathmandu">(),
+    settings: jsonb("settings")
+      .notNull()
+      .$type<{ super_admin_can_import: boolean }>()
+      .default({ super_admin_can_import: false }),
+    createdAt: timestamp("created_at", { withTimezone: true, precision: 3 })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, precision: 3 })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => {
+    const scope = sql`${table.agencyId} = NULLIF(current_setting('app.agency_id', true), '')::uuid AND (
+    current_setting('app.scope_kind', true) = 'agency' OR (
+      current_setting('app.scope_kind', true) = 'company' AND ${table.id} = NULLIF(current_setting('app.company_id', true), '')::uuid
+    ))`;
+    return [
+      check(
+        "companies_status_check",
+        sql`${table.status} IN ('active', 'suspended', 'closing')`,
+      ),
+      check("companies_country_check", sql`${table.defaultCountry} = 'NP'`),
+      check(
+        "companies_timezone_check",
+        sql`${table.timezone} = 'Asia/Kathmandu'`,
+      ),
+      unique("companies_agency_id_idx").on(table.agencyId, table.id),
+      index("companies_agency_created_idx").on(
+        table.agencyId,
+        table.createdAt,
+        table.id,
+      ),
+      pgPolicy("companies_select", {
+        for: "select",
+        to: "anar_app",
+        using: scope,
+      }),
+      pgPolicy("companies_identity_select", {
+        for: "select",
+        to: "anar_app",
+        using: sql`current_setting('app.scope_kind', true) = 'identity' AND EXISTS (
+          SELECT 1 FROM public.company_members AS member
+          WHERE member.agency_id = ${table.agencyId} AND member.company_id = ${table.id}
+          AND member.user_id = NULLIF(current_setting('app.user_id', true), '')::uuid AND member.status = 'active'
+        )`,
+      }),
+      pgPolicy("companies_insert", {
+        for: "insert",
+        to: "anar_app",
+        withCheck: scope,
+      }),
+      pgPolicy("companies_update", {
+        for: "update",
+        to: "anar_app",
+        using: scope,
+        withCheck: scope,
+      }),
+      pgPolicy("companies_delete", {
+        for: "delete",
+        to: "anar_app",
+        using: scope,
+      }),
+    ];
+  },
+).enableRLS();
 
 export const invites = pgTable(
   "invites",
@@ -24,7 +108,9 @@ export const invites = pgTable(
     companyId: uuid("company_id"),
     email: citext("email").notNull(),
     name: text("name").notNull(),
-    role: text("role").notNull().$type<"agency_staff">(),
+    role: text("role")
+      .notNull()
+      .$type<"agency_staff" | "super_admin" | "admin">(),
     tokenHash: text("token_hash").notNull().unique(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     acceptedAt: timestamp("accepted_at", { withTimezone: true }),
@@ -32,18 +118,34 @@ export const invites = pgTable(
     createdBy: uuid("created_by")
       .notNull()
       .references(() => users.id, { onDelete: "restrict" }),
-    createdAt: timestamp("created_at", { withTimezone: true })
+    createdAt: timestamp("created_at", { withTimezone: true, precision: 3 })
       .notNull()
       .defaultNow(),
   },
   (table) => [
     check(
       "invites_target_check",
-      sql`${table.role} = 'agency_staff' AND ${table.companyId} IS NULL`,
+      sql`(${table.role} = 'agency_staff' AND ${table.companyId} IS NULL) OR (${table.role} IN ('super_admin', 'admin') AND ${table.companyId} IS NOT NULL)`,
     ),
     uniqueIndex("invites_pending_staff_idx")
       .on(table.agencyId, table.email)
-      .where(sql`${table.acceptedAt} IS NULL AND ${table.revokedAt} IS NULL`),
+      .where(
+        sql`${table.role} = 'agency_staff' AND ${table.acceptedAt} IS NULL AND ${table.revokedAt} IS NULL`,
+      ),
+    uniqueIndex("invites_pending_company_idx")
+      .on(table.companyId, table.email)
+      .where(
+        sql`${table.companyId} IS NOT NULL AND ${table.acceptedAt} IS NULL AND ${table.revokedAt} IS NULL`,
+      ),
+    index("invites_agency_created_idx").on(
+      table.agencyId,
+      table.createdAt,
+      table.id,
+    ),
+    foreignKey({
+      columns: [table.agencyId, table.companyId],
+      foreignColumns: [companies.agencyId, companies.id],
+    }).onDelete("restrict"),
   ],
 );
 
@@ -85,7 +187,9 @@ export const sessions = pgTable(
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
     lastOtpAt: timestamp("last_otp_at", { withTimezone: true }).notNull(),
-    actingCompanyId: uuid("acting_company_id"),
+    actingCompanyId: uuid("acting_company_id").references(() => companies.id, {
+      onDelete: "restrict",
+    }),
     actingReason: text("acting_reason"),
     actingUntil: timestamp("acting_until", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })

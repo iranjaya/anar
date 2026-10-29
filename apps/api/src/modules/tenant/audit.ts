@@ -3,12 +3,24 @@ import type { AuthUser } from "@anar/domain/auth";
 import { v7 } from "uuid";
 
 type AuditEvents = {
+  "company.super_admin_invited": {
+    target: { type: "invite"; id: string };
+    data: { inviteId: string };
+  };
+  "company.created": {
+    target: { type: "company"; id: string };
+    data: { companyId: string };
+  };
   "auth.bootstrap_owner": {
     target: { type: "user"; id: string };
     data: { environment: string };
   };
   "agency.created": {
     target: { type: "agency"; id: string };
+    data: { inviteId: string };
+  };
+  "agency.first_invite_resent": {
+    target: { type: "invite"; id: string };
     data: { inviteId: string };
   };
   "agency.staff_accepted": {
@@ -22,7 +34,7 @@ export type AuditActor = {
   user: AuthUser;
   role: "owner" | "agency_staff";
   agencyId: string | null;
-  companyId: null;
+  companyId: string | null;
   ip: string | null;
 };
 
@@ -36,6 +48,7 @@ const audit = {
   ): Promise<void> {
     let payload: Record<string, string>;
     if ("environment" in data) payload = { environment: data.environment };
+    else if ("companyId" in data) payload = { companyId: data.companyId };
     else if ("inviterId" in data)
       payload = { inviteId: data.inviteId, inviterId: data.inviterId };
     else payload = { inviteId: data.inviteId };

@@ -87,6 +87,14 @@ const repository = {
     return user;
   },
 
+  async readProfiles(tx: PlatformTx, userIds: string[]) {
+    if (!userIds.length) return [];
+    return tx
+      .select({ id: users.id, name: users.name, email: users.email })
+      .from(users)
+      .where(inArray(users.id, userIds));
+  },
+
   async lockSession(tx: PlatformTx, userId: string, id: string) {
     const [session] = await tx
       .select()

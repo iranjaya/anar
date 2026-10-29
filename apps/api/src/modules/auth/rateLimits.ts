@@ -47,6 +47,20 @@ const rateLimits = {
     );
   },
 
+  resendInvite(
+    tx: PlatformTx,
+    inviteId: string,
+    pepper: KeyObject,
+    now: () => Date,
+  ): Promise<RateLimitResult> {
+    return rateLimits._take(
+      tx,
+      { scope: "invite.resend", value: inviteId, max: 3, windowMs: 10 * 60000 },
+      pepper,
+      now,
+    );
+  },
+
   async _take(
     tx: PlatformTx,
     limit: { scope: string; value: string; max: number; windowMs: number },

@@ -3,7 +3,10 @@ import { authEmailJobSchema } from "@anar/domain/auth";
 import type { createMailCodec } from "../../lib/email/crypto.js";
 import type { createEmailSender } from "../../lib/email/index.js";
 import type { QueueJob } from "../../lib/jobs/index.js";
-import invites, { type ReadInitialInviteAgency } from "./invites.js";
+import invites, {
+  type ReadCompanyInviteTarget,
+  type ReadInitialInviteAgency,
+} from "./invites.js";
 import repository from "./repository.js";
 
 export type OtpEmailDeps = {
@@ -12,6 +15,7 @@ export type OtpEmailDeps = {
   sendEmail: ReturnType<typeof createEmailSender>["sendEmail"];
   now(): Date;
   readInitialInviteAgency: ReadInitialInviteAgency;
+  readCompanyInviteTarget: ReadCompanyInviteTarget;
 };
 
 const emailJob = {
@@ -38,6 +42,7 @@ const emailJob = {
               payload.referenceId,
               deps.now(),
               deps.readInitialInviteAgency,
+              deps.readCompanyInviteTarget,
             );
           }
           const row = await repository.findDeliverableOtp(

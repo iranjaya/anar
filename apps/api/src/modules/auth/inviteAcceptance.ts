@@ -4,6 +4,7 @@ import {
   type invites as inviteTable,
   type PlatformDb,
   type PlatformTx,
+  withPlatformIdentity,
 } from "@anar/db/platform";
 import type { Agency, AgencyMember } from "@anar/domain/agencies";
 import {
@@ -37,6 +38,7 @@ export type InviteAcceptanceDeps = {
     ownerId: string,
   ): Promise<Agency | undefined>;
   hasStaffMembership(tx: PlatformTx, userId: string): Promise<boolean>;
+  hasCompanyMembership(tx: PlatformTx, userId: string): Promise<boolean>;
   activateInvitedStaff(
     tx: PlatformTx,
     input: { agencyId: string; userId: string; invitedBy: string; at: Date },
@@ -143,7 +145,10 @@ const inviteAcceptance = {
             user.email.toLowerCase() !== candidate.email.toLowerCase() ||
             user.platformRole !== null ||
             user.deactivatedAt !== null ||
-            (await deps.hasStaffMembership(tx, user.id))
+            (await deps.hasStaffMembership(tx, user.id)) ||
+            (await withPlatformIdentity(tx, user.id, (scoped) =>
+              deps.hasCompanyMembership(scoped, user.id),
+            ))
           ) {
             throw new AppError(
               "conflict",

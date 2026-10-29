@@ -1,4 +1,10 @@
 import { z } from "zod";
+
+export const inviteResultSchema = z.strictObject({ inviteId: z.uuid() });
+export const resendInviteSchema = z.strictObject({ inviteId: z.uuid() });
+export type InviteResult = z.infer<typeof inviteResultSchema>;
+export type ResendInviteInput = z.infer<typeof resendInviteSchema>;
+
 import { wireDateSchema } from "./http.js";
 import type { JobPayload } from "./jobs.js";
 

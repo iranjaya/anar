@@ -8,16 +8,17 @@ import {
   type AgencyListQuery,
   type AgencyMember,
   type AgencyPage,
-  agencyCursorSchema,
-  agencyListQuerySchema,
   type CreateAgencyInput,
   type CreateAgencyResult,
   createAgencySchema,
+  type ResendFirstInviteInput,
+  resendFirstInviteSchema,
 } from "@anar/domain/agencies";
 import { AppError } from "@anar/domain/errors";
 import type { FastifyRequest } from "fastify";
 import { v7 } from "uuid";
 import type { InviteService } from "../auth/invites.js";
+import type { RateLimitResult } from "../auth/rateLimits.js";
 import type {
   AuthSession,
   RequestMeta,
@@ -25,6 +26,7 @@ import type {
 } from "../auth/sessions.js";
 import audit from "../tenant/audit.js";
 import stepUp from "../tenant/stepUp.js";
+import pagination from "./pagination.js";
 import repository from "./repository.js";
 
 export type OwnerCtx = AuthSession & { role: "owner" };
@@ -37,6 +39,7 @@ export type AgencyCtx = AuthSession & {
 export type AgencyDeps = {
   sessions: Pick<SessionService, "requireSession" | "withPlatformSession">;
   createInitialInvite: InviteService["createInitialInvite"];
+  resendInitialInvite: InviteService["resendInitialInvite"];
   now(): Date;
 };
 export type AgencyService = {
@@ -47,6 +50,11 @@ export type AgencyService = {
     meta: RequestMeta,
   ): Promise<CreateAgencyResult>;
   listAgencies(actor: OwnerCtx, query: AgencyListQuery): Promise<AgencyPage>;
+  resendFirstInvite(
+    actor: OwnerCtx,
+    input: ResendFirstInviteInput,
+    meta: RequestMeta,
+  ): Promise<RateLimitResult>;
 };
 
 const agencies = {
@@ -99,28 +107,46 @@ const agencies = {
         });
       },
 
-      async listAgencies(actor, query) {
-        const parsed = agencyListQuerySchema.safeParse(query);
+      async resendFirstInvite(actor, input, meta) {
+        const parsed = resendFirstInviteSchema.safeParse(input);
         if (!parsed.success)
-          throw new AppError("validation", "Invalid agency cursor");
-        const cursor = parsed.data.cursor
-          ? agencies._cursor(parsed.data.cursor)
-          : undefined;
+          throw new AppError("validation", "A valid agency is required");
+        return deps.sessions.withPlatformSession(actor, async (tx, current) => {
+          const owner = agencies._owner(current);
+          stepUp.requireFreshOtp(owner, deps.now());
+          const agency = await agencies.lockInitialInviteAgency(
+            tx,
+            parsed.data.agencyId,
+            owner.user.id,
+          );
+          if (!agency)
+            throw new AppError("not_found", "Invitation is unavailable");
+          const result = await deps.resendInitialInvite(tx, owner, agency);
+          const { inviteId, allowed, retryAfter } = result;
+          if (!allowed) return { allowed, retryAfter };
+          await audit.audit(
+            tx,
+            {
+              user: owner.user,
+              role: "owner",
+              agencyId: agency.id,
+              companyId: null,
+              ip: meta.ip,
+            },
+            "agency.first_invite_resent",
+            { type: "invite", id: inviteId },
+            { inviteId },
+          );
+          return { allowed, retryAfter };
+        });
+      },
+
+      async listAgencies(actor, query) {
+        const cursor = pagination.cursor(query);
         return deps.sessions.withPlatformSession(actor, async (tx, current) => {
           agencies._owner(current);
           const rows = await repository.list(tx, cursor);
-          const items = rows.slice(0, 50);
-          const last = items.at(-1);
-          const nextCursor =
-            rows.length > 50 && last
-              ? Buffer.from(
-                  JSON.stringify({
-                    createdAt: last.createdAt.toISOString(),
-                    id: last.id,
-                  }),
-                ).toString("base64url")
-              : null;
-          return { items, nextCursor };
+          return pagination.page(rows);
         });
       },
     };
@@ -128,6 +154,11 @@ const agencies = {
 
   readInitialInviteAgency(tx: PlatformTx, agencyId: string, ownerId: string) {
     return repository.readInitialInviteAgency(tx, agencyId, ownerId);
+  },
+  readActiveStaffAgency(tx: PlatformTx, agencyId: string, userId: string) {
+    return withPlatformAgency(tx, { agencyId, userId }, (scoped) =>
+      repository.readActiveStaffAgency(scoped, agencyId, userId),
+    );
   },
 
   async lockInitialInviteAgency(
@@ -188,17 +219,6 @@ const agencies = {
     if (actor.user.platformRole !== "owner")
       throw new AppError("forbidden", "Owner access is required");
     return { ...actor, role: "owner" };
-  },
-
-  _cursor(encoded: string): { createdAt: Date; id: string } {
-    try {
-      const cursor = agencyCursorSchema.parse(
-        JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")),
-      );
-      return { createdAt: new Date(cursor.createdAt), id: cursor.id };
-    } catch {
-      throw new AppError("validation", "Invalid agency cursor");
-    }
   },
 };
 

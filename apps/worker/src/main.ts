@@ -4,6 +4,7 @@ import {
   emailJob,
   type JobRegistration,
   loadMailKey,
+  readCompanyInviteTarget,
   readInitialInviteAgency,
   registerJobs,
 } from "@anar/api/jobs";
@@ -38,6 +39,7 @@ export async function startWorker(
       sendEmail: createEmailSender().sendEmail,
       now: () => new Date(),
       readInitialInviteAgency,
+      readCompanyInviteTarget,
     });
     jobs = [delivery.job];
     closeEmail = delivery.close;

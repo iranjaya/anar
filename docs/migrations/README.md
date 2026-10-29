@@ -16,7 +16,7 @@ Generation does not connect to Postgres. Prepend `packages/db/initial-sql/before
 and append `packages/db/initial-sql/after.sql`, separated from generated DDL by
 `--> statement-breakpoint`. These files hold reviewed custom SQL: create `citext`
 before its tables; grant users, OTP, limits, sessions,
-agencies, invites and agency members only SELECT/INSERT/UPDATE; grant audit only SELECT/INSERT.
+agencies, invites, agency members, companies and company members only SELECT/INSERT/UPDATE; grant audit only SELECT/INSERT.
 Revoke PUBLIC access. Preserve any future reviewed RLS policies and grants too.
 `roles.sql` must keep restrictions after repeated bootstrap. Queue setup and its
 restricted grants remain in `queueSetup.ts`; this squash does not change them.
@@ -25,8 +25,8 @@ Current schema checks, indexes and foreign keys come from Drizzle. The old
 legacy-role conversion preflight is unnecessary on a fresh empty database;
 the initial owner-only role check and singleton owner index enforce its invariants.
 The eight original tables remain explicit platform exceptions. `agency_members`
-is tenant-scoped: its schema generates scope policies and enables RLS; custom SQL
-forces RLS and limits runtime grants. Tenant-table coverage excludes only the
+and `companies` and `company_members` are tenant-scoped: their schemas generate scope policies and enable
+RLS; custom SQL forces RLS and limits runtime grants. Tenant-table coverage excludes only the
 explicit platform list and requires RLS and FORCE RLS on every remaining table.
 
 `pnpm check:migrations` checks the working tree, accepts a regenerated initial

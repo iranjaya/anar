@@ -5,7 +5,13 @@ import tenantScope from "./tenantScope.js";
 export { agencies, agencyMembers } from "./schema/agencies.js";
 export { auditLog } from "./schema/audit.js";
 export { authRateLimits } from "./schema/authLimits.js";
-export { invites, otpCodes, sessions, users } from "./schema/platform.js";
+export {
+  companies,
+  invites,
+  otpCodes,
+  sessions,
+  users,
+} from "./schema/platform.js";
 export type { AgencyScope, TenantScope } from "./tenant.js";
 
 export type PlatformTx = TenantTx;

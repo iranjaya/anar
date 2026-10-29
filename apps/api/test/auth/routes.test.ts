@@ -30,6 +30,7 @@ function agencyFixture() {
       throw new Error("Unexpected agency creation");
     }),
     listAgencies: vi.fn(async () => ({ items: [], nextCursor: null })),
+    resendFirstInvite: vi.fn(async () => ({ allowed: true, retryAfter: 0 })),
   };
 }
 
@@ -42,6 +43,34 @@ function inviteFixture() {
     acceptInvite: vi.fn(async (): Promise<never> => {
       throw new Error("Unexpected invite acceptance");
     }),
+  };
+}
+
+function staffFixture() {
+  return {
+    requireAgencyContext: vi.fn(async (): Promise<never> => {
+      throw new Error("Unexpected agency context");
+    }),
+    getAgency: vi.fn(async (): Promise<never> => {
+      throw new Error("Unexpected agency lookup");
+    }),
+    listStaff: vi.fn(async () => ({ items: [], nextCursor: null })),
+    listStaffInvites: vi.fn(async () => ({ items: [], nextCursor: null })),
+  };
+}
+
+function companyFixture() {
+  return {
+    inviteSuperAdmin: vi.fn(async (): Promise<never> => {
+      throw new Error("Unexpected company invitation");
+    }),
+    requireAgencyContext: vi.fn(async (): Promise<never> => {
+      throw new Error("Unexpected company context");
+    }),
+    createCompany: vi.fn(async (): Promise<never> => {
+      throw new Error("Unexpected company creation");
+    }),
+    listCompanies: vi.fn(async () => ({ items: [], nextCursor: null })),
   };
 }
 
@@ -72,6 +101,8 @@ describe("auth HTTP guards", () => {
       sessions: { ...sessionFixture(), refreshSession },
       stepUp: stepUpFixture(),
       agencies: agencyFixture(),
+      staff: staffFixture(),
+      companies: companyFixture(),
       invites: inviteFixture(),
       requireOrigin: originGuard("https://anar.example.test"),
       trustProxy: false,
@@ -113,6 +144,8 @@ describe("auth HTTP guards", () => {
       },
       stepUp: stepUpFixture(),
       agencies: agencyFixture(),
+      staff: staffFixture(),
+      companies: companyFixture(),
       invites: inviteFixture(),
       requireOrigin: originGuard("https://anar.example.test"),
       trustProxy: false,

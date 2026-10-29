@@ -1,6 +1,5 @@
 import { sessions, users } from "@anar/db/platform";
 import { eq, sql } from "drizzle-orm";
-import { v7 } from "uuid";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { type AuthFixture, startAuthFixture } from "./fixture.js";
 
@@ -40,11 +39,12 @@ describe("session refresh on Postgres", () => {
     async (elapsed) => {
       const issued = await fixture.login();
       const actingUntil = new Date(fixture.now().getTime() + 8 * 3600000);
+      const company = await fixture.seedCompany(issued.user.id);
       await fixture.db.transaction((tx) =>
         tx
           .update(sessions)
           .set({
-            actingCompanyId: v7(),
+            actingCompanyId: company.id,
             actingReason: "Proof support entry",
             actingUntil,
           })
