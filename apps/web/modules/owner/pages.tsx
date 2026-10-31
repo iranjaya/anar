@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PageShell } from "@/components/PageShell";
+import { LogoutButton } from "@/modules/auth/components";
 import { getOwnerReadiness, listAgencies } from "./server";
 import { CreateAgencyForm } from "./ui/CreateAgencyForm";
 import { ResendFirstInvite } from "./ui/ResendFirstInvite";
@@ -22,12 +23,15 @@ export async function AgenciesPage({
             Create agencies and invite their first staff member.
           </p>
         </div>
-        <Link
-          href="/account/sessions"
-          className="inline-flex min-h-11 items-center text-sm font-semibold text-brand underline underline-offset-4"
-        >
-          Your devices
-        </Link>
+        <div className="flex flex-wrap items-center gap-4">
+          <Link
+            href="/account/sessions"
+            className="inline-flex min-h-11 items-center text-sm font-semibold text-brand underline underline-offset-4"
+          >
+            Your devices
+          </Link>
+          <LogoutButton />
+        </div>
       </header>
       {!readiness.enabled && (
         <p

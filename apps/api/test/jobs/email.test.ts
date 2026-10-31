@@ -25,6 +25,7 @@ describe("Resend HTTP transport", () => {
     ...loadEmailConfig({
       EMAIL_TRANSPORT: "resend",
       EMAIL_FROM: "sender@example.test",
+      EMAIL_REPLY_TO: "support@example.test",
       RESEND_API_KEY: "fake-test-key",
     }),
     url,
@@ -79,6 +80,7 @@ describe("Resend HTTP transport", () => {
         subject: message.subject,
         text: message.text,
         html: message.html,
+        reply_to: "support@example.test",
       });
     }
   });

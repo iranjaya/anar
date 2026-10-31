@@ -1,5 +1,6 @@
 import type { AgencyView } from "@anar/domain/agencies";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { PageShell } from "@/components/PageShell";
 import type { ActionResult } from "@/lib/errors";
@@ -17,6 +18,8 @@ export function AgencyFrame({
   readiness: { enabled: boolean; message: string };
   children: ReactNode;
 }) {
+  if (result && !result.ok && result.error === "unauthorized")
+    redirect("/login");
   return (
     <PageShell wide>
       <header className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">

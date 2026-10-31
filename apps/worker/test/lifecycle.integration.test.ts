@@ -93,11 +93,8 @@ describe("DB-backed worker lifecycle", () => {
     },
   );
 
-  it("keeps the DB-backed worker running while the API restarts", async () => {
-    const worker = launch(workerEntry);
-    await expect
-      .poll(async () => (await beats()).rowCount, { timeout: 8000 })
-      .toBe(1);
+  const apiEntry = new URL("../../api/dist/main.js", import.meta.url);
+  async function freePort() {
     const socket = createServer();
     await new Promise<void>((resolve) =>
       socket.listen(0, "127.0.0.1", resolve),
@@ -105,16 +102,36 @@ describe("DB-backed worker lifecycle", () => {
     const address = socket.address();
     if (!address || typeof address === "string")
       throw new Error("Expected a free API port");
-    const port = address.port;
     await new Promise<void>((resolve, reject) =>
       socket.close((error) => (error ? reject(error) : resolve())),
     );
-    expect(port).not.toBeOneOf([3000, 3001, 3100]);
+    expect(address.port).not.toBeOneOf([3000, 3001, 3100]);
+    return address.port;
+  }
+  async function health(port: number) {
+    const response = await fetch(`http://127.0.0.1:${port}/api/health`, {
+      signal: AbortSignal.timeout(4000),
+      headers: { connection: "close" },
+    });
+    return { status: response.status, body: await response.json() };
+  }
+  function beatMinutesAgo(minutes: number) {
+    return fixture.owner.query(
+      `insert into worker_heartbeats (worker_id, started_at, last_seen_at)
+        values ('health-check', now(), now() - make_interval(mins => $1))
+        on conflict (worker_id) do update set last_seen_at = excluded.last_seen_at`,
+      [minutes],
+    );
+  }
+
+  it("keeps the DB-backed worker running while the API restarts", async () => {
+    const worker = launch(workerEntry);
+    await expect
+      .poll(async () => (await beats()).rowCount, { timeout: 8000 })
+      .toBe(1);
+    const port = await freePort();
     for (let restart = 0; restart < 2; restart++) {
-      const api = launch(
-        new URL("../../api/dist/main.js", import.meta.url),
-        port,
-      );
+      const api = launch(apiEntry, port);
       await expect
         .poll(
           async () => {
@@ -137,6 +154,59 @@ describe("DB-backed worker lifecycle", () => {
     }
     worker.child.kill("SIGTERM");
     await waitForExit(worker);
+  });
+
+  it("returns 503 for an old heartbeat, a failed queue query or a refused database and recovers", async () => {
+    const port = await freePort();
+    const api = launch(apiEntry, port);
+    const expectHealth = (status: number, body: object) =>
+      expect
+        .poll(() => health(port).catch(() => null), { timeout: 10000 })
+        .toMatchObject({ status, body });
+    try {
+      await beatMinutesAgo(0);
+      await expectHealth(200, {
+        status: "ok",
+        db: "ok",
+        worker: { healthy: true },
+        queue: { waiting: 0, active: 0, failed: 0 },
+      });
+
+      await beatMinutesAgo(6);
+      await expectHealth(503, {
+        status: "degraded",
+        db: "ok",
+        worker: { healthy: false },
+      });
+      expect((await health(port)).body.worker.lastSeenAt).not.toBeNull();
+      await beatMinutesAgo(0);
+      await expectHealth(200, { status: "ok" });
+
+      await fixture.admin.query("revoke select on pgboss.job from anar_app");
+      await expectHealth(503, { status: "degraded", db: "ok", queue: null });
+      await fixture.admin.query("grant select on pgboss.job to anar_app");
+      await expectHealth(200, { status: "ok" });
+
+      await fixture.admin.query("alter role anar_app nologin");
+      await fixture.admin.query(
+        `select pg_terminate_backend(pid) from pg_stat_activity
+          where usename = 'anar_app' and application_name <> 's12b-observer'`,
+      );
+      await expectHealth(503, {
+        status: "degraded",
+        db: "down",
+        worker: { lastSeenAt: null, healthy: false },
+        queue: null,
+      });
+      await fixture.admin.query("alter role anar_app login");
+      await expectHealth(200, { status: "ok", db: "ok" });
+    } finally {
+      await fixture.admin.query("alter role anar_app login");
+      await fixture.admin.query("grant select on pgboss.job to anar_app");
+    }
+    api.child.kill("SIGTERM");
+    expect(await api.closed).toEqual([0, null]);
+    expect(api.stderr()).toMatch(/^(Database connection failed.*\n)*$/);
   });
 
   it.each(["adminUrl", "migrationUrl"] as const)(

@@ -1,3 +1,5 @@
+import { AppError } from "@/lib/errors";
+
 export function dataMode(
   env: Record<string, string | undefined> = process.env,
 ): "real" | "demo" {
@@ -19,5 +21,6 @@ export function authEnabled() {
 }
 
 export function requireDemoMode() {
-  if (dataMode() !== "demo") throw new Error("Demo access is disabled");
+  if (dataMode() !== "demo")
+    throw new AppError("forbidden", "This is not available yet.");
 }

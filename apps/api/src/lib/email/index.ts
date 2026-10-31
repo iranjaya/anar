@@ -29,6 +29,7 @@ export function createEmailSender(config: EmailConfig = loadEmailConfig()) {
             Text: message.text,
             HTML: message.html,
             Headers: { "X-Anar-Delivery-Key": input.deliveryKey },
+            ...(config.replyTo && { ReplyTo: [{ Email: config.replyTo }] }),
           };
         } else {
           url = config.url ?? "https://api.resend.com/emails";
@@ -40,6 +41,7 @@ export function createEmailSender(config: EmailConfig = loadEmailConfig()) {
             subject: message.subject,
             text: message.text,
             html: message.html,
+            ...(config.replyTo && { reply_to: config.replyTo }),
           };
         }
         const timeout = AbortSignal.timeout(10000);

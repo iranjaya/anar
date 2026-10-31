@@ -1,5 +1,5 @@
 import "server-only";
-import { inviteResultSchema } from "@anar/domain/auth";
+import { inviteResultSchema, okSchema } from "@anar/domain/auth";
 import {
   companyListQuerySchema,
   companyPageSchema,
@@ -7,16 +7,14 @@ import {
   type CreateCompanyInput,
   createCompanyResultSchema,
   createCompanySchema,
+  type EnterCompanyInput,
+  enterCompanySchema,
   type InviteSuperAdminInput,
   inviteSuperAdminSchema,
 } from "@anar/domain/companies";
 import { apiDateSchema, apiRequest } from "@/lib/api/client";
 import { authEnabled } from "@/lib/api/mode";
 import { AppError, actionFailure } from "@/lib/errors";
-import {
-  requestFreshCode as requestCode,
-  verifyFreshCode as verifyCode,
-} from "@/modules/auth/server";
 
 export { listCompanies } from "./data/companies";
 export { enterCompany } from "./data/companies";
@@ -89,11 +87,21 @@ export async function inviteSuperAdmin(input: InviteSuperAdminInput) {
   );
 }
 
-export async function requestFreshCode() {
+export async function enterAgencyCompany(input: EnterCompanyInput) {
   requireReady();
-  return requestCode();
+  const parsed = enterCompanySchema.safeParse(input);
+  if (!parsed.success)
+    throw new AppError("validation", "Give a reason of at least 5 characters.");
+  return apiRequest(
+    { path: "/api/companies/enterCompany", method: "POST", body: parsed.data },
+    okSchema,
+  );
 }
-export async function verifyFreshCode(code: string) {
+
+export async function leaveAgencyCompany() {
   requireReady();
-  return verifyCode(code);
+  return apiRequest(
+    { path: "/api/companies/leaveCompany", method: "POST", body: {} },
+    okSchema,
+  );
 }

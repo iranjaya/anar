@@ -138,6 +138,8 @@ export const inviteStaffSchema = z.strictObject({
   name: agencyStaffViewSchema.shape.name,
 });
 export type InviteStaffInput = z.infer<typeof inviteStaffSchema>;
+export const deactivateStaffSchema = z.strictObject({ staffId: z.uuid() });
+export type DeactivateStaffInput = z.infer<typeof deactivateStaffSchema>;
 
 export const agencyCompanySchema = z.strictObject({
   id: z.uuid(),

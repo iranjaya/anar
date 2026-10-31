@@ -78,6 +78,70 @@ export async function createQueueRuntime(
   };
 }
 
+export type QueueHealth = {
+  db: "ok" | "down";
+  lastSeenAt: Date | null;
+  workerHealthy: boolean;
+  queue: { waiting: number; active: number; failed: number } | null;
+};
+export type HealthProbe = {
+  read(): Promise<QueueHealth>;
+  close(): Promise<void>;
+};
+
+export function createHealthProbe(connectionString: string): HealthProbe {
+  const handle = createDb(connectionString);
+  handle.pool.options.max = 2;
+  handle.pool.options.idleTimeoutMillis = 1000;
+  handle.pool.options.connectionTimeoutMillis = 2000;
+  handle.pool.options.statement_timeout = 2000;
+  handle.pool.options.query_timeout = 3000;
+  return {
+    close: handle.close,
+    async read() {
+      let beat: { last_seen_at: Date | null; healthy: boolean } | undefined;
+      try {
+        beat = (
+          await handle.db.execute<{
+            last_seen_at: Date | null;
+            healthy: boolean;
+          }>(sql`select max(last_seen_at) as last_seen_at,
+            coalesce(max(last_seen_at) > now() - interval '5 minutes', false) as healthy
+            from public.worker_heartbeats`)
+        ).rows[0];
+      } catch {
+        return {
+          db: "down",
+          lastSeenAt: null,
+          workerHealthy: false,
+          queue: null,
+        };
+      }
+      let queue: QueueHealth["queue"] = null;
+      try {
+        queue =
+          (
+            await handle.db.execute<{
+              waiting: number;
+              active: number;
+              failed: number;
+            }>(sql`select
+              count(*) filter (where state in ('created', 'retry'))::int as waiting,
+              count(*) filter (where state = 'active')::int as active,
+              count(*) filter (where state = 'failed')::int as failed
+              from pgboss.job`)
+          ).rows[0] ?? null;
+      } catch {}
+      return {
+        db: "ok",
+        lastSeenAt: beat?.last_seen_at ? new Date(beat.last_seen_at) : null,
+        workerHealthy: beat?.healthy ?? false,
+        queue,
+      };
+    },
+  };
+}
+
 export async function publish(
   tx: QueueTx,
   name: string,

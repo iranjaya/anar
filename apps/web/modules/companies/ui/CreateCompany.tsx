@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { FreshCodeForm } from "@/modules/auth/components";
-import { companyFreshCodeAction, createCompanyAction } from "../actions";
+import { createCompanyAction } from "../actions";
 import { InviteSuperAdmin } from "./InviteSuperAdmin";
 
 export function CreateCompany({
@@ -100,10 +100,7 @@ export function CreateCompany({
         </button>
       </form>
       {state && !state.ok && state.error === "step_up_required" && (
-        <FreshCodeForm
-          enabled={enabled && !pending}
-          submit={companyFreshCodeAction}
-        />
+        <FreshCodeForm enabled={enabled && !pending} />
       )}
     </section>
   );

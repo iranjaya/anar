@@ -23,10 +23,13 @@ import routes from "./modules/auth/routes.js";
 import companyRoutes, {
   type CompanyRouteOptions,
 } from "./modules/companies/routes.js";
+import memberRoutes, {
+  type MemberRouteOptions,
+} from "./modules/members/routes.js";
 import contextRoutes, {
   type ContextRouteOptions,
 } from "./modules/tenant/routes.js";
-import healthRoutes from "./routes/health.js";
+import healthRoutes, { type HealthRouteOptions } from "./routes/health.js";
 
 export type AppDeps = AuthRouteOptions &
   DiscoveryRouteOptions &
@@ -38,7 +41,9 @@ export type AppDeps = AuthRouteOptions &
   AgencyRouteOptions &
   StaffRouteOptions &
   CompanyRouteOptions &
-  InviteRouteOptions & {
+  MemberRouteOptions &
+  InviteRouteOptions &
+  HealthRouteOptions & {
     trustProxy: false | string[];
     logging?: boolean;
   };
@@ -51,7 +56,7 @@ export function buildApp(deps?: AppDeps): FastifyInstance {
     logger: deps?.logging ? safeLogger : false,
   });
   registerHttp(app);
-  app.register(healthRoutes);
+  app.register(healthRoutes, { health: deps?.health });
   if (deps) {
     app.register(discoveryRoutes.register, { discovery: deps.discovery });
     app.register(contextRoutes.register, { context: deps.context });
@@ -59,7 +64,14 @@ export function buildApp(deps?: AppDeps): FastifyInstance {
       companies: deps.companies,
       requireOrigin: deps.requireOrigin,
     });
-    app.register(staffRoutes.register, { staff: deps.staff });
+    app.register(memberRoutes.register, {
+      members: deps.members,
+      requireOrigin: deps.requireOrigin,
+    });
+    app.register(staffRoutes.register, {
+      staff: deps.staff,
+      requireOrigin: deps.requireOrigin,
+    });
     app.register(inviteRoutes.register, {
       invites: deps.invites,
       requireOrigin: deps.requireOrigin,

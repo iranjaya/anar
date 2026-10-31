@@ -135,8 +135,17 @@ describe("current agency and own staff lists", () => {
       "updatedAt",
       "userId",
     ]);
-    expect(view.capabilities).toContain("agency.staff.list");
-    expect(view.capabilities).not.toContain("agency.create");
+    expect(view.capabilities).toEqual([
+      "agency.staff.list",
+      "agency.staff.invite",
+      "agency.staff.resend",
+      "agency.staff.deactivate",
+      "company.create",
+      "company.list",
+      "company.enter",
+      "members.invite_super_admin",
+      "sessions.manage_own",
+    ]);
     expect(response.body).not.toContain(a.token);
     expect(response.body).not.toContain("tokenHash");
     expect(response.body).not.toContain("createdBy");
@@ -351,9 +360,17 @@ describe("current agency and own staff lists", () => {
     "denies a cached context after %s access changes",
     async (kind) => {
       const { a } = await setup();
-      const service = staff.create(
-        context.create({ db: fixture.db, sessions: fixture.apps[0].sessions }),
-      );
+      const service = staff.create({
+        context: context.create({
+          db: fixture.db,
+          sessions: fixture.apps[0].sessions,
+        }),
+        now: fixture.now,
+        createStaffInvite: fixture.invitations.createStaffInvite,
+        resendStaffInvite: fixture.invitations.resendStaffInvite,
+        revokeIssuerInvites: fixture.invitations.revokeIssuerInvites,
+        revokeAllSessions: fixture.apps[0].sessions.revokeAllSessions,
+      });
       const actor = await service.requireAgencyContext({
         headers: { cookie: a.cookie },
       });

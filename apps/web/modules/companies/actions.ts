@@ -3,15 +3,16 @@
 import type { InviteResult } from "@anar/domain/auth";
 import type { CreateCompanyResult } from "@anar/domain/companies";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
-import { type ActionResult, AppError, actionFailure } from "@/lib/errors";
+import { type ActionResult, actionFailure } from "@/lib/errors";
 import {
   createCompany,
+  enterAgencyCompany,
   enterCompany,
   inviteSuperAdmin,
+  leaveAgencyCompany,
   leaveCompany,
-  requestFreshCode,
-  verifyFreshCode,
 } from "./server";
 
 export async function createCompanyAction(
@@ -50,25 +51,6 @@ export async function inviteSuperAdminAction(
   }
 }
 
-export async function companyFreshCodeAction(
-  _previous: ActionResult<{ verified: boolean }> | null,
-  form: FormData,
-): Promise<ActionResult<{ verified: boolean }>> {
-  try {
-    const intent = form.get("intent");
-    if (intent === "request") {
-      await requestFreshCode();
-      return { ok: true, data: { verified: false } };
-    }
-    if (intent !== "verify")
-      throw new AppError("validation", "Choose a code action.");
-    await verifyFreshCode(String(form.get("code") ?? ""));
-    return { ok: true, data: { verified: true } };
-  } catch (error) {
-    return actionFailure(error);
-  }
-}
-
 export async function enterCompanyAction(input: {
   companyId: string;
 }): Promise<ActionResult<{ redirectTo: string }>> {
@@ -94,4 +76,32 @@ export async function leaveCompanyAction(): Promise<
   } catch (error) {
     return actionFailure(error);
   }
+}
+
+export async function enterAgencyCompanyAction(
+  target: { companyId: string; slug: string },
+  _previous: ActionResult<{ ok: true }> | null,
+  form: FormData,
+): Promise<ActionResult<{ ok: true }>> {
+  try {
+    await enterAgencyCompany({
+      companyId: target.companyId,
+      reason: String(form.get("reason") ?? ""),
+    });
+  } catch (error) {
+    return actionFailure(error);
+  }
+  redirect(`/${target.slug}`);
+}
+
+export async function leaveAgencyCompanyAction(
+  _previous: ActionResult<{ ok: true }> | null,
+  _form: FormData,
+): Promise<ActionResult<{ ok: true }>> {
+  try {
+    await leaveAgencyCompany();
+  } catch (error) {
+    return actionFailure(error);
+  }
+  redirect("/agency/companies");
 }

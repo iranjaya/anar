@@ -1,5 +1,5 @@
 import { companyMembers, type TenantTx } from "@anar/db/tenant";
-import { and, count, eq, type SQL, sql } from "drizzle-orm";
+import { and, asc, count, eq, type SQL, sql } from "drizzle-orm";
 
 const repository = {
   ownActiveCompanyIds(tx: TenantTx, userId: string): SQL {
@@ -63,6 +63,48 @@ const repository = {
         ),
       );
     return member;
+  },
+  async read(tx: TenantTx, companyId: string, memberId: string, lock = false) {
+    const query = tx
+      .select()
+      .from(companyMembers)
+      .where(
+        and(
+          eq(companyMembers.companyId, companyId),
+          eq(companyMembers.id, memberId),
+        ),
+      );
+    const [member] = await (lock ? query.for("update") : query);
+    return member;
+  },
+  async activeSuperAdminUserIds(
+    tx: TenantTx,
+    companyId: string,
+  ): Promise<string[]> {
+    const rows = await tx
+      .select({ userId: companyMembers.userId })
+      .from(companyMembers)
+      .where(
+        and(
+          eq(companyMembers.companyId, companyId),
+          eq(companyMembers.role, "super_admin"),
+          eq(companyMembers.status, "active"),
+        ),
+      );
+    return rows.map((row) => row.userId);
+  },
+  async deactivate(tx: TenantTx, memberId: string, at: Date) {
+    await tx
+      .update(companyMembers)
+      .set({ status: "deactivated", deactivatedAt: at, updatedAt: at })
+      .where(eq(companyMembers.id, memberId));
+  },
+  listCompany(tx: TenantTx, companyId: string) {
+    return tx
+      .select()
+      .from(companyMembers)
+      .where(eq(companyMembers.companyId, companyId))
+      .orderBy(asc(companyMembers.createdAt), asc(companyMembers.id));
   },
   async countActive(tx: TenantTx, companyId: string): Promise<number> {
     const [row] = await tx

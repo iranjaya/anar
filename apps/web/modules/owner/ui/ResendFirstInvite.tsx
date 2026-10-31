@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { FreshCodeForm } from "@/modules/auth/components";
 import { resendFirstInviteAction } from "../actions";
 
 export function ResendFirstInvite({
@@ -15,24 +16,29 @@ export function ResendFirstInvite({
     null,
   );
   return (
-    <form action={action} aria-busy={pending} className="space-y-2">
-      <button
-        type="submit"
-        disabled={!enabled || pending}
-        className="min-h-11 w-full rounded-lg border border-line-strong px-3 text-sm font-semibold text-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-50 lg:w-auto"
-      >
-        {pending ? "Sending…" : "Resend first invite"}
-      </button>
-      {state && !state.ok && (
-        <p role="alert" className="text-sm text-overdue">
-          {state.message}
-        </p>
+    <div className="min-w-0">
+      <form action={action} aria-busy={pending} className="space-y-2">
+        <button
+          type="submit"
+          disabled={!enabled || pending}
+          className="min-h-11 w-full rounded-lg border border-line-strong px-3 text-sm font-semibold text-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-50 lg:w-auto"
+        >
+          {pending ? "Sending…" : "Resend first invite"}
+        </button>
+        {state && !state.ok && (
+          <p role="alert" className="text-sm text-overdue">
+            {state.message}
+          </p>
+        )}
+        {state?.ok && (
+          <p role="status" className="text-sm text-brand">
+            Invitation queued.
+          </p>
+        )}
+      </form>
+      {state && !state.ok && state.error === "step_up_required" && (
+        <FreshCodeForm enabled={enabled && !pending} />
       )}
-      {state?.ok && (
-        <p role="status" className="text-sm text-brand">
-          Invitation queued.
-        </p>
-      )}
-    </form>
+    </div>
   );
 }

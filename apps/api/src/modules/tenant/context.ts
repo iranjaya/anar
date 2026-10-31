@@ -23,6 +23,7 @@ export type Ctx = AuthSession & {
   agency: Agency;
   companyId: string;
   company: AgencyCompany;
+  superAdminCanImport: boolean;
 } & (
     | { role: "agency_staff"; member: null }
     | { role: "super_admin" | "admin"; member: CompanyMember }
@@ -57,7 +58,10 @@ export type ContextDeps = {
     tx: PlatformTx,
     agencyId: string,
     companyId: string,
-  ): Promise<AgencyCompany | undefined>;
+  ): Promise<
+    | (AgencyCompany & { settings: { super_admin_can_import: boolean } })
+    | undefined
+  >;
   readActiveMember(
     tx: PlatformTx,
     companyId: string,
@@ -97,7 +101,7 @@ const context = {
             );
             if (!company)
               throw new AppError("not_found", "Company is unavailable");
-            throw new AppError("forbidden", "Company entry is required");
+            return context._entered(deps, tx, current, staff, company.id);
           }
           const [found] = await withPlatformIdentity(
             tx,
@@ -132,8 +136,18 @@ const context = {
             affectedUserIds,
           );
           context._denyOwner(current);
-          if (await deps.readStaffMembership(tx, current.user.id))
-            throw new AppError("forbidden", "Company entry is required");
+          const staff = await deps.readStaffMembership(tx, current.user.id);
+          if (staff) {
+            if (
+              actor.role !== "agency_staff" ||
+              staff.agencyId !== actor.agencyId
+            )
+              throw new AppError("forbidden", "Company entry is required");
+            return fn(
+              tx,
+              await context._entered(deps, tx, current, staff, actor.companyId),
+            );
+          }
           const resolved = await context._lockCompany(deps, tx, current, {
             id: actor.companyId,
             agencyId: actor.agencyId,
@@ -145,6 +159,44 @@ const context = {
         return views.context(actor);
       },
     };
+  },
+  async _entered(
+    deps: ContextDeps,
+    tx: PlatformTx,
+    actor: AuthSession,
+    staff: AgencyMember,
+    companyId: string,
+  ): Promise<Ctx> {
+    const { actingActive, actingCompanyId } = actor.session;
+    if (staff.status !== "active")
+      throw new AppError("forbidden", "Agency staff access is unavailable");
+    if (!actingActive || actingCompanyId !== companyId)
+      throw new AppError("forbidden", "Company entry is required");
+    const agency = await deps.readActiveAgency(tx, staff.agencyId, true);
+    if (!agency)
+      throw new AppError("forbidden", "Agency staff access is unavailable");
+    return withPlatformTenant(
+      tx,
+      { agencyId: agency.id, companyId, userId: actor.user.id },
+      async (scoped) => {
+        const company = await deps.lockActiveCompany(
+          scoped,
+          agency.id,
+          companyId,
+        );
+        if (!company) throw new AppError("not_found", "Company is unavailable");
+        return {
+          ...actor,
+          agencyId: agency.id,
+          agency,
+          companyId: company.id,
+          company,
+          superAdminCanImport: company.settings.super_admin_can_import,
+          role: "agency_staff",
+          member: null,
+        };
+      },
+    );
   },
   _denyOwner(actor: AuthSession): void {
     if (actor.user.platformRole !== null)
@@ -181,6 +233,7 @@ const context = {
           agency,
           companyId: company.id,
           company,
+          superAdminCanImport: company.settings.super_admin_can_import,
           member,
           role: member.role,
         };

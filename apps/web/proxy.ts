@@ -5,6 +5,10 @@ import { dataMode } from "./lib/api/mode";
 export function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const real = dataMode() === "real";
+  const [, slug, ...rest] = path.split("/");
+  const companyRoute =
+    slugSchema.safeParse(slug).success &&
+    (rest.length === 0 || rest.join("/") === "settings/team");
   const realRoute =
     [
       "/",
@@ -19,7 +23,7 @@ export function proxy(request: NextRequest) {
       "/agency/staff",
       "/agency/invites",
       "/agency/companies",
-    ].includes(path) || slugSchema.safeParse(path.slice(1)).success;
+    ].includes(path) || companyRoute;
   if (real && !realRoute) return new NextResponse(null, { status: 404 });
   const authScreen =
     real ||

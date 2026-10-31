@@ -18,3 +18,4 @@ You got this email because someone signed in as you asked to confirm a
 sensitive action in Anar.
 Anar is a lead tracker for sales teams.
 Trouble with the code? Ask the person who invited you.
+Need help? Reply to this email.

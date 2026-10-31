@@ -90,6 +90,7 @@ export async function requireDemoContext(): Promise<Ctx> {
 }
 
 export async function verifyContext(ctx: Ctx): Promise<Ctx> {
+  requireDemoMode();
   const data = await store();
   const company = data.companies.find(
     (company) => company.id === ctx.companyId,

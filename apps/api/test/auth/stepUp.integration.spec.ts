@@ -23,6 +23,16 @@ describe("session-bound step-up on Postgres", () => {
     expect(response.headers["set-cookie"]).toBeUndefined();
     return response;
   }
+  async function refused(cookie: string, index = 0) {
+    const response = await fixture.post("requestStepUp", {}, { cookie, index });
+    expect(response.statusCode).toBe(429);
+    expect(response.json()).toEqual({
+      ok: false,
+      error: "validation",
+      message: "Too many codes were sent. Wait a few minutes and try again.",
+    });
+    return response;
+  }
   async function pending() {
     const own = await fixture.login();
     fixture.advance(900001);
@@ -272,7 +282,7 @@ describe("session-bound step-up on Postgres", () => {
     await request(own.cookie, 1);
     const before = await fixture.challenges(own.user.id);
     const jobs = await fixture.jobs();
-    await request(own.cookie);
+    await refused(own.cookie);
     expect(
       (
         await fixture.post(
@@ -332,7 +342,7 @@ describe("session-bound step-up on Postgres", () => {
       ).toBe(200);
     }
     const before = await fixture.challenges(own.user.id);
-    await request(own.cookie);
+    await refused(own.cookie);
     expect(await fixture.challenges(own.user.id)).toEqual(before);
     expect(
       (await fixture.limits()).find((row) => row.scope === "otp.ip")?.hits,

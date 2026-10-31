@@ -6,6 +6,7 @@ import type { QueueJob } from "../../lib/jobs/index.js";
 import invites, {
   type ReadCompanyInviteTarget,
   type ReadInitialInviteAgency,
+  type ReadStaffInviteAgency,
 } from "./invites.js";
 import repository from "./repository.js";
 
@@ -15,6 +16,7 @@ export type OtpEmailDeps = {
   sendEmail: ReturnType<typeof createEmailSender>["sendEmail"];
   now(): Date;
   readInitialInviteAgency: ReadInitialInviteAgency;
+  readStaffInviteAgency: ReadStaffInviteAgency;
   readCompanyInviteTarget: ReadCompanyInviteTarget;
 };
 
@@ -42,6 +44,7 @@ const emailJob = {
               payload.referenceId,
               deps.now(),
               deps.readInitialInviteAgency,
+              deps.readStaffInviteAgency,
               deps.readCompanyInviteTarget,
             );
           }

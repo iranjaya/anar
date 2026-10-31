@@ -35,7 +35,7 @@ function contextFixture() {
 
 function stepUpFixture() {
   return {
-    requestStepUp: vi.fn(async () => ({ ok: true as const })),
+    requestStepUp: vi.fn(async () => ({ sent: true })),
     stepUp: vi.fn(async () => ({ ok: true as const })),
   };
 }
@@ -75,6 +75,35 @@ function staffFixture() {
     }),
     listStaff: vi.fn(async () => ({ items: [], nextCursor: null })),
     listStaffInvites: vi.fn(async () => ({ items: [], nextCursor: null })),
+    inviteStaff: vi.fn(async (): Promise<never> => {
+      throw new Error("Unexpected staff invite");
+    }),
+    resendStaffInvite: vi.fn(async (): Promise<never> => {
+      throw new Error("Unexpected staff invite resend");
+    }),
+    deactivateStaff: vi.fn(async (): Promise<never> => {
+      throw new Error("Unexpected staff removal");
+    }),
+  };
+}
+
+function memberFixture() {
+  return {
+    requireContext: vi.fn(async (): Promise<never> => {
+      throw new Error("Unexpected member context");
+    }),
+    listMembers: vi.fn(async () => []),
+    listInvites: vi.fn(async () => []),
+    listAgencyEntries: vi.fn(async () => []),
+    inviteAdmin: vi.fn(async (): Promise<never> => {
+      throw new Error("Unexpected Admin invite");
+    }),
+    resendInvite: vi.fn(async (): Promise<never> => {
+      throw new Error("Unexpected invite resend");
+    }),
+    deactivateMember: vi.fn(async (): Promise<never> => {
+      throw new Error("Unexpected member removal");
+    }),
   };
 }
 
@@ -90,6 +119,12 @@ function companyFixture() {
       throw new Error("Unexpected company creation");
     }),
     listCompanies: vi.fn(async () => ({ items: [], nextCursor: null })),
+    enterCompany: vi.fn(async (): Promise<never> => {
+      throw new Error("Unexpected company entry");
+    }),
+    leaveCompany: vi.fn(async (): Promise<never> => {
+      throw new Error("Unexpected company leave");
+    }),
   };
 }
 
@@ -123,6 +158,7 @@ describe("auth HTTP guards", () => {
       agencies: agencyFixture(),
       staff: staffFixture(),
       companies: companyFixture(),
+      members: memberFixture(),
       invites: inviteFixture(),
       requireOrigin: originGuard("https://anar.example.test"),
       trustProxy: false,
@@ -167,6 +203,7 @@ describe("auth HTTP guards", () => {
       agencies: agencyFixture(),
       staff: staffFixture(),
       companies: companyFixture(),
+      members: memberFixture(),
       invites: inviteFixture(),
       requireOrigin: originGuard("https://anar.example.test"),
       trustProxy: false,

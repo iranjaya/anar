@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { dataMode } from "@/lib/api/mode";
 import type { ActionResult } from "@/lib/errors";
-import { CompanyAccessFrame } from "@/modules/auth/pages";
+import { RealCompanyShell } from "./RealCompanyShell";
 
 export async function CompanyShell(props: {
   children: ReactNode;
@@ -13,8 +13,6 @@ export async function CompanyShell(props: {
     return <DemoCompanyShell {...props} />;
   }
   return (
-    <CompanyAccessFrame params={props.params}>
-      {props.children}
-    </CompanyAccessFrame>
+    <RealCompanyShell params={props.params}>{props.children}</RealCompanyShell>
   );
 }

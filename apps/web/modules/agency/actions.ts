@@ -2,13 +2,8 @@
 
 import type { InviteResult } from "@anar/domain/auth";
 import { revalidatePath } from "next/cache";
-import { type ActionResult, AppError, actionFailure } from "@/lib/errors";
-import {
-  inviteStaff,
-  requestFreshCode,
-  resendStaffInvite,
-  verifyFreshCode,
-} from "./server";
+import { type ActionResult, actionFailure } from "@/lib/errors";
+import { deactivateStaff, inviteStaff, resendStaffInvite } from "./server";
 
 export async function inviteStaffAction(
   _previous: ActionResult<InviteResult> | null,
@@ -40,20 +35,15 @@ export async function resendStaffInviteAction(
   }
 }
 
-export async function freshCodeAction(
-  _previous: ActionResult<{ verified: boolean }> | null,
-  form: FormData,
-): Promise<ActionResult<{ verified: boolean }>> {
+export async function deactivateStaffAction(
+  staffId: string,
+  _previous: ActionResult<{ ok: true }> | null,
+  _form: FormData,
+): Promise<ActionResult<{ ok: true }>> {
   try {
-    const intent = form.get("intent");
-    if (intent === "request") {
-      await requestFreshCode();
-      return { ok: true, data: { verified: false } };
-    }
-    if (intent !== "verify")
-      throw new AppError("validation", "Choose a code action.");
-    await verifyFreshCode(String(form.get("code") ?? ""));
-    return { ok: true, data: { verified: true } };
+    const data = await deactivateStaff({ staffId });
+    revalidatePath("/agency/staff");
+    return { ok: true, data };
   } catch (error) {
     return actionFailure(error);
   }

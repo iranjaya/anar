@@ -70,6 +70,15 @@ const context = {
       ): Promise<T> {
         return context._withContext(deps, actor, affectedUserIds, { run: fn });
       },
+      async withSession<T>(
+        request: Pick<FastifyRequest, "headers">,
+        fn: (tx: PlatformTx, current: AuthSession) => Promise<T>,
+      ): Promise<T> {
+        const actor = await deps.sessions.requireSession(request);
+        return deps.db.transaction(async (tx) =>
+          fn(tx, await deps.sessions.lockSessionActor(tx, actor)),
+        );
+      },
       withAgencyCompany<T>(
         actor: AgencyCtx,
         companyId: string,

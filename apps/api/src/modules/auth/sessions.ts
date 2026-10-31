@@ -21,6 +21,7 @@ export type SessionState = {
   actingCompanyId: string | null;
   actingReason: string | null;
   actingUntil: Date | null;
+  actingActive: boolean;
 };
 export type RequestMeta = { ip: string; userAgent?: string };
 export type AuthSession = { user: AuthUser; session: SessionState };
@@ -155,9 +156,8 @@ const sessions = {
         });
       },
 
-      async revokeAllSessions(tx, userId) {
-        await repository.lockUser(tx, userId);
-        await repository.revokeAllSessions(tx, userId, deps.now());
+      revokeAllSessions(tx, userId) {
+        return sessions.revokeAll(tx, userId, deps.now());
       },
 
       async logout(request) {
@@ -210,6 +210,19 @@ const sessions = {
     return service;
   },
 
+  async revokeAll(tx: PlatformTx, userId: string, at: Date): Promise<void> {
+    await repository.lockUser(tx, userId);
+    await repository.revokeAllSessions(tx, userId, at);
+  },
+
+  setActing(
+    tx: PlatformTx,
+    session: { id: string; userId: string },
+    acting: { companyId: string; reason: string; until: Date } | null,
+  ): Promise<void> {
+    return repository.setActing(tx, session.userId, session.id, acting);
+  },
+
   _expiresAt(at: Date): Date {
     return new Date(
       Math.floor(at.getTime() / 1000) * 1000 + 30 * 24 * 60 * 60 * 1000,
@@ -242,6 +255,9 @@ const sessions = {
         actingCompanyId: session.actingCompanyId,
         actingReason: session.actingReason,
         actingUntil: session.actingUntil,
+        actingActive:
+          session.actingUntil !== null &&
+          at.getTime() < session.actingUntil.getTime(),
       },
     };
   },

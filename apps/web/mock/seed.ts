@@ -23,7 +23,8 @@ export function buildSeed(now: Date): MockStore {
   const today = startOfDay(localNow).getTime();
   const at = (days: number, hours = 10) =>
     new Date(today + days * day + hours * hour);
-  const ago = (hours: number) => new Date(now.getTime() - hours * hour);
+  const step = Math.min(hour, (now.getTime() - today) / 4);
+  const ago = (hours: number) => new Date(now.getTime() - hours * step);
   const morning = new Date(Math.min(today + 8 * hour, now.getTime()));
   let randomState = 20261028;
   const random = () => {

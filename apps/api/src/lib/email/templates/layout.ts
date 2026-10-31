@@ -50,6 +50,7 @@ const layout = {
       input.footer.reason,
       input.footer.operator,
       input.footer.contact,
+      "Need help? Reply to this email.",
     ];
     const header =
       table('width="100%"') +

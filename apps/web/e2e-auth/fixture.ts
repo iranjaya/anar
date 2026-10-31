@@ -1,14 +1,60 @@
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import path from "node:path";
 import { createInterface } from "node:readline";
-import { test as base, expect } from "@playwright/test";
+import { promisify } from "node:util";
+import {
+  type Browser,
+  test as base,
+  expect,
+  type Page,
+  type TestInfo,
+} from "@playwright/test";
 
 type Message = { ID: string; To: { Address: string }[]; Text: string };
-type AuthStack = { baseURL: string; mailURL: string };
+type AuthStack = { baseURL: string; mailURL: string; project: string };
 export const staffEmail = "staff@browser.example.test";
+
+async function docker(...args: string[]) {
+  return (
+    await promisify(execFile)("docker", args, { timeout: 60000 })
+  ).stdout.trim();
+}
+
+export async function stackContainer(stack: AuthStack, service: string) {
+  if (!/^anar-browser-[0-9a-f-]{36}$/.test(stack.project))
+    throw new Error("Expected the disposable browser stack");
+  const id = await docker(
+    "ps",
+    "-aq",
+    "--filter",
+    `label=com.docker.compose.project=${stack.project}`,
+    "--filter",
+    `label=com.docker.compose.service=${service}`,
+  );
+  if (!id) throw new Error(`Missing ${service} container`);
+  return id;
+}
+
+// Each test starts with empty rate limits, so one test's sign-ins cannot use up another test's codes.
+export async function resetRateLimits(stack: AuthStack) {
+  await docker(
+    "exec",
+    await stackContainer(stack, "db"),
+    "psql",
+    "-U",
+    "postgres",
+    "-d",
+    "anar",
+    "-v",
+    "ON_ERROR_STOP=1",
+    "-qc",
+    "delete from auth_rate_limits",
+  );
+}
 
 export const test = base.extend<
   {
+    rateLimits: undefined;
     mailbox: {
       ids(): Promise<string[]>;
       code(email: string, before: string[]): Promise<string>;
@@ -62,6 +108,13 @@ export const test = base.extend<
       }
     },
     { scope: "worker", timeout: 300000 },
+  ],
+  rateLimits: [
+    async ({ stack }, use) => {
+      await resetRateLimits(stack);
+      await use(undefined);
+    },
+    { auto: true },
   ],
   baseURL: async ({ stack }, use) => {
     await use(stack.baseURL);
@@ -119,3 +172,36 @@ export const test = base.extend<
   },
 });
 export { expect };
+
+export type Mailbox = {
+  ids(): Promise<string[]>;
+  code(email: string, before: string[]): Promise<string>;
+};
+
+export async function signIn(page: Page, mailbox: Mailbox, email: string) {
+  await page.goto("/login");
+  await page.getByLabel("Email address").fill(email);
+  const before = await mailbox.ids();
+  await page.getByRole("button", { name: "Send code", exact: true }).click();
+  await expect(page).toHaveURL(/\/login\/code$/);
+  await page
+    .getByLabel("Six-digit code")
+    .fill(await mailbox.code(email, before));
+  await page.getByRole("button", { name: "Verify and sign in" }).click();
+  await expect(page).not.toHaveURL(/\/login/);
+}
+
+export async function newPage(
+  browser: Browser,
+  baseURL: string,
+  testInfo: TestInfo,
+) {
+  const { viewport, isMobile, hasTouch } = testInfo.project.use;
+  const context = await browser.newContext({
+    baseURL,
+    viewport,
+    isMobile,
+    hasTouch,
+  });
+  return context.newPage();
+}

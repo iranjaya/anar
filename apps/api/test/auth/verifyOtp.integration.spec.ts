@@ -81,6 +81,7 @@ describe("OTP verification on Postgres", () => {
           "actingCompanyId",
           "actingReason",
           "actingUntil",
+          "actingActive",
         ].sort(),
       );
       expect(JSON.stringify(current)).not.toContain(token);

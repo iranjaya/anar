@@ -6,6 +6,7 @@ import {
   loadMailKey,
   readCompanyInviteTarget,
   readInitialInviteAgency,
+  readStaffInviteAgency,
   registerJobs,
 } from "@anar/api/jobs";
 import { createQueueRuntime } from "@anar/db/queue";
@@ -39,6 +40,7 @@ export async function startWorker(
       sendEmail: createEmailSender().sendEmail,
       now: () => new Date(),
       readInitialInviteAgency,
+      readStaffInviteAgency,
       readCompanyInviteTarget,
     });
     jobs = [delivery.job];

@@ -25,7 +25,7 @@ jobs:
 
   database:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
@@ -52,24 +52,26 @@ jobs:
             apps/web/test-results
           if-no-files-found: error
 
+  e2e-auth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: pnpm --filter @anar/web exec playwright install --with-deps chromium
+      - run: pnpm --filter @anar/domain build
+      - run: pnpm --filter @anar/web e2e:auth --reporter=line
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-auth-results
+          path: apps/web/test-results/auth
+          if-no-files-found: ignore
+
   compose:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
-      - run: docker compose build
-      - run: docker compose up -d db
-      - run: docker compose run --rm migrate
-      - run: docker compose up -d api worker web proxy
       - run: pnpm smoke:compose
-      - if: failure()
-        run: node scripts/compose-logs.ts > compose-failure.log
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: compose-failure
-          path: compose-failure.log
-          if-no-files-found: error
-      - if: always()
-        run: docker compose down

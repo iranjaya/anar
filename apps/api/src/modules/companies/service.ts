@@ -6,6 +6,8 @@ import {
   type CreateCompanyInput,
   type CreateCompanyResult,
   createCompanySchema,
+  type EnterCompanyInput,
+  enterCompanySchema,
   type InviteSuperAdminInput,
   inviteSuperAdminSchema,
 } from "@anar/domain/companies";
@@ -14,11 +16,12 @@ import type { FastifyRequest } from "fastify";
 import { v7 } from "uuid";
 import type context from "../agencies/context.js";
 import pagination from "../agencies/pagination.js";
-import type { AgencyCtx } from "../agencies/service.js";
+import agencies, { type AgencyCtx } from "../agencies/service.js";
 import type { InviteService } from "../auth/invites.js";
-import type { RequestMeta } from "../auth/sessions.js";
+import sessions, { type RequestMeta } from "../auth/sessions.js";
 import members from "../members/service.js";
 import audit from "../tenant/audit.js";
+import permissions from "../tenant/permissions.js";
 import stepUp from "../tenant/stepUp.js";
 import inviteTargets from "./inviteTargets.js";
 import repository, { type WorkspaceSelection } from "./repository.js";
@@ -46,7 +49,17 @@ export type CompanyService = {
     actor: AgencyCtx,
     query: CompanyListQuery,
   ): Promise<CompanyPage>;
+  enterCompany(
+    actor: AgencyCtx,
+    input: EnterCompanyInput,
+    meta: RequestMeta,
+  ): Promise<void>;
+  leaveCompany(
+    request: Pick<FastifyRequest, "headers">,
+    meta: RequestMeta,
+  ): Promise<void>;
 };
+const actingHours = 8;
 const companies = {
   discoverWorkspaces(
     tx: PlatformTx,
@@ -72,13 +85,21 @@ const companies = {
           parsed.data.companyId,
           companies.lockActiveCompany,
           async (tx, current, company) => {
+            permissions.require(current, "members.invite_super_admin", {
+              agencyId: company.agencyId,
+              companyId: company.id,
+            });
             stepUp.requireFreshOtp(current, deps.now());
             const result = await deps.createCompanyInvite(
               tx,
               current,
               current.agency,
               company,
-              parsed.data,
+              {
+                email: parsed.data.email,
+                name: parsed.data.name,
+                role: "super_admin",
+              },
             );
             await audit.audit(
               tx,
@@ -113,6 +134,7 @@ const companies = {
           throw new AppError("validation", "Check the company details");
         }
         return deps.context.withAgencyContext(actor, async (tx, current) => {
+          permissions.require(current, "company.create");
           const at = deps.now();
           stepUp.requireFreshOtp(current, at);
           const company = await repository.create(tx, {
@@ -145,6 +167,7 @@ const companies = {
       listCompanies(actor, query) {
         const cursor = pagination.cursor(query);
         return deps.context.withAgencyContext(actor, async (tx, current) => {
+          permissions.require(current, "company.list");
           const page = pagination.page(
             await repository.listSummaries(tx, current.agencyId, cursor),
           );
@@ -165,6 +188,70 @@ const companies = {
             items,
             nextCursor: page.nextCursor,
           };
+        });
+      },
+      async enterCompany(actor, input, meta) {
+        const parsed = enterCompanySchema.safeParse(input);
+        if (!parsed.success)
+          throw new AppError(
+            "validation",
+            "Give a reason of at least 5 characters",
+          );
+        const { companyId, reason } = parsed.data;
+        return deps.context.withAgencyCompany(
+          actor,
+          companyId,
+          companies.lockActiveCompany,
+          async (tx, current, company) => {
+            permissions.require(current, "company.enter", {
+              agencyId: company.agencyId,
+              companyId: company.id,
+            });
+            const until = new Date(
+              deps.now().getTime() + actingHours * 3600000,
+            );
+            await sessions.setActing(tx, current.session, {
+              companyId: company.id,
+              reason,
+              until,
+            });
+            await audit.audit(
+              tx,
+              {
+                user: current.user,
+                role: current.role,
+                agencyId: current.agencyId,
+                companyId: company.id,
+                ip: meta.ip,
+              },
+              "agency.enter_company",
+              { type: "company", id: company.id },
+              { companyId: company.id, reason },
+            );
+          },
+        );
+      },
+      async leaveCompany(request, meta) {
+        await deps.context.withSession(request, async (tx, current) => {
+          if (current.user.platformRole !== null)
+            throw new AppError("forbidden", "Agency staff access is required");
+          const companyId = current.session.actingCompanyId;
+          if (companyId === null) return;
+          await sessions.setActing(tx, current.session, null);
+          const staff = await agencies.readStaffMembership(tx, current.user.id);
+          await audit.audit(
+            tx,
+            {
+              user: current.user,
+              role: "agency_staff",
+              agencyId: staff?.agencyId ?? null,
+              companyId: staff ? companyId : null,
+              ip: meta.ip,
+            },
+            "agency.leave_company",
+            { type: "company", id: companyId },
+            { companyId },
+          );
         });
       },
     };

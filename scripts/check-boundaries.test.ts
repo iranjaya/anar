@@ -313,6 +313,20 @@ for (const source of [
   });
 }
 
+for (const file of [
+  "apps/api/src/modules/leads/probe.ts",
+  "apps/api/test/members/probe.ts",
+]) {
+  test(`denies platform access from ${file}`, () => {
+    assert.ok(
+      restrictedDbFixture(
+        file,
+        'import type { PlatformTx } from "@anar/db/platform";',
+      ).some((error) => error.includes("Platform DB is restricted")),
+    );
+  });
+}
+
 test("denies the worker platform access", () => {
   assert.ok(
     restrictedDbFixture(

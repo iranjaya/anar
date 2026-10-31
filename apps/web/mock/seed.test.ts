@@ -116,4 +116,17 @@ describe("seed", () => {
       );
     }
   });
+
+  it("keeps today's calls inside today just after midnight", () => {
+    const now = new Date("2026-10-31T00:19:00+05:45");
+    const midnight = new Date("2026-10-31T00:00:00+05:45");
+    const seed = buildSeed(now);
+    const calls = seed.followUps.filter(
+      (call) =>
+        call.byMemberId === "sundar-heights-sunaina" &&
+        call.happenedAt >= midnight,
+    );
+    expect(calls).toHaveLength(3);
+    for (const call of calls) expect(call.happenedAt <= now).toBe(true);
+  });
 });

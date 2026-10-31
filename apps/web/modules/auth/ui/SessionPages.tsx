@@ -1,24 +1,9 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
-import type { ReactNode } from "react";
+import { redirect } from "next/navigation";
 import { PageShell } from "@/components/PageShell";
-import { getCompanyContext } from "@/modules/tenant/server";
+import { ReadError } from "@/components/ReadError";
 import { getSession, listWorkspaces } from "../server";
 import { LogoutButton } from "./LogoutButton";
-
-function ReadError({ message, href }: { message: string; href: string }) {
-  return (
-    <div role="alert" className="rounded-2xl border border-line bg-surface p-6">
-      <p className="text-overdue">{message}</p>
-      <a
-        href={href}
-        className="mt-3 inline-flex min-h-11 items-center font-semibold text-brand underline underline-offset-4"
-      >
-        Try again
-      </a>
-    </div>
-  );
-}
 
 async function readSession() {
   const result = await getSession();
@@ -159,72 +144,5 @@ export async function AccountPage() {
       </p>
       <AccountLinks />
     </>
-  );
-}
-
-export async function CompanyAccessFrame({
-  children,
-  params,
-}: {
-  children: ReactNode;
-  params: Promise<{ slug: string }>;
-}) {
-  const { slug } = await params;
-  const result = await getCompanyContext(slug);
-  if (!result || (!result.ok && result.error === "unauthorized"))
-    redirect("/login");
-  if (!result.ok) {
-    if (result.error === "not_found" || result.error === "forbidden")
-      notFound();
-    return (
-      <PageShell>
-        <ReadError message={result.message} href={`/${slug}`} />
-      </PageShell>
-    );
-  }
-  return (
-    <PageShell wide>
-      <AccountLinks />
-      <header className="mb-6">
-        <p className="text-sm font-semibold text-brand">
-          Anar · {result.data.agency.name}
-        </p>
-        <h1 className="mt-2 font-display text-3xl font-bold wrap-break-word">
-          {result.data.company.name}
-        </h1>
-      </header>
-      {children}
-    </PageShell>
-  );
-}
-
-export async function CompanyHomePage({
-  params,
-}: {
-  params: Promise<{ slug: string }>;
-}) {
-  const result = await getCompanyContext((await params).slug);
-  if (!result?.ok) return null;
-  const { company, user, role } = result.data;
-  return (
-    <section className="rounded-2xl border border-line bg-surface p-6">
-      <h2 className="font-display text-xl font-semibold">
-        Welcome, {user.name}
-      </h2>
-      <dl className="mt-5 grid gap-5 lg:grid-cols-3">
-        <div>
-          <dt className="text-sm text-muted">Your role</dt>
-          <dd className="mt-1 capitalize">{role.replaceAll("_", " ")}</dd>
-        </div>
-        <div>
-          <dt className="text-sm text-muted">Company status</dt>
-          <dd className="mt-1 capitalize">{company.status}</dd>
-        </div>
-        <div>
-          <dt className="text-sm text-muted">Timezone</dt>
-          <dd className="mt-1">{company.timezone}</dd>
-        </div>
-      </dl>
-    </section>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useActionState, useId, useState } from "react";
 import { FreshCodeForm } from "@/modules/auth/components";
-import { companyFreshCodeAction, inviteSuperAdminAction } from "../actions";
+import { inviteSuperAdminAction } from "../actions";
 
 export function InviteSuperAdmin({
   companyId,
@@ -87,10 +87,7 @@ export function InviteSuperAdmin({
         </form>
       )}
       {state && !state.ok && state.error === "step_up_required" && (
-        <FreshCodeForm
-          enabled={enabled && !pending}
-          submit={companyFreshCodeAction}
-        />
+        <FreshCodeForm enabled={enabled && !pending} />
       )}
     </div>
   );

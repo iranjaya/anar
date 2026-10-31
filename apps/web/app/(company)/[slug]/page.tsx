@@ -1,1 +1,1 @@
-export { CompanyHomePage as default } from "@/modules/auth/pages";
+export { CompanyHomePage as default } from "@/modules/tenant/pages";

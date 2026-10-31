@@ -64,7 +64,7 @@ export type StepUpService = {
   requestStepUp(
     actor: AuthSession,
     requestMeta: RequestMeta,
-  ): Promise<{ ok: true }>;
+  ): Promise<{ sent: boolean }>;
   stepUp(actor: AuthSession, input: StepUpInput): Promise<{ ok: true }>;
 };
 export type StepUpDeps = OtpDeps & {
@@ -173,7 +173,7 @@ const otp = {
               deps.renderCode,
             );
           }
-          return { ok: true };
+          return { sent: allowed };
         });
       },
 

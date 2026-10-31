@@ -25,6 +25,7 @@ import type {
   SessionService,
 } from "../auth/sessions.js";
 import audit from "../tenant/audit.js";
+import permissions from "../tenant/permissions.js";
 import stepUp from "../tenant/stepUp.js";
 import pagination from "./pagination.js";
 import repository from "./repository.js";
@@ -73,6 +74,7 @@ const agencies = {
           );
         return deps.sessions.withPlatformSession(actor, async (tx, current) => {
           const owner = agencies._owner(current);
+          permissions.require(owner, "agency.create");
           const at = deps.now();
           stepUp.requireFreshOtp(owner, at);
           const agency = await repository.create(tx, {
@@ -113,6 +115,7 @@ const agencies = {
           throw new AppError("validation", "A valid agency is required");
         return deps.sessions.withPlatformSession(actor, async (tx, current) => {
           const owner = agencies._owner(current);
+          permissions.require(owner, "agency.resend_first_invite");
           stepUp.requireFreshOtp(owner, deps.now());
           const agency = await agencies.lockInitialInviteAgency(
             tx,
@@ -144,7 +147,7 @@ const agencies = {
       async listAgencies(actor, query) {
         const cursor = pagination.cursor(query);
         return deps.sessions.withPlatformSession(actor, async (tx, current) => {
-          agencies._owner(current);
+          permissions.require(agencies._owner(current), "agency.list");
           const rows = await repository.list(tx, cursor);
           return pagination.page(rows);
         });
@@ -179,6 +182,27 @@ const agencies = {
     });
   },
 
+  readStaffInviteAgency(tx: PlatformTx, agencyId: string, issuerId: string) {
+    return agencies._staffInviteAgency(tx, agencyId, issuerId, false);
+  },
+  lockStaffInviteAgency(tx: PlatformTx, agencyId: string, issuerId: string) {
+    return agencies._staffInviteAgency(tx, agencyId, issuerId, true);
+  },
+  async _staffInviteAgency(
+    tx: PlatformTx,
+    agencyId: string,
+    issuerId: string,
+    lock: boolean,
+  ): Promise<Agency | undefined> {
+    const agency = await agencies.readActiveAgency(tx, agencyId, lock);
+    if (
+      !agency ||
+      !(await agencies.hasActiveStaff(tx, agencyId, issuerId, lock))
+    )
+      return undefined;
+    return agency;
+  },
+
   async lockInitialInviteAgency(
     tx: PlatformTx,
     agencyId: string,
@@ -204,7 +228,13 @@ const agencies = {
 
   async activateInvitedStaff(
     tx: PlatformTx,
-    input: { agencyId: string; userId: string; invitedBy: string; at: Date },
+    input: {
+      agencyId: string;
+      userId: string;
+      invitedBy: string;
+      initial: boolean;
+      at: Date;
+    },
   ): Promise<AgencyMember> {
     return withPlatformAgency(
       tx,
@@ -225,6 +255,7 @@ const agencies = {
             "Invite cannot be accepted by this account",
           );
         if (
+          input.initial &&
           !(await repository.activateAgency(
             scoped,
             input.agencyId,

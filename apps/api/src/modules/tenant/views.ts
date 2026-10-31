@@ -80,8 +80,8 @@ const views = {
           }
         : null,
       session: { id, actingCompanyId, actingReason, actingUntil },
-      capabilities: permissions.companyCapabilities(),
-      resourceAccess: ctx.role === "admin" ? "own" : "all",
+      capabilities: permissions.capabilities(ctx),
+      resourceAccess: permissions.resourceAccess(ctx),
     };
   },
 };

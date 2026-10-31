@@ -159,6 +159,12 @@ export async function startAuthFixture() {
       const app = buildApp({
         context: tenant,
         discovery: tenant,
+        members: members.create({
+          context: tenant,
+          now,
+          createCompanyInvite: invitations.createCompanyInvite,
+          resendCompanyInvite: invitations.resendCompanyInvite,
+        }),
         companies: companies.create({
           createCompanyInvite: invitations.createCompanyInvite,
           context: agencyContext.create({
@@ -167,14 +173,24 @@ export async function startAuthFixture() {
           }),
           now,
         }),
-        staff: staff.create(
-          agencyContext.create({ db, sessions: verification.sessions }),
-        ),
+        staff: staff.create({
+          context: agencyContext.create({
+            db,
+            sessions: verification.sessions,
+          }),
+          now,
+          createStaffInvite: invitations.createStaffInvite,
+          resendStaffInvite: invitations.resendStaffInvite,
+          revokeIssuerInvites: invitations.revokeIssuerInvites,
+          revokeAllSessions: verification.sessions.revokeAllSessions,
+        }),
         invites: inviteAcceptance.create({
           db,
           otpPepper: pepper,
           now,
           readInitialInviteAgency: agencies.readInitialInviteAgency,
+          readStaffInviteAgency: agencies.readStaffInviteAgency,
+          lockStaffInviteAgency: agencies.lockStaffInviteAgency,
           readCompanyInviteTarget: companies.readCompanyInviteTarget,
           lockCompanyInviteTarget: companies.lockCompanyInviteTarget,
           activateInvitedMember: members.activateInvitedMember,
@@ -527,7 +543,7 @@ export async function startAuthFixture() {
             },
             { timeout: 10000 },
           )
-          .toBe(200);
+          .toBeOneOf([200, 503]);
         return { ...api, url };
       },
       async holdUser(

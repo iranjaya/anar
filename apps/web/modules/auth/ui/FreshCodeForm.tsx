@@ -1,21 +1,12 @@
 "use client";
 
 import { useActionState, useId, useState } from "react";
-import type { ActionResult } from "@/lib/errors";
+import { freshCodeAction } from "../actions";
 
-export function FreshCodeForm({
-  enabled,
-  submit,
-}: {
-  enabled: boolean;
-  submit(
-    previous: ActionResult<{ verified: boolean }> | null,
-    form: FormData,
-  ): Promise<ActionResult<{ verified: boolean }>>;
-}) {
+export function FreshCodeForm({ enabled }: { enabled: boolean }) {
   const id = useId();
   const [code, setCode] = useState("");
-  const [state, action, pending] = useActionState(submit, null);
+  const [state, action, pending] = useActionState(freshCodeAction, null);
   return (
     <section
       aria-busy={pending}

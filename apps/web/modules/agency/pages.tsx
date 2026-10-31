@@ -8,6 +8,7 @@ import {
 import { AgencyFrame } from "./ui/AgencyFrame";
 import { InviteColleague } from "./ui/InviteColleague";
 import { PageLinks } from "./ui/PageLinks";
+import { RemoveStaff } from "./ui/RemoveStaff";
 import { ResendInvite } from "./ui/ResendInvite";
 
 type PageProps = {
@@ -84,6 +85,12 @@ export async function AgencyStaffPage({ searchParams }: PageProps) {
     result?.ok &&
     result.data.capabilities.includes("agency.staff.invite")
   );
+  const canRemove = !!(
+    readiness.enabled &&
+    result?.ok &&
+    result.data.capabilities.includes("agency.staff.deactivate")
+  );
+  const selfId = result?.ok ? result.data.staff.id : null;
   return (
     <AgencyFrame
       title="Agency staff"
@@ -138,7 +145,16 @@ export async function AgencyStaffPage({ searchParams }: PageProps) {
                     </time>
                   </p>
                 </div>
-                <p className="text-sm capitalize">{member.status}</p>
+                <div className="flex flex-col gap-2 lg:items-end">
+                  <p className="text-sm capitalize">{member.status}</p>
+                  {canRemove && member.status === "active" && (
+                    <RemoveStaff
+                      staffId={member.id}
+                      name={member.name}
+                      self={member.id === selfId}
+                    />
+                  )}
+                </div>
               </article>
             ))}
           {page?.ok && (

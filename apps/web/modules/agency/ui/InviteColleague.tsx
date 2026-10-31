@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useActionState, useEffect, useState } from "react";
 import { FreshCodeForm } from "@/modules/auth/components";
-import { freshCodeAction, inviteStaffAction } from "../actions";
+import { inviteStaffAction } from "../actions";
 
 export function InviteColleague({ enabled }: { enabled: boolean }) {
   const [name, setName] = useState("");
@@ -91,7 +91,7 @@ export function InviteColleague({ enabled }: { enabled: boolean }) {
         </button>
       </form>
       {state && !state.ok && state.error === "step_up_required" && (
-        <FreshCodeForm enabled={enabled && !pending} submit={freshCodeAction} />
+        <FreshCodeForm enabled={enabled && !pending} />
       )}
     </section>
   );

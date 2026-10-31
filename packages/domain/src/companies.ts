@@ -44,3 +44,9 @@ export type CompanyPage = {
   items: CompanySummary[];
   nextCursor: string | null;
 };
+
+export const enterCompanySchema = z.strictObject({
+  companyId: z.uuid(),
+  reason: z.string().trim().min(5).max(500),
+});
+export type EnterCompanyInput = z.infer<typeof enterCompanySchema>;

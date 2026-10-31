@@ -99,8 +99,14 @@ describe("compiled API", () => {
         { timeout: 5000 },
       )
       .toEqual({
-        status: 200,
-        body: { status: "ok", service: "api" },
+        status: 503,
+        body: {
+          status: "degraded",
+          service: "api",
+          db: "ok",
+          worker: { lastSeenAt: null, healthy: false },
+          queue: { waiting: 0, active: 0, failed: 0 },
+        },
       });
   }
 

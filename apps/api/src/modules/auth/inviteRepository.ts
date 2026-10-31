@@ -1,5 +1,16 @@
 import { invites, type PlatformTx, users } from "@anar/db/platform";
-import { and, desc, eq, gt, isNull, lt, lte, or, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  lt,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 
 const inviteRepository = {
   async insert(
@@ -26,6 +37,27 @@ const inviteRepository = {
       .where(
         and(
           eq(invites.companyId, companyId),
+          eq(invites.email, email),
+          isNull(invites.acceptedAt),
+          isNull(invites.revokedAt),
+          lte(invites.expiresAt, at),
+        ),
+      );
+  },
+
+  async revokeExpiredStaffInvite(
+    tx: PlatformTx,
+    agencyId: string,
+    email: string,
+    at: Date,
+  ): Promise<void> {
+    await tx
+      .update(invites)
+      .set({ revokedAt: at })
+      .where(
+        and(
+          eq(invites.agencyId, agencyId),
+          eq(invites.role, "agency_staff"),
           eq(invites.email, email),
           isNull(invites.acceptedAt),
           isNull(invites.revokedAt),
@@ -79,6 +111,64 @@ const inviteRepository = {
       .limit(51);
   },
 
+  async listCompanyInvites(tx: PlatformTx, companyId: string) {
+    return tx
+      .select({
+        id: invites.id,
+        email: invites.email,
+        name: invites.name,
+        role: sql<"super_admin" | "admin">`${invites.role}`,
+        expiresAt: invites.expiresAt,
+      })
+      .from(invites)
+      .where(
+        and(
+          eq(invites.companyId, companyId),
+          isNull(invites.acceptedAt),
+          isNull(invites.revokedAt),
+        ),
+      )
+      .orderBy(desc(invites.createdAt), desc(invites.id));
+  },
+
+  async revokeByIssuer(
+    tx: PlatformTx,
+    agencyId: string,
+    issuerId: string,
+    at: Date,
+  ): Promise<void> {
+    await tx
+      .update(invites)
+      .set({ revokedAt: at })
+      .where(
+        and(
+          eq(invites.agencyId, agencyId),
+          eq(invites.createdBy, issuerId),
+          isNull(invites.acceptedAt),
+          isNull(invites.revokedAt),
+        ),
+      );
+  },
+
+  async revokeCompanyByIssuer(
+    tx: PlatformTx,
+    companyId: string,
+    issuerId: string,
+    at: Date,
+  ): Promise<void> {
+    await tx
+      .update(invites)
+      .set({ revokedAt: at })
+      .where(
+        and(
+          eq(invites.companyId, companyId),
+          eq(invites.createdBy, issuerId),
+          isNull(invites.acceptedAt),
+          isNull(invites.revokedAt),
+        ),
+      );
+  },
+
   async lock(tx: PlatformTx, id: string) {
     const [invite] = await tx
       .select()
@@ -102,6 +192,46 @@ const inviteRepository = {
           eq(invites.createdBy, ownerId),
           eq(invites.role, "agency_staff"),
           isNull(invites.companyId),
+          isNull(invites.acceptedAt),
+          isNull(invites.revokedAt),
+        ),
+      )
+      .for("update");
+    return invite;
+  },
+
+  async lockStaffInvite(tx: PlatformTx, agencyId: string, id: string) {
+    const [invite] = await tx
+      .select()
+      .from(invites)
+      .where(
+        and(
+          eq(invites.id, id),
+          eq(invites.agencyId, agencyId),
+          eq(invites.role, "agency_staff"),
+          isNull(invites.companyId),
+          isNull(invites.acceptedAt),
+          isNull(invites.revokedAt),
+        ),
+      )
+      .for("update");
+    return invite;
+  },
+
+  async lockCompanyInvite(
+    tx: PlatformTx,
+    companyId: string,
+    id: string,
+    roles: ("super_admin" | "admin")[],
+  ) {
+    const [invite] = await tx
+      .select()
+      .from(invites)
+      .where(
+        and(
+          eq(invites.id, id),
+          eq(invites.companyId, companyId),
+          inArray(invites.role, roles),
           isNull(invites.acceptedAt),
           isNull(invites.revokedAt),
         ),

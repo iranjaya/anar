@@ -1,4 +1,10 @@
-:80 {
+{
+	skip_install_trust
+}
+
+{$ANAR_SITE_ADDRESS::80} {
+	@https protocol https
+	header @https Strict-Transport-Security "max-age=31536000; includeSubDomains"
 	route {
 		handle /api/imports {
 			reverse_proxy web:3000

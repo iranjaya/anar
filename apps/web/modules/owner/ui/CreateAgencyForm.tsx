@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useState } from "react";
+import { FreshCodeForm } from "@/modules/auth/components";
 import { createAgencyAction } from "../actions";
 
 const empty = { name: "", slug: "", staffName: "", email: "" };
@@ -107,6 +108,9 @@ export function CreateAgencyForm({ enabled }: { enabled: boolean }) {
           {pending ? "Creating…" : "Create and invite"}
         </button>
       </form>
+      {state && !state.ok && state.error === "step_up_required" && (
+        <FreshCodeForm enabled={enabled && !pending} />
+      )}
     </section>
   );
 }

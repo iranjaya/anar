@@ -9,5 +9,9 @@
     "types": ["node"],
     "typeRoots": ["../apps/api/node_modules/@types"]
   },
-  "include": ["*.ts", "../test/support/auth-browser-stack.ts"]
+  "include": [
+    "*.ts",
+    "../test/support/auth-browser-stack.ts",
+    "../test/support/foundation-seed.ts"
+  ]
 }

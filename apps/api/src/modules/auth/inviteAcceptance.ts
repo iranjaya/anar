@@ -28,6 +28,7 @@ import repository from "./inviteRepository.js";
 import type {
   ReadCompanyInviteTarget,
   ReadInitialInviteAgency,
+  ReadStaffInviteAgency,
 } from "./invites.js";
 import rateLimits, {
   type InviteOperation,
@@ -41,6 +42,8 @@ export type InviteAcceptanceDeps = {
   otpPepper: string;
   now(): Date;
   readInitialInviteAgency: ReadInitialInviteAgency;
+  readStaffInviteAgency: ReadStaffInviteAgency;
+  lockStaffInviteAgency: ReadStaffInviteAgency;
   readCompanyInviteTarget: ReadCompanyInviteTarget;
   lockCompanyInviteTarget: ReadCompanyInviteTarget;
   activateInvitedMember(
@@ -56,9 +59,16 @@ export type InviteAcceptanceDeps = {
   hasCompanyMembership(tx: PlatformTx, userId: string): Promise<boolean>;
   activateInvitedStaff(
     tx: PlatformTx,
-    input: { agencyId: string; userId: string; invitedBy: string; at: Date },
+    input: {
+      agencyId: string;
+      userId: string;
+      invitedBy: string;
+      initial: boolean;
+      at: Date;
+    },
   ): Promise<AgencyMember>;
 };
+type Issuer = "owner" | "staff";
 export type InviteAcceptanceService = {
   admit(operation: InviteOperation, ip: string): Promise<RateLimitResult>;
   inspectInvite(input: InviteTokenInput): Promise<InviteView>;
@@ -103,12 +113,15 @@ const inviteAcceptance = {
             tokenHash,
             deps.now(),
           );
-          const issuer = await identities.readUser(tx, invite.createdBy);
-          inviteAcceptance._requireIssuer(invite, issuer);
+          const issuer = inviteAcceptance._issuer(
+            invite,
+            await identities.readUser(tx, invite.createdBy),
+          );
           const target = await inviteAcceptance._target(
             deps,
             tx,
             invite,
+            issuer,
             false,
           );
           return {
@@ -149,9 +162,11 @@ const inviteAcceptance = {
             candidate.createdBy,
             recipient.id,
           ]);
-          const issuer = users.find((row) => row.id === candidate.createdBy);
+          const issuer = inviteAcceptance._issuer(
+            candidate,
+            users.find((row) => row.id === candidate.createdBy),
+          );
           const user = users.find((row) => row.id === recipient.id);
-          inviteAcceptance._requireIssuer(candidate, issuer);
           if (
             !user ||
             user.email.toLowerCase() !== candidate.email.toLowerCase() ||
@@ -168,7 +183,7 @@ const inviteAcceptance = {
               "Invite cannot be accepted by this account",
             );
           }
-          await inviteAcceptance._target(deps, tx, candidate, true);
+          await inviteAcceptance._target(deps, tx, candidate, issuer, true);
           const locked = await repository.lock(tx, candidate.id);
           const at = deps.now();
           const invite = inviteAcceptance._valid(locked, tokenHash, at);
@@ -187,6 +202,7 @@ const inviteAcceptance = {
                   agencyId: invite.agencyId,
                   userId: user.id,
                   invitedBy: invite.createdBy,
+                  initial: issuer === "owner",
                   at,
                 })
               : await withPlatformTenant(
@@ -238,26 +254,30 @@ const inviteAcceptance = {
     };
   },
 
-  _requireIssuer(invite: ValidInvite, issuer: AuthUser | undefined): void {
-    const expected = invite.role === "agency_staff" ? "owner" : null;
-    if (
-      !issuer ||
-      issuer.platformRole !== expected ||
-      issuer.deactivatedAt !== null
-    )
+  _issuer(invite: ValidInvite, issuer: AuthUser | undefined): Issuer {
+    if (!issuer || issuer.deactivatedAt !== null)
       throw new AppError("not_found", "Invitation is unavailable");
+    if (invite.role === "agency_staff" && issuer.platformRole === "owner")
+      return "owner";
+    if (issuer.platformRole === null) return "staff";
+    throw new AppError("not_found", "Invitation is unavailable");
   },
 
   async _target(
     deps: InviteAcceptanceDeps,
     tx: PlatformTx,
     invite: ValidInvite,
+    issuer: Issuer,
     lock: boolean,
   ) {
     if (invite.role === "agency_staff") {
-      const read = lock
+      const initial = lock
         ? deps.lockInitialInviteAgency
         : deps.readInitialInviteAgency;
+      const staff = lock
+        ? deps.lockStaffInviteAgency
+        : deps.readStaffInviteAgency;
+      const read = issuer === "owner" ? initial : staff;
       const agency = await read(tx, invite.agencyId, invite.createdBy);
       if (!agency) throw new AppError("not_found", "Invitation is unavailable");
       return { agencyName: agency.name, companyName: null };

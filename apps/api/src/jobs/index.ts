@@ -8,6 +8,7 @@ export { createMailCodec } from "../lib/email/crypto.js";
 export { createEmailSender, type EmailConfig } from "../lib/email/index.js";
 export { default as emailJob } from "../modules/auth/emailJob.js";
 export const readInitialInviteAgency = agencies.readInitialInviteAgency;
+export const readStaffInviteAgency = agencies.readStaffInviteAgency;
 export const readCompanyInviteTarget = companies.readCompanyInviteTarget;
 
 export type JobRegistration = {

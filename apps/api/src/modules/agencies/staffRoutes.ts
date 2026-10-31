@@ -4,22 +4,77 @@ import {
   agencyInvitePageSchema,
   agencyStaffPageSchema,
   agencyViewSchema,
+  type DeactivateStaffInput,
+  type InviteStaffInput,
 } from "@anar/domain/agencies";
-import { emptySchema } from "@anar/domain/auth";
+import {
+  emptySchema,
+  inviteResultSchema,
+  okSchema,
+  type ResendInviteInput,
+} from "@anar/domain/auth";
 import { AppError } from "@anar/domain/errors";
 import { apiSuccessSchema } from "@anar/domain/http";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { StaffService } from "./staff.js";
 
-export type StaffRouteOptions = { staff: StaffService };
+export type StaffRouteOptions = {
+  staff: StaffService;
+  requireOrigin(request: FastifyRequest): void | Promise<void>;
+};
 const staffRoutes = {
   async register(
     app: FastifyInstance,
-    { staff }: StaffRouteOptions,
+    { staff, requireOrigin }: StaffRouteOptions,
   ): Promise<void> {
     const view = apiSuccessSchema(agencyViewSchema);
     const staffPage = apiSuccessSchema(agencyStaffPageSchema);
     const invitePage = apiSuccessSchema(agencyInvitePageSchema);
+    const invited = apiSuccessSchema(inviteResultSchema);
+    const success = apiSuccessSchema(okSchema);
+    const onRequest = async (request: FastifyRequest) => {
+      await requireOrigin(request);
+    };
+    app.post<{ Body: InviteStaffInput }>(
+      "/api/agencies/inviteStaff",
+      { onRequest },
+      async (request, reply) => {
+        const actor = await staff.requireAgencyContext(request);
+        const result = await staff.inviteStaff(actor, request.body, {
+          ip: request.ip,
+        });
+        return reply.send(invited.parse({ ok: true, data: result }));
+      },
+    );
+    app.post<{ Body: ResendInviteInput }>(
+      "/api/agencies/resendStaffInvite",
+      { onRequest },
+      async (request, reply) => {
+        const actor = await staff.requireAgencyContext(request);
+        const limit = await staff.resendStaffInvite(actor, request.body, {
+          ip: request.ip,
+        });
+        if (!limit.allowed)
+          return reply
+            .code(429)
+            .header("Retry-After", String(limit.retryAfter))
+            .send({
+              ok: false,
+              error: "validation",
+              message: "Too many invite resends. Try again later.",
+            });
+        return reply.send(success.parse({ ok: true, data: { ok: true } }));
+      },
+    );
+    app.post<{ Body: DeactivateStaffInput }>(
+      "/api/agencies/deactivateStaff",
+      { onRequest },
+      async (request, reply) => {
+        const actor = await staff.requireAgencyContext(request);
+        await staff.deactivateStaff(actor, request.body, { ip: request.ip });
+        return reply.send(success.parse({ ok: true, data: { ok: true } }));
+      },
+    );
     app.get("/api/agencies/getAgency", async (request, reply) => {
       const actor = await staff.requireAgencyContext(request);
       if (!emptySchema.safeParse(request.query).success)

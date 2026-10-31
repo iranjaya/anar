@@ -1,5 +1,6 @@
 import { auditLog, type PlatformTx } from "@anar/db/platform";
 import type { AuthUser } from "@anar/domain/auth";
+import { and, desc, eq } from "drizzle-orm";
 import { v7 } from "uuid";
 
 type AuditEvents = {
@@ -11,7 +12,27 @@ type AuditEvents = {
     target: { type: "invite"; id: string };
     data: { inviteId: string };
   };
+  "company.admin_invited": {
+    target: { type: "invite"; id: string };
+    data: { inviteId: string };
+  };
+  "company.invite_resent": {
+    target: { type: "invite"; id: string };
+    data: { inviteId: string };
+  };
+  "company.member_deactivated": {
+    target: { type: "company_member"; id: string };
+    data: { userId: string };
+  };
   "company.created": {
+    target: { type: "company"; id: string };
+    data: { companyId: string };
+  };
+  "agency.enter_company": {
+    target: { type: "company"; id: string };
+    data: { companyId: string; reason: string };
+  };
+  "agency.leave_company": {
     target: { type: "company"; id: string };
     data: { companyId: string };
   };
@@ -27,9 +48,21 @@ type AuditEvents = {
     target: { type: "invite"; id: string };
     data: { inviteId: string };
   };
+  "agency.staff_invited": {
+    target: { type: "invite"; id: string };
+    data: { inviteId: string };
+  };
+  "agency.staff_invite_resent": {
+    target: { type: "invite"; id: string };
+    data: { inviteId: string };
+  };
   "agency.staff_accepted": {
     target: { type: "agency_member"; id: string };
     data: { inviteId: string; inviterId: string };
+  };
+  "agency.staff_deactivated": {
+    target: { type: "agency_member"; id: string };
+    data: { userId: string };
   };
 };
 export type AuditAction = keyof AuditEvents;
@@ -52,7 +85,10 @@ const audit = {
   ): Promise<void> {
     let payload: Record<string, string>;
     if ("environment" in data) payload = { environment: data.environment };
+    else if ("reason" in data)
+      payload = { companyId: data.companyId, reason: data.reason };
     else if ("companyId" in data) payload = { companyId: data.companyId };
+    else if ("userId" in data) payload = { userId: data.userId };
     else if ("inviterId" in data)
       payload = { inviteId: data.inviteId, inviterId: data.inviterId };
     else payload = { inviteId: data.inviteId };
@@ -68,6 +104,29 @@ const audit = {
       data: payload,
       ip: actor.ip,
     });
+  },
+
+  async listCompanyEntries(tx: PlatformTx, companyId: string) {
+    const action: AuditAction = "agency.enter_company";
+    const rows = await tx
+      .select({
+        id: auditLog.id,
+        actorUserId: auditLog.actorUserId,
+        data: auditLog.data,
+        createdAt: auditLog.createdAt,
+      })
+      .from(auditLog)
+      .where(
+        and(eq(auditLog.companyId, companyId), eq(auditLog.action, action)),
+      )
+      .orderBy(desc(auditLog.createdAt), desc(auditLog.id))
+      .limit(30);
+    return rows.map((row) => ({
+      id: row.id,
+      actorUserId: row.actorUserId,
+      reason: (row.data as { reason: string }).reason,
+      enteredAt: row.createdAt,
+    }));
   },
 };
 

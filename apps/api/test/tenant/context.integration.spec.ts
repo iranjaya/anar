@@ -134,7 +134,19 @@ describe("session discovery and company context", () => {
             actingReason: null,
             actingUntil: null,
           },
-          capabilities: ["sessions.manage_own"],
+          capabilities:
+            role === "admin"
+              ? [
+                  "leads.view",
+                  "leads.update",
+                  "followups.log",
+                  "reports.view_own",
+                  "sessions.manage_own",
+                ]
+              : expect.arrayContaining([
+                  "members.invite_admin",
+                  "leads.assign",
+                ]),
           resourceAccess: role === "admin" ? "own" : "all",
         },
       });
@@ -162,7 +174,7 @@ describe("session discovery and company context", () => {
     },
   );
 
-  it("refuses owner before company reads and staff before entry, including a persisted acting triplet", async () => {
+  it("refuses owner before company reads and staff before entry, including an expired acting triplet", async () => {
     const { owner, a, b } = await setup();
     await fixture.owner("REVOKE SELECT ON companies FROM anar_app");
     try {
@@ -180,8 +192,8 @@ describe("session discovery and company context", () => {
         .update(sessions)
         .set({
           actingCompanyId: a.companyId,
-          actingReason: "Forged old entry",
-          actingUntil: new Date(fixture.now().getTime() + 3600000),
+          actingReason: "Expired old entry",
+          actingUntil: new Date(fixture.now().getTime() - 1000),
         })
         .where(eq(sessions.userId, a.user.id)),
     );

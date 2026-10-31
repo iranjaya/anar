@@ -4,6 +4,7 @@ import { AgencyFrame, PageLinks } from "@/modules/agency/components";
 import { getAgency } from "@/modules/agency/server";
 import { getCompanyReadiness, listAgencyCompanies } from "../server";
 import { CreateCompany } from "./CreateCompany";
+import { EnterAgencyCompany } from "./EnterAgencyCompany";
 import { InviteSuperAdmin } from "./InviteSuperAdmin";
 
 export async function AgencyCompaniesPage({
@@ -20,6 +21,7 @@ export async function AgencyCompaniesPage({
     : null;
   const canInvite =
     readiness.enabled && capabilities.includes("members.invite_super_admin");
+  const canEnter = readiness.enabled && capabilities.includes("company.enter");
   return (
     <AgencyFrame
       title="Agency companies"
@@ -100,6 +102,13 @@ export async function AgencyCompaniesPage({
                       : formatDay(company.lastImportAt)}
                   </p>
                 </div>
+                {canEnter && company.status === "active" && (
+                  <EnterAgencyCompany
+                    companyId={company.id}
+                    slug={company.slug}
+                    name={company.name}
+                  />
+                )}
                 {company.memberCount === 0 && company.status === "active" && (
                   <InviteSuperAdmin
                     companyId={company.id}

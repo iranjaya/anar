@@ -7,6 +7,7 @@ import type {
 } from "@anar/domain/agencies";
 import type { AuthUser } from "@anar/domain/auth";
 import { AppError } from "@anar/domain/errors";
+import type { PendingInvite } from "@anar/domain/members";
 import { v7 } from "uuid";
 import type { createMailCodec } from "../../lib/email/crypto.js";
 import inviteEmail from "../../lib/email/templates/invite.js";
@@ -18,6 +19,11 @@ export type ReadInitialInviteAgency = (
   tx: PlatformTx,
   agencyId: string,
   ownerId: string,
+) => Promise<{ name: string } | undefined>;
+export type ReadStaffInviteAgency = (
+  tx: PlatformTx,
+  agencyId: string,
+  issuerId: string,
 ) => Promise<{ name: string } | undefined>;
 export type CompanyInviteTargetInput = {
   agencyId: string;
@@ -35,14 +41,23 @@ export type InviteDeps = {
   mailCodec: Pick<ReturnType<typeof createMailCodec>, "encryptMessage">;
   now(): Date;
 };
+type InviteRole = "agency_staff" | "super_admin" | "admin";
+type InviteIssuer = { user: AuthUser; role?: string };
 export type InviteService = {
   createCompanyInvite(
     tx: PlatformTx,
-    actor: { user: AuthUser },
+    actor: InviteIssuer,
     agency: Agency,
     company: AgencyCompany,
-    input: { email: string; name: string },
+    input: { email: string; name: string; role: "super_admin" | "admin" },
   ): Promise<{ inviteId: string }>;
+  resendCompanyInvite(
+    tx: PlatformTx,
+    actor: InviteIssuer,
+    agency: Agency,
+    company: AgencyCompany,
+    input: { inviteId: string; roles: ("super_admin" | "admin")[] },
+  ): Promise<{ inviteId: string } & RateLimitResult>;
   createInitialInvite(
     tx: PlatformTx,
     actor: { user: AuthUser },
@@ -54,6 +69,23 @@ export type InviteService = {
     actor: { user: AuthUser },
     agency: Agency,
   ): Promise<{ inviteId: string } & RateLimitResult>;
+  createStaffInvite(
+    tx: PlatformTx,
+    actor: { user: AuthUser },
+    agency: Agency,
+    input: { email: string; name: string },
+  ): Promise<{ inviteId: string }>;
+  resendStaffInvite(
+    tx: PlatformTx,
+    actor: { user: AuthUser },
+    agency: Agency,
+    inviteId: string,
+  ): Promise<{ inviteId: string } & RateLimitResult>;
+  revokeIssuerInvites(
+    tx: PlatformTx,
+    agencyId: string,
+    issuerId: string,
+  ): Promise<void>;
 };
 
 const invites = {
@@ -87,13 +119,32 @@ const invites = {
           company,
         );
       },
+      async resendCompanyInvite(tx, actor, agency, company, input) {
+        const invite = await repository.lockCompanyInvite(
+          tx,
+          company.id,
+          input.inviteId,
+          input.roles,
+        );
+        if (!invite)
+          throw new AppError("not_found", "Invitation is unavailable");
+        const limit = await rateLimits.resendInvite(
+          tx,
+          invite.id,
+          pepper,
+          deps.now,
+        );
+        if (limit.allowed)
+          await invites._issue(tx, deps, actor, agency, invite, true, company);
+        return { inviteId: invite.id, ...limit };
+      },
       async createInitialInvite(tx, actor, agency, input) {
         return invites._issue(
           tx,
           deps,
           actor,
           agency,
-          { id: v7(), ...input },
+          { id: v7(), ...input, role: "agency_staff" },
           false,
         );
       },
@@ -115,15 +166,52 @@ const invites = {
           await invites._issue(tx, deps, actor, agency, invite, true);
         return { inviteId: invite.id, ...limit };
       },
+      async createStaffInvite(tx, actor, agency, input) {
+        await repository.revokeExpiredStaffInvite(
+          tx,
+          agency.id,
+          input.email,
+          deps.now(),
+        );
+        return invites._issue(
+          tx,
+          deps,
+          actor,
+          agency,
+          { id: v7(), ...input, role: "agency_staff" },
+          false,
+        );
+      },
+      async resendStaffInvite(tx, actor, agency, inviteId) {
+        const invite = await repository.lockStaffInvite(
+          tx,
+          agency.id,
+          inviteId,
+        );
+        if (!invite)
+          throw new AppError("not_found", "Invitation is unavailable");
+        const limit = await rateLimits.resendInvite(
+          tx,
+          invite.id,
+          pepper,
+          deps.now,
+        );
+        if (limit.allowed)
+          await invites._issue(tx, deps, actor, agency, invite, true);
+        return { inviteId: invite.id, ...limit };
+      },
+      revokeIssuerInvites(tx, agencyId, issuerId) {
+        return repository.revokeByIssuer(tx, agencyId, issuerId, deps.now());
+      },
     };
   },
 
   async _issue(
     tx: PlatformTx,
     deps: InviteDeps,
-    actor: { user: AuthUser },
+    actor: InviteIssuer,
     agency: Agency,
-    input: { id: string; email: string; name: string },
+    input: { id: string; email: string; name: string; role: InviteRole },
     resent: boolean,
     company: AgencyCompany | null = null,
   ): Promise<{ inviteId: string }> {
@@ -139,7 +227,7 @@ const invites = {
         companyId: company?.id ?? null,
         email: input.email,
         name: input.name,
-        role: company ? "super_admin" : "agency_staff",
+        role: input.role,
         tokenHash,
         expiresAt,
         createdBy: actor.user.id,
@@ -150,13 +238,10 @@ const invites = {
     const key = invites.deliveryKey(id, tokenHash);
     const message = inviteEmail.render({
       name: input.name,
-      role: company ? "super_admin" : "agency_staff",
+      role: input.role,
       agency: agency.name,
       company: company?.name ?? null,
-      inviter: {
-        name: actor.user.name,
-        role: company ? "agency_staff" : "owner",
-      },
+      inviter: { name: actor.user.name, role: invites._inviterRole(actor) },
       url: `${deps.publicOrigin}/invite#token=${token}`,
       expiresAt,
       timeZone: "Asia/Kathmandu",
@@ -184,6 +269,7 @@ const invites = {
     id: string,
     at: Date,
     readAgency: ReadInitialInviteAgency,
+    readStaffAgency: ReadStaffInviteAgency,
     readCompany: ReadCompanyInviteTarget,
   ) {
     const row = await repository.findDeliverable(tx, id, at);
@@ -194,6 +280,13 @@ const invites = {
       row.issuerRole === "owner"
     ) {
       if (!(await readAgency(tx, row.agencyId, row.createdBy)))
+        return undefined;
+    } else if (
+      row.role === "agency_staff" &&
+      row.companyId === null &&
+      row.issuerRole === null
+    ) {
+      if (!(await readStaffAgency(tx, row.agencyId, row.createdBy)))
         return undefined;
     } else if (
       (row.role === "super_admin" || row.role === "admin") &&
@@ -223,6 +316,27 @@ const invites = {
     cursor?: { createdAt: Date; id: string },
   ): Promise<AgencyInviteView[]> {
     return repository.listStaffInvites(tx, agencyId, cursor);
+  },
+
+  _inviterRole(actor: InviteIssuer): "owner" | "agency_staff" | "super_admin" {
+    if (actor.user.platformRole === "owner") return "owner";
+    return actor.role === "super_admin" ? "super_admin" : "agency_staff";
+  },
+
+  revokeCompanyIssuerInvites(
+    tx: PlatformTx,
+    companyId: string,
+    issuerId: string,
+    at: Date,
+  ): Promise<void> {
+    return repository.revokeCompanyByIssuer(tx, companyId, issuerId, at);
+  },
+
+  listCompanyInvites(
+    tx: PlatformTx,
+    companyId: string,
+  ): Promise<PendingInvite[]> {
+    return repository.listCompanyInvites(tx, companyId);
   },
 
   deliveryKey(id: string, tokenHash: string): string {

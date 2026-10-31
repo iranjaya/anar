@@ -1,5 +1,10 @@
-import { agencies, agencyMembers, type PlatformTx } from "@anar/db/platform";
-import { and, desc, eq, lt, or } from "drizzle-orm";
+import {
+  agencies,
+  agencyMembers,
+  type PlatformTx,
+  users,
+} from "@anar/db/platform";
+import { and, desc, eq, isNull, lt, ne, or, sql } from "drizzle-orm";
 
 const agencyFields = {
   id: agencies.id,
@@ -118,6 +123,54 @@ const repository = {
       )
       .for("update");
     return staff;
+  },
+
+  async readStaffById(tx: PlatformTx, agencyId: string, id: string) {
+    const [staff] = await tx
+      .select({ id: agencyMembers.id, userId: agencyMembers.userId })
+      .from(agencyMembers)
+      .where(
+        and(eq(agencyMembers.agencyId, agencyId), eq(agencyMembers.id, id)),
+      );
+    return staff;
+  },
+
+  async lockStaffById(tx: PlatformTx, agencyId: string, id: string) {
+    const [staff] = await tx
+      .select()
+      .from(agencyMembers)
+      .where(
+        and(eq(agencyMembers.agencyId, agencyId), eq(agencyMembers.id, id)),
+      )
+      .for("update");
+    return staff;
+  },
+
+  async countOtherActiveStaff(
+    tx: PlatformTx,
+    agencyId: string,
+    userId: string,
+  ): Promise<number> {
+    const [row] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(agencyMembers)
+      .innerJoin(users, eq(users.id, agencyMembers.userId))
+      .where(
+        and(
+          eq(agencyMembers.agencyId, agencyId),
+          eq(agencyMembers.status, "active"),
+          ne(agencyMembers.userId, userId),
+          isNull(users.deactivatedAt),
+        ),
+      );
+    return row?.count ?? 0;
+  },
+
+  async deactivateStaff(tx: PlatformTx, id: string, at: Date) {
+    await tx
+      .update(agencyMembers)
+      .set({ status: "deactivated", deactivatedAt: at, updatedAt: at })
+      .where(eq(agencyMembers.id, id));
   },
 
   async insertStaff(tx: PlatformTx, input: typeof agencyMembers.$inferInsert) {

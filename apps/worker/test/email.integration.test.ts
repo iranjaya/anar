@@ -94,6 +94,7 @@ describe("encrypted delivery through the real worker", () => {
         provider: "mailpit",
         url: fixture.mailpit.url,
         from: "sender@example.test",
+        replyTo: "support@example.test",
       }).sendEmail({
         ...decoded,
         deliveryKey: work.deliveryKey,
@@ -124,6 +125,7 @@ describe("encrypted delivery through the real worker", () => {
     ]);
     const headers = await fixture.mailpit.headers(summary.ID);
     expect(headers["X-Anar-Delivery-Key"]).toEqual([key]);
+    expect(headers["Reply-To"]).toEqual(["<support@example.test>"]);
     return received;
   };
 

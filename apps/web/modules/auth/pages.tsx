@@ -9,8 +9,6 @@ export { AuthEmail } from "./ui/AuthEmail";
 export { AuthFrame } from "./ui/AuthFrame";
 export {
   AccountPage,
-  CompanyAccessFrame,
-  CompanyHomePage,
   SessionHomePage,
   WorkspacesPage,
 } from "./ui/SessionPages";

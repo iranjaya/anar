@@ -60,9 +60,11 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql://anar_app:anar_app_local@db:5432/anar}
       EMAIL_TRANSPORT: ${EMAIL_TRANSPORT:-}
       EMAIL_FROM: ${EMAIL_FROM:-}
+      EMAIL_REPLY_TO: ${EMAIL_REPLY_TO:-}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       MAIL_ENCRYPTION_KEY: ${MAIL_ENCRYPTION_KEY:-}
     init: true
+    restart: unless-stopped
 
   web:
     image: anar-web:runtime
@@ -80,6 +82,8 @@ services:
 
   proxy:
     image: caddy:2-alpine
+    environment:
+      ANAR_SITE_ADDRESS: ${ANAR_SITE_ADDRESS:-:80}
     ports:
       - "127.0.0.1:8080:80"
     volumes:

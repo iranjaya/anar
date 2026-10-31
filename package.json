@@ -15,7 +15,7 @@
     "check:boundaries": "node scripts/check-boundaries.ts && node --test scripts/check-boundaries.test.ts",
     "check:migrations": "node scripts/check-migrations.ts && node --test scripts/check-migrations.test.ts",
     "test": "pnpm --filter @anar/domain build && pnpm --filter @anar/db build && pnpm --filter @anar/api build && pnpm --filter @anar/worker build && node scripts/check-web-units.ts && pnpm --filter @anar/web test lib/errors.test.ts && pnpm --filter @anar/domain test && pnpm --filter @anar/api test && pnpm --filter @anar/worker test && node --test scripts/*.test.ts",
-    "test:integration": "pnpm --filter @anar/domain build && pnpm --filter @anar/db build && pnpm --filter @anar/api build && pnpm --filter @anar/worker build && pnpm --filter @anar/db test:integration && pnpm --filter @anar/worker test:integration",
+    "test:integration": "pnpm --filter @anar/domain build && pnpm --filter @anar/db build && pnpm --filter @anar/api build && pnpm --filter @anar/worker build && pnpm --filter @anar/db test:integration && pnpm --filter @anar/api test:integration && pnpm --filter @anar/worker test:integration",
     "e2e": "pnpm --filter @anar/domain build && node scripts/check-e2e.ts && pnpm --filter @anar/web e2e",
     "smoke:compose": "pnpm --filter @anar/domain build && node scripts/smoke-compose.ts",
     "db:migrate": "pnpm --filter @anar/db build && pnpm --filter @anar/db migrate"

@@ -7,6 +7,8 @@ import {
   agencyStaffPageSchema,
   agencyStaffViewSchema,
   agencyViewSchema,
+  type DeactivateStaffInput,
+  deactivateStaffSchema,
   type InviteStaffInput,
   inviteStaffSchema,
 } from "@anar/domain/agencies";
@@ -20,10 +22,6 @@ import type { z } from "zod";
 import { apiDateSchema, apiRequest } from "@/lib/api/client";
 import { authEnabled } from "@/lib/api/mode";
 import { type ActionResult, AppError, actionFailure } from "@/lib/errors";
-import {
-  requestFreshCode as requestCode,
-  verifyFreshCode as verifyCode,
-} from "@/modules/auth/server";
 
 const readiness = {
   enabled: false,
@@ -109,12 +107,17 @@ export async function resendStaffInvite(input: ResendInviteInput) {
   );
 }
 
-export async function requestFreshCode() {
+export async function deactivateStaff(input: DeactivateStaffInput) {
   requireReady();
-  return requestCode();
-}
-
-export async function verifyFreshCode(code: string) {
-  requireReady();
-  return verifyCode(code);
+  const parsed = deactivateStaffSchema.safeParse(input);
+  if (!parsed.success)
+    throw new AppError("validation", "Choose a staff member to remove.");
+  return apiRequest(
+    {
+      path: "/api/agencies/deactivateStaff",
+      method: "POST",
+      body: parsed.data,
+    },
+    okSchema,
+  );
 }

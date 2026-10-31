@@ -21,7 +21,9 @@ execFileSync(
   { cwd: root, stdio: "inherit" },
 );
 const report = JSON.parse(readFileSync(reportFile, "utf8"));
-assert.equal(report.numTotalTests, 231);
-assert.equal(report.numPassedTests, 231);
+assert.ok(report.numTotalTests >= 233, "Web unit tests went missing");
+assert.equal(report.numPassedTests, report.numTotalTests);
 assert.equal(report.numPendingTests, 0);
-console.log("Original web unit suite: 231/231 passed, none skipped.");
+console.log(
+  `Web unit suite: ${report.numPassedTests}/${report.numTotalTests} passed, none skipped.`,
+);

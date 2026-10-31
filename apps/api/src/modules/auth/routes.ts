@@ -168,9 +168,19 @@ const routes = {
         const result = await options.stepUp.requestStepUp(actor, {
           ip: request.ip,
         });
+        if (!result.sent)
+          return reply
+            .code(429)
+            .header("Cache-Control", "private, no-store")
+            .send({
+              ok: false,
+              error: "validation",
+              message:
+                "Too many codes were sent. Wait a few minutes and try again.",
+            });
         return reply
           .header("Cache-Control", "private, no-store")
-          .send(success.parse({ ok: true, data: result }));
+          .send(success.parse({ ok: true, data: { ok: true } }));
       },
     );
     app.post<{ Body: StepUpInput }>(

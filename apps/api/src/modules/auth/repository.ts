@@ -87,6 +87,15 @@ const repository = {
     return user;
   },
 
+  async countUsable(tx: PlatformTx, userIds: string[]): Promise<number> {
+    if (!userIds.length) return 0;
+    const rows = await tx
+      .select({ id: users.id })
+      .from(users)
+      .where(and(inArray(users.id, userIds), isNull(users.deactivatedAt)));
+    return rows.length;
+  },
+
   async readProfiles(tx: PlatformTx, userIds: string[]) {
     if (!userIds.length) return [];
     return tx
@@ -216,6 +225,22 @@ const repository = {
     await tx
       .update(sessions)
       .set({ lastOtpAt: at })
+      .where(and(eq(sessions.userId, userId), eq(sessions.id, sessionId)));
+  },
+
+  async setActing(
+    tx: PlatformTx,
+    userId: string,
+    sessionId: string,
+    acting: { companyId: string; reason: string; until: Date } | null,
+  ): Promise<void> {
+    await tx
+      .update(sessions)
+      .set({
+        actingCompanyId: acting?.companyId ?? null,
+        actingReason: acting?.reason ?? null,
+        actingUntil: acting?.until ?? null,
+      })
       .where(and(eq(sessions.userId, userId), eq(sessions.id, sessionId)));
   },
 

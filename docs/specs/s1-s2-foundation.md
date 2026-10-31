@@ -520,6 +520,16 @@ Files: integrator's explicit registrations, boundary/policy/CI scripts and found
 Uses: S1/S2 delivered contracts. Gives: accepted integration baseline, stable ownership and test harness for each module writer.
 Proof: root lint/boundaries/typecheck/units/build/migration checks, `DB`, API/worker integrations, original demo e2e and full `E` suite, built-image proxy smoke. Cases include two agencies with two companies each/every role, concurrent refresh/revoke/invite, real Date/cookie transport, foreign Origin, API outage, and no mock fallback. This validates existing endpoints only; later owners must add their own HTTP isolation and job proofs.
 
+#### S2.6 hand-off notes: decisions changed during S1/S2
+
+- The `E` suite lives in `apps/web/e2e-auth/` and runs with `pnpm --filter @anar/web e2e:auth`; there is no separate `e2e-foundation/` or `e2e:foundation`. Foundation stories are `e2e-auth/foundation.spec.ts`.
+- API and DB-backed integration specs are named `*.integration.spec.ts`; `pnpm --filter @anar/api test:integration` runs them and root `pnpm test:integration` runs db, api and worker.
+- Each browser test starts with an empty `auth_rate_limits` table in its disposable stack. The reset is test code only and refuses any project not named `anar-browser-<uuid>`; production code keeps the per-email and per-IP caps, proven by `smoke:compose`.
+- Audit `data` is an allowlist of string fields. Staff and member removal store `{ userId }` only. Session events (sign-in, device revoke, logout) are user-level and are not written to the audit log.
+- Agency staff entries are read from the audit log (`agency.enter_company`) through `GET /api/companies/:slug/members/listAgencyEntries`; there is no separate entries table.
+- `smoke:compose` builds and removes its own `anar-browser-<uuid>` stack on free ports; it never uses the development stack. The worker restarts on its own (`restart: unless-stopped`) after a database outage.
+- `/api/health` returns 503 until a worker heartbeat exists, so readiness waits accept 200 or 503 from the API itself.
+
 ### Review focus: cases that must not fall between steps
 
 | Failure case | Assigned proof |

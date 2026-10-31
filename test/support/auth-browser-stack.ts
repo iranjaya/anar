@@ -14,6 +14,13 @@ const composeFile = fileURLToPath(
 );
 const ownerEmail = "owner@browser.example.test";
 const staffEmail = "staff@browser.example.test";
+const managerEmail = "manager@browser.example.test";
+const companyStaffEmail = "company-staff@browser.example.test";
+const inviteStaffEmail = "invite-staff@browser.example.test";
+const superAdminStaffEmail = "super-admin-staff@browser.example.test";
+const removerEmail = "remover@browser.example.test";
+const leaverEmail = "leaver@browser.example.test";
+const entriesManagerEmail = "entries-manager@browser.example.test";
 
 async function freePort() {
   const server = createServer();
@@ -65,6 +72,7 @@ async function startAuthStack(signal: AbortSignal) {
     TRUSTED_PROXY_CIDRS: "uniquelocal",
     EMAIL_TRANSPORT: "mailpit",
     EMAIL_FROM: "proof@browser.example.test",
+    EMAIL_REPLY_TO: "support@browser.example.test",
     RESEND_API_KEY: "",
   };
   await writeFile(
@@ -160,10 +168,34 @@ async function startAuthStack(signal: AbortSignal) {
       INSERT INTO agencies (id,name,slug,status,created_by) VALUES
       ('20000000-0000-4000-8000-000000000001','Browser Agency','browser-agency','active','10000000-0000-4000-8000-000000000001');
       INSERT INTO agency_members (id,agency_id,user_id,status,invited_by) VALUES
-      ('30000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000002','active','10000000-0000-4000-8000-000000000001');`);
+      ('30000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000002','active','10000000-0000-4000-8000-000000000001');
+      INSERT INTO users (id,email,name) VALUES
+      ('10000000-0000-4000-8000-000000000003','${managerEmail}','Browser Manager'),
+      ('10000000-0000-4000-8000-000000000004','${companyStaffEmail}','Company Staff'),
+      ('10000000-0000-4000-8000-000000000005','${inviteStaffEmail}','Invite Staff'),
+      ('10000000-0000-4000-8000-000000000006','${superAdminStaffEmail}','Super Admin Staff'),
+      ('10000000-0000-4000-8000-000000000007','${removerEmail}','Remover Staff'),
+      ('10000000-0000-4000-8000-000000000008','${leaverEmail}','Leaver Staff'),
+      ('10000000-0000-4000-8000-000000000009','${entriesManagerEmail}','Entries Manager');
+      INSERT INTO agencies (id,name,slug,status,created_by) VALUES
+      ('20000000-0000-4000-8000-000000000002','Other Agency','other-agency','active','10000000-0000-4000-8000-000000000001'),
+      ('20000000-0000-4000-8000-000000000003','Removal Agency','removal-agency','active','10000000-0000-4000-8000-000000000001');
+      INSERT INTO agency_members (id,agency_id,user_id,status,invited_by) VALUES
+      ('30000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000004','active','10000000-0000-4000-8000-000000000001'),
+      ('30000000-0000-4000-8000-000000000003','20000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000005','active','10000000-0000-4000-8000-000000000001'),
+      ('30000000-0000-4000-8000-000000000004','20000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000006','active','10000000-0000-4000-8000-000000000001'),
+      ('30000000-0000-4000-8000-000000000005','20000000-0000-4000-8000-000000000003','10000000-0000-4000-8000-000000000007','active','10000000-0000-4000-8000-000000000001'),
+      ('30000000-0000-4000-8000-000000000006','20000000-0000-4000-8000-000000000003','10000000-0000-4000-8000-000000000008','active','10000000-0000-4000-8000-000000000001');
+      INSERT INTO companies (id,agency_id,name,slug,status,default_country,timezone) VALUES
+      ('40000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001','Browser Company','browser-company','active','NP','Asia/Kathmandu'),
+      ('40000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000002','Other Company','other-company','active','NP','Asia/Kathmandu');
+      INSERT INTO company_members (id,agency_id,company_id,user_id,name,role,status) VALUES
+      ('50000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001','40000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000003','Browser Manager','super_admin','active'),
+      ('50000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000001','40000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000009','Entries Manager','super_admin','active');`);
     await compose("up", "--detach", "api", "worker", "web", "proxy");
     const published = await compose("port", "mailpit", "8025");
     const mailURL = `http://${published}`;
+    const httpsPort = (await compose("port", "proxy", "443")).split(":").pop();
     await waitFor(async () => {
       const response = await fetch(`${baseURL}/api/health`, {
         signal: AbortSignal.timeout(2000),
@@ -182,7 +214,7 @@ async function startAuthStack(signal: AbortSignal) {
       await response.body?.cancel();
       return response.ok;
     }, "web readiness");
-    return { baseURL, mailURL, close };
+    return { baseURL, mailURL, httpsPort, project, close };
   } catch (error) {
     await close();
     throw error;
@@ -199,7 +231,12 @@ try {
   const stack = await startAuthStack(controller.signal);
   try {
     console.log(
-      JSON.stringify({ baseURL: stack.baseURL, mailURL: stack.mailURL }),
+      JSON.stringify({
+        baseURL: stack.baseURL,
+        mailURL: stack.mailURL,
+        httpsPort: stack.httpsPort,
+        project: stack.project,
+      }),
     );
     if (!controller.signal.aborted)
       await new Promise<void>((resolve) =>

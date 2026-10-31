@@ -4,6 +4,7 @@ import { loadApiConfig } from "./lib/config.js";
 import { createMailCodec } from "./lib/email/crypto.js";
 import stepUpCode from "./lib/email/templates/stepUpCode.js";
 import { originGuard } from "./lib/http.js";
+import { createHealthProbe } from "./lib/jobs/index.js";
 import agencyContext from "./modules/agencies/context.js";
 import agencies from "./modules/agencies/service.js";
 import staff from "./modules/agencies/staff.js";
@@ -36,6 +37,7 @@ export async function startApi(): Promise<void> {
     mailCodec,
     now,
   });
+  const health = createHealthProbe(config.connectionString);
   const runtime = await otp.start({
     connectionString: config.connectionString,
     otpPepper: config.otpPepper,
@@ -82,6 +84,8 @@ export async function startApi(): Promise<void> {
       otpPepper: config.otpPepper,
       now,
       readInitialInviteAgency: agencies.readInitialInviteAgency,
+      readStaffInviteAgency: agencies.readStaffInviteAgency,
+      lockStaffInviteAgency: agencies.lockStaffInviteAgency,
       readCompanyInviteTarget: companies.readCompanyInviteTarget,
       lockCompanyInviteTarget: companies.lockCompanyInviteTarget,
       activateInvitedMember: members.activateInvitedMember,
@@ -94,11 +98,24 @@ export async function startApi(): Promise<void> {
     app = buildApp({
       context: tenant.service,
       discovery: tenant.service,
-      staff: staff.create(contextRuntime.service),
+      staff: staff.create({
+        context: contextRuntime.service,
+        now,
+        createStaffInvite: invitations.createStaffInvite,
+        resendStaffInvite: invitations.resendStaffInvite,
+        revokeIssuerInvites: invitations.revokeIssuerInvites,
+        revokeAllSessions: verification.sessions.revokeAllSessions,
+      }),
       companies: companies.create({
         context: contextRuntime.service,
         now,
         createCompanyInvite: invitations.createCompanyInvite,
+      }),
+      members: members.create({
+        context: tenant.service,
+        now,
+        createCompanyInvite: invitations.createCompanyInvite,
+        resendCompanyInvite: invitations.resendCompanyInvite,
       }),
       invites: inviteRuntime.service,
       agencies: agencies.create({
@@ -114,6 +131,7 @@ export async function startApi(): Promise<void> {
         sessions: verification.sessions,
         renderCode: stepUpCode.render,
       }),
+      health,
       requireOrigin: originGuard(config.publicOrigin),
       trustProxy: config.trustProxy,
       logging: true,
@@ -134,6 +152,7 @@ export async function startApi(): Promise<void> {
         inviteRuntime.close(),
         contextRuntime.close(),
         tenant.close(),
+        health.close(),
       ]);
     });
     process.once("SIGINT", stop);
@@ -147,6 +166,7 @@ export async function startApi(): Promise<void> {
         verifier?.close(),
         tenantRuntime?.close(),
         acceptance?.close(),
+        health.close(),
         agencyRuntime?.close(),
       ]);
     throw error;
