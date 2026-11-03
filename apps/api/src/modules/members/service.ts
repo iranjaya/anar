@@ -1,4 +1,4 @@
-import type { TenantTx } from "@anar/db/tenant";
+import { readCompanyScope, type TenantTx } from "@anar/db/tenant";
 import {
   type InviteResult,
   type ResendInviteInput,
@@ -38,6 +38,18 @@ export type MemberDeps = {
   now(): Date;
   createCompanyInvite: InviteService["createCompanyInvite"];
   resendCompanyInvite: InviteService["resendCompanyInvite"];
+  getMemberLeadCounts(
+    tx: TenantTx,
+    memberId: string,
+    at: Date,
+  ): Promise<{ openLeads: number; overdue: number }>;
+  reassignOpenLeads(
+    tx: TenantTx,
+    current: Ctx,
+    from: string,
+    to: string | null,
+    meta: { at: Date; ip: string | null },
+  ): Promise<number>;
 };
 export type MemberService = {
   requireContext(
@@ -99,14 +111,16 @@ const members = {
               )
             ).map((user) => [user.id, user]),
           );
-          return rows.map((row) => {
+          const at = deps.now();
+          const views: MemberView[] = [];
+          for (const row of rows) {
             const user = users.get(row.userId);
             if (!user)
               throw new AppError(
                 "unavailable",
                 "Member identity is unavailable",
               );
-            return {
+            views.push({
               id: row.id,
               companyId: row.companyId,
               userId: row.userId,
@@ -114,11 +128,10 @@ const members = {
               role: row.role,
               status: row.status,
               email: user.email,
-              // No lead tables exist yet, so these counts are truly zero.
-              openLeads: 0,
-              overdue: 0,
-            };
-          });
+              ...(await deps.getMemberLeadCounts(tx, row.id, at)),
+            });
+          }
+          return views;
         });
       },
       listInvites(actor) {
@@ -183,13 +196,10 @@ const members = {
         const parsed = deactivateMemberSchema.safeParse(input);
         if (!parsed.success)
           throw new AppError("validation", "Choose a member to remove");
-        if (parsed.data.reassignTo !== undefined)
-          throw new AppError(
-            "validation",
-            "Reassigning leads is not available yet",
-          );
-        const { memberId } = parsed.data;
-        const { found, managers } = await deps.context.withContext(
+        const { memberId, reassignTo } = parsed.data;
+        if (reassignTo === memberId)
+          throw new AppError("validation", "Choose another member");
+        const { found, destination, managers } = await deps.context.withContext(
           actor,
           async (tx, current) => {
             const member = await repository.read(
@@ -199,6 +209,9 @@ const members = {
             );
             return {
               found: member,
+              destination: reassignTo
+                ? await repository.read(tx, current.companyId, reassignTo)
+                : null,
               managers:
                 member?.role === "super_admin"
                   ? await repository.activeSuperAdminUserIds(
@@ -210,6 +223,8 @@ const members = {
           },
         );
         if (!found) throw new AppError("not_found", "Member is unavailable");
+        if (reassignTo && !destination)
+          throw new AppError("validation", "Choose an active member");
         return deps.context.withContext(
           actor,
           async (tx, current) => {
@@ -247,6 +262,26 @@ const members = {
                 );
             }
             if (target.status !== "active") return { reassigned: 0 };
+            if (destination) {
+              const locked = await repository.read(
+                tx,
+                current.companyId,
+                destination.id,
+                true,
+              );
+              if (
+                locked?.status !== "active" ||
+                locked.userId !== destination.userId
+              )
+                throw new AppError("validation", "Choose an active member");
+            }
+            const reassigned = await deps.reassignOpenLeads(
+              tx,
+              current,
+              target.id,
+              destination?.id ?? null,
+              { at, ip: meta.ip },
+            );
             await repository.deactivate(tx, target.id, at);
             await sessions.revokeAll(tx, target.userId, at);
             await invites.revokeCompanyIssuerInvites(
@@ -268,9 +303,13 @@ const members = {
               { type: "company_member", id: target.id },
               { userId: target.userId },
             );
-            return { reassigned: 0 };
+            return { reassigned };
           },
-          [found.userId, ...managers],
+          [
+            found.userId,
+            ...managers,
+            ...(destination ? [destination.userId] : []),
+          ],
         );
       },
     };
@@ -300,8 +339,13 @@ const members = {
 
   ownActiveCompanyIds: repository.ownActiveCompanyIds,
   readActiveForUser: repository.readActiveForUser,
+  readMember: repository.read,
   hasMembership: repository.hasMembership,
   countActive: repository.countActive,
+  async listSuperAdminUserIds(tx: TenantTx): Promise<string[]> {
+    const { companyId } = await readCompanyScope(tx);
+    return repository.activeSuperAdminUserIds(tx, companyId);
+  },
   async hasActiveSuperAdmin(
     tx: TenantTx,
     companyId: string,

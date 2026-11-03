@@ -2,6 +2,24 @@ import type { Lead, TodayCounts } from "./leads.js";
 import type { Stage } from "./settings.js";
 
 export type Range = { from: Date; to: Date };
+export type DailyCounts = Pick<
+  TodayCounts,
+  "overdue" | "dueToday" | "newLeads"
+>;
+export type WeeklyCounts = {
+  leads: number;
+  calls: number;
+  siteVisits: number;
+  bookings: number;
+  overdue: number;
+  staffCalls: number;
+  byAdmin: {
+    memberId: string;
+    userId: string;
+    name: string;
+    calls: number;
+  }[];
+};
 export type Target = {
   id: string;
   companyId: string;

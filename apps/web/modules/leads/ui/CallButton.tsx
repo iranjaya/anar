@@ -11,11 +11,13 @@ export function CallButton({
   phoneE164,
   phoneValid,
   slug,
+  logOnDial = true,
 }: {
   leadId: string;
   phoneE164: string | null;
   phoneValid: boolean;
   slug: string;
+  logOnDial?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -35,7 +37,9 @@ export function CallButton({
   return (
     <a
       href={`tel:${phoneE164}`}
-      onClick={() => router.push(logHref, { scroll: false })}
+      onClick={
+        logOnDial ? () => router.push(logHref, { scroll: false }) : undefined
+      }
       className={style}
     >
       <Phone className="size-4" aria-hidden="true" />

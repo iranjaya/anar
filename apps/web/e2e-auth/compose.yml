@@ -20,6 +20,9 @@ services:
     image: ${AUTH_TEST_PROJECT}-worker
     environment:
       MAILPIT_URL: http://mailpit:8025
+      NODE_EXTRA_CA_CERTS: /fake/ca.pem
+    volumes:
+      - ${FAKE_PUSH_DIR}:/fake:ro
   web:
     extends:
       file: ../../../compose.yml
@@ -34,9 +37,22 @@ services:
     ports: !override
       - "127.0.0.1:${AUTH_TEST_PORT}:80"
       - "127.0.0.1::443"
+  fake-push:
+    image: node:24.22.1-bookworm-slim
+    command: ["node", "/fake/server.mjs"]
+    volumes:
+      - ${FAKE_PUSH_DIR}:/fake:ro
+    ports:
+      - "127.0.0.1::8080"
+    networks:
+      default:
+        aliases:
+          - fcm.googleapis.com
+          - web.push.apple.com
   mailpit:
     image: axllent/mailpit:v1.32.0
     ports:
       - "127.0.0.1::8025"
 volumes:
   postgres_data:
+  uploads_data:

@@ -2,6 +2,7 @@ import { otpCodes, type PlatformTx, sessions, users } from "@anar/db/platform";
 import type { AuthUser } from "@anar/domain/auth";
 import { AppError } from "@anar/domain/errors";
 import { and, asc, desc, eq, gt, inArray, isNull, or } from "drizzle-orm";
+import pushBindings from "./pushBindings.js";
 
 const repository = {
   async findOtpUser(tx: PlatformTx, email: string) {
@@ -168,6 +169,7 @@ const repository = {
           isNull(sessions.revokedAt),
         ),
       );
+    await pushBindings.release(tx, { userId, sessionId: id }, at);
   },
 
   async revokeAllSessions(
@@ -179,6 +181,7 @@ const repository = {
       .update(sessions)
       .set({ revokedAt: at })
       .where(and(eq(sessions.userId, userId), isNull(sessions.revokedAt)));
+    await pushBindings.release(tx, { userId }, at);
   },
 
   async refreshSession(

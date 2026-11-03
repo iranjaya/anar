@@ -1,4 +1,6 @@
-import { expect, staffEmail, test } from "./fixture";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { expect, stackContainer, staffEmail, test } from "./fixture";
 
 test("delivers a code through the worker and keeps the proxy cookie through refresh and logout", async ({
   page,
@@ -84,8 +86,36 @@ test("keeps demo access outside the real profile", async ({
     page.getByRole("button", { name: "Send code", exact: true }),
   ).toBeEnabled();
   expect((await page.request.get("/companies")).status()).toBe(404);
-  expect((await page.request.get("/sundar-heights/leads")).status()).toBe(404);
+  expect((await page.request.get("/sundar-heights/dashboard")).status()).toBe(
+    404,
+  );
   expect((await page.request.post("/api/imports", { data: {} })).status()).toBe(
     403,
   );
+});
+
+test("the worker reaches the fake push service over trusted HTTPS", async ({
+  stack,
+}) => {
+  await fetch(`${stack.pushURL}/reset`, { method: "POST" });
+  const worker = await stackContainer(stack, "worker");
+  await promisify(execFile)(
+    "docker",
+    [
+      "exec",
+      worker,
+      "node",
+      "-e",
+      'const r = await fetch("https://fcm.googleapis.com/fcm/send/harness", { method: "POST", headers: { TTL: "60" } }); if (r.status !== 201) process.exit(1);',
+    ],
+    { timeout: 30000 },
+  );
+  const received = await (await fetch(`${stack.pushURL}/requests`)).json();
+  expect(received).toEqual([
+    expect.objectContaining({
+      host: "fcm.googleapis.com",
+      path: "/fcm/send/harness",
+      ttl: "60",
+    }),
+  ]);
 });

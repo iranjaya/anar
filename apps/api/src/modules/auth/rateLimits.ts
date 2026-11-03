@@ -1,9 +1,13 @@
-import { createHmac, type KeyObject } from "node:crypto";
+import { createHmac, createSecretKey, type KeyObject } from "node:crypto";
 import { authRateLimits, type PlatformTx } from "@anar/db/platform";
 import { eq } from "drizzle-orm";
 
 export type InviteOperation = "inspect" | "accept";
 export type RateLimitResult = { allowed: boolean; retryAfter: number };
+export type UploadLimiter = (
+  tx: PlatformTx,
+  userId: string,
+) => Promise<RateLimitResult>;
 
 const rateLimits = {
   async requestOtp(
@@ -56,6 +60,30 @@ const rateLimits = {
     return rateLimits._take(
       tx,
       { scope: "invite.resend", value: inviteId, max: 3, windowMs: 10 * 60000 },
+      pepper,
+      now,
+    );
+  },
+
+  createUploadLimiter(encodedPepper: string, now: () => Date): UploadLimiter {
+    const pepper = createSecretKey(Buffer.from(encodedPepper, "base64"));
+    return (tx, userId) => rateLimits.uploadImport(tx, userId, pepper, now);
+  },
+
+  uploadImport(
+    tx: PlatformTx,
+    userId: string,
+    pepper: KeyObject,
+    now: () => Date,
+  ): Promise<RateLimitResult> {
+    return rateLimits._take(
+      tx,
+      {
+        scope: "imports.upload.user",
+        value: userId,
+        max: 20,
+        windowMs: 3600000,
+      },
       pepper,
       now,
     );

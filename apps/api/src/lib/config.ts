@@ -1,3 +1,5 @@
+import { isAbsolute } from "node:path";
+
 function secret(name: string, env: NodeJS.ProcessEnv): string {
   const value = env[name]?.trim() ?? "";
   const bytes = Buffer.from(value, "base64");
@@ -8,6 +10,45 @@ function secret(name: string, env: NodeJS.ProcessEnv): string {
 
 export function loadMailKey(env: NodeJS.ProcessEnv = process.env): string {
   return secret("MAIL_ENCRYPTION_KEY", env);
+}
+
+export function loadUploadsRoot(env: NodeJS.ProcessEnv = process.env): string {
+  const uploadsRoot = env.UPLOADS_ROOT ?? "";
+  if (!isAbsolute(uploadsRoot))
+    throw new Error("UPLOADS_ROOT must be an absolute path");
+  return uploadsRoot;
+}
+
+export const pushHosts = ["fcm.googleapis.com", "web.push.apple.com"] as const;
+
+export function loadPushConfig(env: NodeJS.ProcessEnv = process.env) {
+  const flag = env.ANAR_PUSH_ENABLED ?? "false";
+  if (!["true", "false"].includes(flag))
+    throw new Error("ANAR_PUSH_ENABLED must be true or false");
+  if (flag === "false")
+    return { pushEnabled: false, vapidPublicKey: "", pushHosts };
+  const key = env.VAPID_PUBLIC_KEY ?? "";
+  const bytes = Buffer.from(key, "base64url");
+  if (
+    bytes.length !== 65 ||
+    bytes[0] !== 4 ||
+    bytes.toString("base64url") !== key
+  )
+    throw new Error("VAPID_PUBLIC_KEY must be a base64url P-256 public key");
+  return { pushEnabled: true, vapidPublicKey: key, pushHosts };
+}
+
+// Worker only: the private key signs push requests and must never reach the API or web.
+export function loadPushDeliveryConfig(env: NodeJS.ProcessEnv = process.env) {
+  const { vapidPublicKey } = loadPushConfig(env);
+  const privateKey = env.VAPID_PRIVATE_KEY ?? "";
+  const bytes = Buffer.from(privateKey, "base64url");
+  if (bytes.length !== 32 || bytes.toString("base64url") !== privateKey)
+    throw new Error("VAPID_PRIVATE_KEY must be 32 bytes in base64url");
+  const subject = env.VAPID_SUBJECT ?? "";
+  if (!/^mailto:[^\s@]+@[^\s@]+$/.test(subject))
+    throw new Error("VAPID_SUBJECT must be a mailto: address");
+  return { publicKey: vapidPublicKey, privateKey, subject };
 }
 
 export function loadApiConfig(env: NodeJS.ProcessEnv = process.env) {
@@ -39,6 +80,7 @@ export function loadApiConfig(env: NodeJS.ProcessEnv = process.env) {
   const cookieTransport = localHttp
     ? { protocol: "http" as const, local: true as const }
     : { protocol: "https" as const };
+  const uploadsRoot = loadUploadsRoot(env);
   const proxies =
     env.TRUSTED_PROXY_CIDRS?.split(",")
       .map((value) => value.trim())
@@ -50,5 +92,7 @@ export function loadApiConfig(env: NodeJS.ProcessEnv = process.env) {
     publicOrigin,
     trustProxy: proxies.length ? proxies : (false as const),
     cookieTransport,
+    uploadsRoot,
+    ...loadPushConfig(env),
   };
 }

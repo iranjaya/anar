@@ -86,6 +86,18 @@ export async function TeamPage({
                             slug={slug}
                             memberId={member.id}
                             name={member.name}
+                            openLeads={member.openLeads}
+                            overdue={member.overdue}
+                            destinations={team.data
+                              .filter(
+                                (other) =>
+                                  other.status === "active" &&
+                                  other.id !== member.id,
+                              )
+                              .map((other) => ({
+                                id: other.id,
+                                name: other.name,
+                              }))}
                           />
                         )}
                     </li>
@@ -130,7 +142,10 @@ export async function TeamPage({
                   <p className="mt-1 text-xs text-muted">
                     Expires{" "}
                     <time dateTime={invite.expiresAt.toISOString()}>
-                      {formatDay(invite.expiresAt)}
+                      {formatDay(
+                        invite.expiresAt,
+                        context.data.company.timezone,
+                      )}
                     </time>
                   </p>
                   {canInvite && (staff || invite.role === "admin") && (
@@ -183,8 +198,15 @@ export async function TeamPage({
                   <p className="mt-1 text-sm wrap-break-word">{entry.reason}</p>
                   <p className="mt-1 text-xs text-muted">
                     <time dateTime={entry.enteredAt.toISOString()}>
-                      {formatDay(entry.enteredAt)},{" "}
-                      {formatClock(entry.enteredAt)}
+                      {formatDay(
+                        entry.enteredAt,
+                        context.data.company.timezone,
+                      )}
+                      ,{" "}
+                      {formatClock(
+                        entry.enteredAt,
+                        context.data.company.timezone,
+                      )}
                     </time>
                   </p>
                 </li>

@@ -16,6 +16,7 @@ COPY apps/web/components apps/web/components
 COPY apps/web/lib apps/web/lib
 COPY apps/web/mock apps/web/mock
 COPY apps/web/modules apps/web/modules
+COPY apps/web/public apps/web/public
 COPY apps/web/next.config.ts apps/web/postcss.config.mjs apps/web/tsconfig.json apps/web/proxy.ts apps/web/instrumentation.ts apps/web/
 
 FROM base AS dev
@@ -30,6 +31,7 @@ WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 HOSTNAME=0.0.0.0 PORT=3000
 COPY --from=build --chown=node:node /workspace/apps/web/.next/standalone ./
 COPY --from=build --chown=node:node /workspace/apps/web/.next/static ./apps/web/.next/static
+COPY --from=build --chown=node:node /workspace/apps/web/public ./apps/web/public
 USER node
 EXPOSE 3000
 CMD ["node", "apps/web/server.js"]

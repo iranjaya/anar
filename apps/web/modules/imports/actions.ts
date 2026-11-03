@@ -4,8 +4,24 @@ import { z } from "zod";
 import { type ActionResult, AppError, actionFailure } from "@/lib/errors";
 import { can, requireContext } from "@/modules/tenant/server";
 import { commitInputSchema, dryRunInputSchema } from "./data/commit";
-import { commitImport, createImportBatch, dryRunImport } from "./server";
-import type { DryRun, UploadResult } from "./types";
+import {
+  commitImport,
+  commitRealImport,
+  createImportBatch,
+  dryRunImport,
+  dryRunRealImport,
+  resumeRealImport,
+  saveRealImportDraft,
+} from "./server";
+import type {
+  CommitImportInput,
+  CommitImportResult,
+  DryRun,
+  DryRunResult,
+  ImportDraft,
+  ImportDraftInput,
+  UploadResult,
+} from "./types";
 
 export async function createImportBatchAction(input: {
   slug: string;
@@ -78,6 +94,53 @@ export async function commitImportAction(
     if (!can(ctx, "imports.commit"))
       throw new AppError("forbidden", "You cannot import leads.");
     return { ok: true, data: await commitImport(ctx, parsed.data) };
+  } catch (error) {
+    return actionFailure(error);
+  }
+}
+
+export async function saveImportDraftAction(
+  input: ImportDraftInput & { slug: string },
+): Promise<ActionResult<ImportDraft>> {
+  try {
+    const { slug, ...draft } = input;
+    return { ok: true, data: await saveRealImportDraft(slug, draft) };
+  } catch (error) {
+    return actionFailure(error);
+  }
+}
+
+export async function commitRealImportAction(
+  input: CommitImportInput & { slug: string },
+): Promise<ActionResult<CommitImportResult>> {
+  try {
+    const { slug, ...commit } = input;
+    return { ok: true, data: await commitRealImport(slug, commit) };
+  } catch (error) {
+    return actionFailure(error);
+  }
+}
+
+export async function resumeImportAction(input: {
+  slug: string;
+  batchId: string;
+}): Promise<ActionResult<CommitImportResult>> {
+  try {
+    return {
+      ok: true,
+      data: await resumeRealImport(input.slug, input.batchId),
+    };
+  } catch (error) {
+    return actionFailure(error);
+  }
+}
+
+export async function dryRunRealImportAction(
+  input: ImportDraftInput & { slug: string },
+): Promise<ActionResult<DryRunResult>> {
+  try {
+    const { slug, ...draft } = input;
+    return { ok: true, data: await dryRunRealImport(slug, draft) };
   } catch (error) {
     return actionFailure(error);
   }

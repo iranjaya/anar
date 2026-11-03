@@ -99,7 +99,7 @@ export async function AgencyCompaniesPage({
                     <span className="lg:hidden">Last import: </span>
                     {company.lastImportAt === null
                       ? "No imports yet"
-                      : formatDay(company.lastImportAt)}
+                      : formatDay(company.lastImportAt, company.timezone)}
                   </p>
                 </div>
                 {canEnter && company.status === "active" && (

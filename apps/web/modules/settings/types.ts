@@ -3,5 +3,6 @@ export type {
   Field,
   LostReason,
   Outcome,
+  SettingsCatalog,
   Stage,
 } from "@anar/domain/settings";

@@ -41,14 +41,20 @@ export async function resendInviteAction(
 export async function deactivateMemberAction(
   slug: string,
   memberId: string,
-  _previous: ActionResult<DeactivateMemberResult> | null,
-  _form: FormData,
-): Promise<ActionResult<DeactivateMemberResult>> {
+  _previous:
+    | (ActionResult<DeactivateMemberResult> & { reassignTo?: string })
+    | null,
+  form: FormData,
+): Promise<ActionResult<DeactivateMemberResult> & { reassignTo?: string }> {
+  const selected = String(form.get("reassignTo") ?? "");
   try {
-    const data = await deactivateMember(slug, memberId);
+    const data = await deactivateMember(slug, {
+      memberId,
+      reassignTo: selected === "unassigned" ? null : selected,
+    });
     revalidatePath(`/${slug}/settings/team`);
     return { ok: true, data };
   } catch (error) {
-    return actionFailure(error);
+    return { ...actionFailure(error), reassignTo: selected };
   }
 }

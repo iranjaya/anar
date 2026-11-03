@@ -455,6 +455,10 @@ describe("company Super Admin invitations", () => {
         }),
         now: fixture.now,
         createCompanyInvite: fixture.invitations.createCompanyInvite,
+
+        async seedCompany() {
+          throw new Error("Unexpected company seed");
+        },
       });
       const actor = await service.requireAgencyContext({
         headers: { cookie: a.cookie },

@@ -48,6 +48,11 @@ services:
       PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:8080}
       ANAR_LOCAL_HTTP: ${ANAR_LOCAL_HTTP:-}
       TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-}
+      UPLOADS_ROOT: /var/lib/anar/uploads
+      ANAR_PUSH_ENABLED: ${ANAR_PUSH_ENABLED:-false}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+    volumes:
+      - uploads_data:/var/lib/anar/uploads
     init: true
 
   worker:
@@ -58,11 +63,19 @@ services:
       target: runtime
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://anar_app:anar_app_local@db:5432/anar}
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:8080}
       EMAIL_TRANSPORT: ${EMAIL_TRANSPORT:-}
       EMAIL_FROM: ${EMAIL_FROM:-}
       EMAIL_REPLY_TO: ${EMAIL_REPLY_TO:-}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       MAIL_ENCRYPTION_KEY: ${MAIL_ENCRYPTION_KEY:-}
+      ANAR_PUSH_ENABLED: ${ANAR_PUSH_ENABLED:-false}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+      UPLOADS_ROOT: /var/lib/anar/uploads
+    volumes:
+      - uploads_data:/var/lib/anar/uploads:ro
     init: true
     restart: unless-stopped
 
@@ -78,6 +91,7 @@ services:
       API_INTERNAL_URL: http://api:3001
       ANAR_DATA_MODE: real
       ANAR_AUTH_ENABLED: ${ANAR_AUTH_ENABLED:-true}
+      ANAR_PUSH_ENABLED: ${ANAR_PUSH_ENABLED:-false}
     init: true
 
   proxy:
@@ -94,3 +108,4 @@ services:
 
 volumes:
   postgres_data:
+  uploads_data:

@@ -1,4 +1,6 @@
 import { randomBytes } from "node:crypto";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 export function createTestRuntimeConfig(databaseUrl: string) {
   return {
@@ -12,5 +14,6 @@ export function createTestRuntimeConfig(databaseUrl: string) {
     TRUSTED_PROXY_CIDRS: "",
     NODE_OPTIONS: "",
     HOST: "127.0.0.1",
+    UPLOADS_ROOT: path.join(tmpdir(), "anar-test-uploads"),
   };
 }

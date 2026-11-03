@@ -1,9 +1,18 @@
+import { slugSchema } from "@anar/domain/agencies";
+import {
+  type ImportReport,
+  type ImportRowsPage,
+  type ImportRowsQuery,
+  importRowsQuerySchema,
+} from "@anar/domain/imports";
 import { z } from "zod";
+import { apiRequest } from "@/lib/api/client";
 import { AppError } from "@/lib/errors";
 import { store } from "@/mock/access";
 import { can, verifyContext } from "@/modules/tenant/server";
 import type { Ctx } from "@/modules/tenant/types";
 import type { ImportBatch, ImportRow } from "../types";
+import { importReportSchema, importRowsPageSchema } from "./wire";
 
 export async function getImportBatch(
   ctx: Ctx,
@@ -18,6 +27,45 @@ export async function getImportBatch(
   );
   if (!batch) throw new AppError("not_found", "Import not found.");
   return batch;
+}
+
+export async function getRealImportBatch(
+  slug: string,
+  batchId: string,
+): Promise<ImportReport> {
+  const company = slugSchema.safeParse(slug);
+  const batch = z.uuid().safeParse(batchId);
+  if (!company.success || !batch.success)
+    throw new AppError("not_found", "Import not found.");
+  return apiRequest(
+    {
+      path: `/api/companies/${company.data}/imports/getImportBatch`,
+      query: { batchId: batch.data },
+    },
+    importReportSchema,
+  );
+}
+
+export async function listRealImportRows(
+  slug: string,
+  query: ImportRowsQuery,
+): Promise<ImportRowsPage> {
+  const company = slugSchema.safeParse(slug);
+  const parsed = importRowsQuerySchema.safeParse(query);
+  if (!company.success || !parsed.success)
+    throw new AppError("not_found", "Import not found.");
+  const { batchId, afterRowNo, filter } = parsed.data;
+  return apiRequest(
+    {
+      path: `/api/companies/${company.data}/imports/listImportRows`,
+      query: {
+        batchId,
+        ...(afterRowNo ? { afterRowNo: String(afterRowNo) } : {}),
+        ...(filter ? { filter } : {}),
+      },
+    },
+    importRowsPageSchema,
+  );
 }
 
 export async function listImportRows(

@@ -6,10 +6,12 @@ export function Facts({
   lead,
   fields,
   now,
+  timezone,
 }: {
   lead: Lead;
   fields: LeadDetail["fields"];
   now: Date;
+  timezone: string;
 }) {
   const facts = [
     ["Phone", lead.phoneE164 ? formatPhone(lead.phoneE164) : lead.phoneRaw],
@@ -17,10 +19,12 @@ export function Facts({
     ["Source", lead.source],
     ["Campaign", lead.campaignName],
     ["Form", lead.formName],
-    ["Lead date", formatDay(lead.leadDate, now)],
+    ["Lead date", formatDay(lead.leadDate, timezone, now)],
     [
       "Last contacted",
-      lead.lastContactedAt ? formatDay(lead.lastContactedAt, now) : null,
+      lead.lastContactedAt
+        ? formatDay(lead.lastContactedAt, timezone, now)
+        : null,
     ],
   ].filter(([, value]) => value !== null && value !== "");
   return (

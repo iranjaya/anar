@@ -11,6 +11,13 @@ const statuses: Record<AppErrorCode, number> = {
   unavailable: 503,
 };
 
+export const uploadLimits = {
+  fileSize: 25 * 1024 * 1024,
+  files: 1,
+  fields: 0,
+  parts: 1,
+};
+
 export function originGuard(publicOrigin: string) {
   return (request: FastifyRequest): void => {
     if (request.headers.origin !== publicOrigin)
@@ -71,6 +78,17 @@ export function registerHttp(app: FastifyInstance): void {
       return reply
         .code(statuses[error.code])
         .send({ ok: false, error: error.code, message: error.message });
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      error.code === "FST_REQ_FILE_TOO_LARGE"
+    )
+      return reply.code(400).send({
+        ok: false,
+        error: "validation",
+        message: "The file is larger than 25 MB",
+      });
     if (
       error &&
       typeof error === "object" &&

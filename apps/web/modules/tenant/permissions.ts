@@ -26,6 +26,10 @@ const permissions = {
 
 export type Permission = keyof typeof permissions;
 
+export function isDemoPermission(permission: string): permission is Permission {
+  return Object.hasOwn(permissions, permission);
+}
+
 export function can(
   ctx: Ctx,
   permission: Permission,

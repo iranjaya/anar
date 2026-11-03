@@ -8,10 +8,11 @@ import { parseApiResponse } from "./response";
 export const apiDateSchema = wireDateSchema.transform(
   (value) => new Date(value),
 );
-export type ApiRequest = { path: string; query?: Record<string, string> } & (
-  | { method?: "GET" }
-  | { method: "POST"; body: unknown }
-);
+export type ApiRequest = {
+  path: string;
+  query?: Record<string, string>;
+  timeoutMs?: number;
+} & ({ method?: "GET" } | { method: "POST"; body: unknown });
 
 export async function apiRequest<T>(
   request: ApiRequest,
@@ -58,7 +59,7 @@ export async function apiRequest<T>(
       headers: outgoing,
       cache: "no-store",
       redirect: "error",
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(request.timeoutMs ?? 10000),
       ...(request.method === "POST"
         ? { body: JSON.stringify(request.body) }
         : {}),

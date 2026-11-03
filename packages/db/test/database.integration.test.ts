@@ -161,10 +161,27 @@ describe("database roles and tenant transactions", () => {
       { tablename: "audit_log" },
       { tablename: "auth_rate_limits" },
       { tablename: "companies" },
+      { tablename: "company_job_periods" },
       { tablename: "company_members" },
+      { tablename: "fields" },
+      { tablename: "follow_ups" },
+      { tablename: "import_batches" },
+      { tablename: "import_rows" },
+      { tablename: "import_runs" },
       { tablename: "invites" },
+      { tablename: "lead_events" },
+      { tablename: "leads" },
+      { tablename: "lost_reasons" },
+      { tablename: "mapping_templates" },
+      { tablename: "notification_deliveries" },
+      { tablename: "notifications" },
       { tablename: "otp_codes" },
+      { tablename: "outcomes" },
+      { tablename: "push_endpoint_bindings" },
+      { tablename: "push_subscriptions" },
+      { tablename: "scoring_configs" },
       { tablename: "sessions" },
+      { tablename: "stages" },
       { tablename: "users" },
       { tablename: "worker_heartbeats" },
     ]);
@@ -205,13 +222,29 @@ describe("database roles and tenant transactions", () => {
       pg_get_userbyid(n.nspowner) AS schema_owner, c.relrowsecurity, c.relforcerowsecurity
       FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
       WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')
-        AND c.relname NOT IN ('agencies', 'audit_log', 'auth_rate_limits', 'invites', 'otp_codes', 'sessions', 'users', 'worker_heartbeats')
+        AND c.relname NOT IN ('agencies', 'audit_log', 'auth_rate_limits', 'invites', 'otp_codes', 'push_endpoint_bindings', 'sessions', 'users', 'worker_heartbeats')
       ORDER BY c.relname`);
     expect(owner.rows).toEqual(
       [
         "agency_members",
         "companies",
+        "company_job_periods",
         "company_members",
+        "fields",
+        "follow_ups",
+        "import_batches",
+        "import_rows",
+        "import_runs",
+        "lead_events",
+        "leads",
+        "lost_reasons",
+        "mapping_templates",
+        "notification_deliveries",
+        "notifications",
+        "outcomes",
+        "push_subscriptions",
+        "scoring_configs",
+        "stages",
         "tenant_scope_fixture",
       ].map((table_name) => ({
         table_name,
@@ -251,6 +284,43 @@ describe("database roles and tenant transactions", () => {
         truncate: false,
       },
     ]);
+    for (const table of [
+      "notifications",
+      "fields",
+      "follow_ups",
+      "stages",
+      "outcomes",
+      "lost_reasons",
+      "leads",
+      "scoring_configs",
+      "lead_events",
+      "import_batches",
+      "import_rows",
+      "mapping_templates",
+      "push_subscriptions",
+      "push_endpoint_bindings",
+      "notification_deliveries",
+      "import_runs",
+    ]) {
+      const grants = await runtime.pool.query(
+        `SELECT
+        has_table_privilege(current_user, $1, 'SELECT') AS select,
+        has_table_privilege(current_user, $1, 'INSERT') AS insert,
+        has_table_privilege(current_user, $1, 'UPDATE') AS update,
+        has_table_privilege(current_user, $1, 'DELETE') AS delete,
+        has_table_privilege(current_user, $1, 'TRUNCATE') AS truncate`,
+        [`public.${table}`],
+      );
+      expect(grants.rows, table).toEqual([
+        {
+          select: true,
+          insert: true,
+          update: table !== "follow_ups",
+          delete: false,
+          truncate: false,
+        },
+      ]);
+    }
   });
 
   it.each([
@@ -262,6 +332,8 @@ describe("database roles and tenant transactions", () => {
     "DELETE FROM public.companies",
     "TRUNCATE public.companies",
     "DELETE FROM public.company_members",
+    "DELETE FROM public.follow_ups",
+    "UPDATE public.follow_ups SET notes = 'no'",
     "TRUNCATE public.company_members",
     "SET ROLE anar_migrate",
     "SET ROLE postgres",

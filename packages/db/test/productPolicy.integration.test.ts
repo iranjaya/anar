@@ -32,6 +32,7 @@ const platformTables = [
   "auth_rate_limits",
   "invites",
   "otp_codes",
+  "push_endpoint_bindings",
   "sessions",
   "users",
   "worker_heartbeats",

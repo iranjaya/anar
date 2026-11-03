@@ -11,7 +11,12 @@ import {
 } from "@playwright/test";
 
 type Message = { ID: string; To: { Address: string }[]; Text: string };
-type AuthStack = { baseURL: string; mailURL: string; project: string };
+type AuthStack = {
+  baseURL: string;
+  mailURL: string;
+  pushURL: string;
+  project: string;
+};
 export const staffEmail = "staff@browser.example.test";
 
 async function docker(...args: string[]) {

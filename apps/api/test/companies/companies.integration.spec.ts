@@ -282,6 +282,9 @@ describe("own agency company shells", () => {
           sessions: fixture.apps[0].sessions,
         }),
         now: fixture.now,
+        async seedCompany() {
+          throw new Error("Unexpected company seed");
+        },
       });
       const actor = await service.requireAgencyContext({
         headers: { cookie: a.cookie },

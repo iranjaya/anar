@@ -20,6 +20,10 @@ export function authEnabled() {
   return dataMode() === "real" && process.env.ANAR_AUTH_ENABLED !== "false";
 }
 
+export function pushEnabled() {
+  return authEnabled() && process.env.ANAR_PUSH_ENABLED === "true";
+}
+
 export function requireDemoMode() {
   if (dataMode() !== "demo")
     throw new AppError("forbidden", "This is not available yet.");

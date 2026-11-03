@@ -6,11 +6,14 @@ import { useEffect, useId, useState, useTransition } from "react";
 import { Chip } from "@/components/Chip";
 import { EmptyState } from "@/components/EmptyState";
 import { formatDay } from "@/lib/dates";
+import type { ActionResult } from "@/lib/errors";
 import { formatPhone } from "@/lib/phone";
 import { ScoreBadge } from "@/modules/scoring/components";
 import type { Member } from "@/modules/tenant/types";
 import { assignLeadsAction } from "../actions";
 import type { LeadRow, Priority } from "../types";
+
+const unassign = "unassign";
 
 const columns =
   "lg:grid-cols-[2.75rem_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,1fr)]";
@@ -18,21 +21,33 @@ const columns =
 export function AssignList({
   items,
   members,
+  timezone,
   onAssigned,
   total = items.length,
   nextCursor = null,
   q = "",
   priority,
   compact = false,
+  noun = "unassigned leads",
+  assignNote,
+  assignAction,
 }: {
   items: LeadRow[];
   members: Pick<Member, "id" | "name">[];
+  timezone: string;
   onAssigned?: () => void;
   total?: number;
   nextCursor?: string | null;
   q?: string;
   priority?: Priority;
   compact?: boolean;
+  noun?: string;
+  assignNote?: string;
+  assignAction?: (input: {
+    slug: string;
+    leadIds: string[];
+    memberId: string | null;
+  }) => Promise<ActionResult<{ updated: number }>>;
 }) {
   const { slug } = useParams<{ slug: string }>();
   const router = useRouter();
@@ -51,7 +66,7 @@ export function AssignList({
     : "col-start-2 min-w-0 break-words text-muted lg:col-start-auto";
   let emptyTitle = "No leads match";
   if (priority) emptyTitle = `No ${priority} leads waiting`;
-  if (total === 0) emptyTitle = "No unassigned leads";
+  if (total === 0) emptyTitle = `No ${noun}`;
 
   function href(search: string, score?: Priority, cursor?: string) {
     const params = new URLSearchParams();
@@ -61,22 +76,32 @@ export function AssignList({
     return `/${slug}/leads?${params}`;
   }
 
+  function buttonLabel() {
+    if (memberId === unassign)
+      return pending ? "Unassigning…" : `Unassign ${picked.length} leads`;
+    return pending ? "Assigning…" : `Assign ${picked.length} leads`;
+  }
+
   function assign() {
     setError("");
     setMessage("");
     startTransition(async () => {
       try {
-        const result = await assignLeadsAction({
-          slug,
-          leadIds: picked,
-          memberId,
-        });
+        const result = assignAction
+          ? await assignAction({
+              slug,
+              leadIds: picked,
+              memberId: memberId === unassign ? null : memberId,
+            })
+          : await assignLeadsAction({ slug, leadIds: picked, memberId });
         if (!result.ok) {
           setError(result.message);
           return;
         }
         setMessage(
-          `${result.data.updated} leads assigned to ${members.find((member) => member.id === memberId)?.name}.`,
+          memberId === unassign
+            ? `${result.data.updated} leads unassigned.`
+            : `${result.data.updated} leads assigned to ${members.find((member) => member.id === memberId)?.name}.`,
         );
         setPicked([]);
         onAssigned?.();
@@ -90,7 +115,9 @@ export function AssignList({
 
   return (
     <div className={compact ? "min-w-0" : "min-w-0 pb-64 lg:pb-0"}>
-      <p className="mb-6 text-muted">{total} unassigned leads</p>
+      <p className="mb-6 text-muted">
+        {total} {noun}
+      </p>
       <div
         className={
           compact
@@ -267,7 +294,9 @@ export function AssignList({
                     }
                   </td>
                   <td className={`${detailCell} capitalize`}>{lead.source}</td>
-                  <td className={detailCell}>{formatDay(lead.leadDate)}</td>
+                  <td className={detailCell}>
+                    {formatDay(lead.leadDate, timezone)}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -307,11 +336,12 @@ export function AssignList({
             Assign to
             <select
               value={memberId}
-              disabled={pending}
+              disabled={pending || assignNote !== undefined}
               onChange={(event) => setMemberId(event.currentTarget.value)}
               className="mt-1 min-h-11 w-full min-w-0 rounded-xl border border-line-strong bg-surface px-3 text-base"
             >
               <option value="">Pick a person</option>
+              {assignAction && <option value={unassign}>Unassign</option>}
               {members.map((member) => (
                 <option key={member.id} value={member.id}>
                   {member.name}
@@ -324,12 +354,17 @@ export function AssignList({
               {error}
             </p>
           )}
-          {!picked.length && (
+          {assignNote !== undefined && (
+            <p id={`${id}-reason`} className="text-sm text-muted">
+              {assignNote}
+            </p>
+          )}
+          {assignNote === undefined && !picked.length && (
             <p id={`${id}-reason`} className="text-sm text-muted">
               Select leads to assign
             </p>
           )}
-          {picked.length > 0 && !memberId && (
+          {assignNote === undefined && picked.length > 0 && !memberId && (
             <p id={`${id}-reason`} className="text-sm text-muted">
               Pick a person to assign to
             </p>
@@ -337,13 +372,20 @@ export function AssignList({
           <button
             type="button"
             onClick={assign}
-            disabled={pending || picked.length === 0 || !memberId}
+            disabled={
+              pending ||
+              assignNote !== undefined ||
+              picked.length === 0 ||
+              !memberId
+            }
             aria-describedby={
-              !picked.length || !memberId ? `${id}-reason` : undefined
+              assignNote !== undefined || !picked.length || !memberId
+                ? `${id}-reason`
+                : undefined
             }
             className="min-h-14 w-full rounded-xl bg-brand px-4 font-semibold text-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:opacity-50"
           >
-            {pending ? "Assigning…" : `Assign ${picked.length} leads`}
+            {buttonLabel()}
           </button>
         </section>
       </div>

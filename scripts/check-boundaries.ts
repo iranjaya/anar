@@ -343,7 +343,7 @@ export function checkBoundaries(root: string): string[] {
               const platformEntry =
                 specifier === "@anar/db/platform" ||
                 (target?.manifest.name === "@anar/db" &&
-                  /\/(?:src|dist)\/(?:platform|tenantScope|schema\/(?:agencies|platform|audit|authLimits|index))\.(?:d\.)?[cm]?[jt]s$/.test(
+                  /\/(?:src|dist)\/(?:platform|tenantScope|schema\/(?:agencies|platform|audit|authLimits|pushBindings|index))\.(?:d\.)?[cm]?[jt]s$/.test(
                     resolved?.replaceAll(path.sep, "/") ?? "",
                   ));
               if (

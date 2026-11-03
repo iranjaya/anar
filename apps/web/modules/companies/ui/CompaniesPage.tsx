@@ -55,7 +55,7 @@ export async function CompaniesPage() {
               <span className="lg:hidden">Last import: </span>
               {company.lastImportAt === null
                 ? "No imports yet"
-                : formatDay(company.lastImportAt)}
+                : formatDay(company.lastImportAt, company.timezone)}
             </p>
             <EnterCompanyButton
               companyId={company.id}

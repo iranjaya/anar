@@ -34,7 +34,7 @@ export async function RealCompanyShell({
         <ActingBanner
           company={company.name}
           reason={session.actingReason ?? ""}
-          until={formatDay(session.actingUntil)}
+          until={formatDay(session.actingUntil, company.timezone)}
         />
       )}
       <CompanyNav view={result.data} />

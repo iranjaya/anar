@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { promisify } from "node:util";
 import type { Browser, Page, TestInfo } from "@playwright/test";
@@ -48,7 +49,7 @@ async function database(baseURL: string, query: string) {
     "--filter",
     "label=com.docker.compose.service=db",
   );
-  await docker(
+  return docker(
     "exec",
     db,
     "psql",
@@ -342,7 +343,7 @@ test("a failed team load shows an error, not an empty team", async ({
   }
 });
 
-test("removing an Admin ends their access on the next request", async ({
+test("removing an Admin moves their open work and ends their access", async ({
   browser,
   baseURL,
   mailbox,
@@ -366,6 +367,22 @@ test("removing an Admin ends their access on the next request", async ({
   await signIn(member, mailbox, values.email);
   await expect(member).toHaveURL(`${baseURL}/${slug}`);
 
+  const leadId = randomUUID();
+  const stageId = randomUUID();
+  await database(
+    String(baseURL),
+    `INSERT INTO stages (id, company_id, name, position, kind, is_default)
+    VALUES ('${stageId}', '40000000-0000-4000-8000-000000000001', 'New', 1, 'open', false);
+    INSERT INTO leads
+    (id, company_id, phone_valid, source_kind, lead_date, stage_id, custom,
+     score, priority, score_breakdown, scored_at, assigned_to)
+    SELECT '${leadId}', m.company_id, false, 'manual', now(), '${stageId}', '{}',
+      0, 'cold', '{}', now(), m.id
+    FROM company_members m
+    JOIN users u ON u.id = m.user_id
+    WHERE u.email = '${values.email}'`,
+  );
+
   await page.goto(team);
   const row = page
     .getByRole("listitem")
@@ -373,8 +390,41 @@ test("removing an Admin ends their access on the next request", async ({
   await row
     .getByRole("button", { name: `Remove ${values.name} from the team` })
     .click();
+  const dialog = row.getByRole("dialog", { name: `Remove ${values.name}` });
+  await expect(dialog.getByText("1 open lead, 0 overdue.")).toBeVisible();
+  await dialog
+    .getByLabel("Move open leads to")
+    .selectOption({ label: "Browser Manager" });
+  await ageSessionCode(String(baseURL), managerEmail, 20);
+  await dialog.getByRole("button", { name: "Confirm removal" }).click();
+  await expect(dialog.getByText("Confirm with a fresh code")).toBeVisible();
+  const codeMail = await mailbox.ids();
+  await dialog.getByRole("button", { name: "Send fresh code" }).click();
+  await dialog
+    .getByLabel("Six-digit code")
+    .fill(await mailbox.code(managerEmail, codeMail));
+  await dialog.getByRole("button", { name: "Verify code" }).click();
+  await expect(
+    dialog.getByText("Code verified. Retry your action."),
+  ).toBeVisible();
+  await expect(dialog.getByLabel("Move open leads to")).toHaveValue(
+    await database(
+      String(baseURL),
+      `SELECT m.id FROM company_members m JOIN users u ON u.id = m.user_id WHERE u.email = '${managerEmail}'`,
+    ),
+  );
+  await dialog.getByRole("button", { name: "Confirm removal" }).click();
   await expect(row.getByText("deactivated", { exact: true })).toBeVisible();
   await expect(row.getByRole("button")).toHaveCount(0);
+  expect(
+    await database(
+      String(baseURL),
+      `SELECT assigned_to = (
+    SELECT m.id FROM company_members m JOIN users u ON u.id = m.user_id
+    WHERE u.email = '${managerEmail}'
+  ) FROM leads WHERE id = '${leadId}'`,
+    ),
+  ).toBe("t");
   await fits(page, testInfo, "team-removed");
 
   await member.goto(`/${slug}`);
@@ -434,10 +484,11 @@ test("entered agency staff remove Super Admins but not the last one", async ({
     .filter({ hasNot: page.getByText(managerEmail, { exact: true }) })
     .filter({ has: page.getByRole("button", { name: /^Remove .+ team$/ }) });
   for (let left = await others.count(); left > 0; left--) {
-    await others
-      .first()
-      .getByRole("button", { name: /^Remove .+ team$/ })
-      .click();
+    const first = others.first();
+    await first.getByRole("button", { name: /^Remove .+ team$/ }).click();
+    const dialog = first.getByRole("dialog");
+    await dialog.getByLabel("Move open leads to").selectOption("unassigned");
+    await dialog.getByRole("button", { name: "Confirm removal" }).click();
     await expect(others).toHaveCount(left - 1);
   }
   const row = page
@@ -446,8 +497,11 @@ test("entered agency staff remove Super Admins but not the last one", async ({
   await row
     .getByRole("button", { name: "Remove Browser Manager from the team" })
     .click();
+  const dialog = row.getByRole("dialog");
+  await dialog.getByLabel("Move open leads to").selectOption("unassigned");
+  await dialog.getByRole("button", { name: "Confirm removal" }).click();
   await expect(
-    row.getByRole("alert").filter({ hasText: "last Super Admin" }),
+    dialog.getByRole("alert").filter({ hasText: "last Super Admin" }),
   ).toBeVisible();
   await page.reload();
   await expect(

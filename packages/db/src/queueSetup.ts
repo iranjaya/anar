@@ -27,6 +27,52 @@ export async function setupQueue(handle: DbHandle): Promise<void> {
         retentionSeconds: 600,
         deleteAfterSeconds: 86400,
       });
+      // One delivery plus two retries, each allowed 15 minutes to finish.
+      await boss.createQueue("import.commit", {
+        policy: "short",
+        retryLimit: 2,
+        retryDelay: 30,
+        retryBackoff: true,
+        expireInSeconds: 900,
+        retentionSeconds: 86400,
+        deleteAfterSeconds: 7 * 86400,
+      });
+      await boss.createQueue("notify.push", {
+        policy: "short",
+        retryLimit: 3,
+        retryDelay: 30,
+        retryBackoff: true,
+        expireInSeconds: 60,
+        retentionSeconds: 3600,
+        deleteAfterSeconds: 86400,
+      });
+      await boss.createQueue("notify.summary_email", {
+        policy: "short",
+        retryLimit: 3,
+        retryDelay: 30,
+        retryBackoff: true,
+        expireInSeconds: 60,
+        retentionSeconds: 86400,
+        deleteAfterSeconds: 7 * 86400,
+      });
+      await boss.createQueue("followups.overdue_scan", {
+        policy: "short",
+        retryLimit: 2,
+        retryDelay: 30,
+        retryBackoff: true,
+        expireInSeconds: 900,
+        retentionSeconds: 86400,
+        deleteAfterSeconds: 7 * 86400,
+      });
+      await boss.createQueue("reports.summary", {
+        policy: "short",
+        retryLimit: 2,
+        retryDelay: 30,
+        retryBackoff: true,
+        expireInSeconds: 900,
+        retentionSeconds: 86400,
+        deleteAfterSeconds: 7 * 86400,
+      });
       await connection.execute(sql`revoke all on schema pgboss from public;
         grant usage on schema pgboss to anar_app;
         revoke all on all tables in schema pgboss from public, anar_app;

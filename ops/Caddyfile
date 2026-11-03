@@ -7,10 +7,32 @@
 	header @https Strict-Transport-Security "max-age=31536000; includeSubDomains"
 	route {
 		handle /api/imports {
-			reverse_proxy web:3000
+			request_body {
+				max_size 25664KiB
+			}
+			reverse_proxy api:3001 {
+				transport http {
+					response_header_timeout 125s
+				}
+			}
+		}
+		handle /api/companies/*/imports/dryRunImport {
+			reverse_proxy api:3001 {
+				transport http {
+					response_header_timeout 125s
+				}
+			}
 		}
 		handle /api/* {
 			reverse_proxy api:3001
+		}
+		@importCheck path_regexp ^/[a-z0-9][a-z0-9-]*[a-z0-9]/imports/[0-9a-f-]{36}/map$
+		handle @importCheck {
+			reverse_proxy web:3000 {
+				transport http {
+					response_header_timeout 125s
+				}
+			}
 		}
 		handle {
 			reverse_proxy web:3000

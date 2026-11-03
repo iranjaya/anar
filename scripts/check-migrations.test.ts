@@ -14,6 +14,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
+  applyInitialMigration,
   checkMigrations,
   migrationDrift,
   migrationFiles,
@@ -39,6 +40,7 @@ function schemaFixture(schema: string, run: (root: string) => void) {
       "packages/db/src/schema",
       "packages/db/migrations",
       "packages/db/initial-sql",
+      "ops/postgres",
     ])
       cpSync(path.join(repo, dir), path.join(root, dir), { recursive: true });
     const index = path.join(root, "packages/db/src/schema/index.ts");
@@ -62,6 +64,20 @@ test("fails on a broken schema even when Drizzle exits zero", () => {
   schemaFixture('throw new Error("broken schema");', (root) =>
     assert.throws(() => checkMigrations(root)),
   );
+});
+
+test("refuses a migration that Postgres cannot apply", () => {
+  schemaFixture("", (root) => {
+    const file = path.join(root, "packages/db/migrations/0000_initial.sql");
+    writeFileSync(
+      file,
+      readFileSync(file, "utf8").replace("E'\\x3B', '|')", "'),"),
+    );
+    assert.throws(
+      () => applyInitialMigration(root),
+      /Migration does not apply/,
+    );
+  });
 });
 
 test("refuses a second migration before deployment", () => {

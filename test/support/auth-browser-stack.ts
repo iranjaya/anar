@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
-import { randomBytes, randomUUID } from "node:crypto";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { createECDH, randomBytes, randomUUID } from "node:crypto";
+import { copyFile, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -37,6 +37,69 @@ async function freePort() {
   return address.port;
 }
 
+// A throwaway CA lets the stack's worker trust the fake push services over HTTPS.
+async function fakePushFiles(dir: string) {
+  const openssl = (...args: string[]) =>
+    run("openssl", args, { cwd: dir, timeout: 30000 });
+  await run("mkdir", ["-p", dir]);
+  await openssl(
+    "req",
+    "-x509",
+    "-newkey",
+    "ec",
+    "-pkeyopt",
+    "ec_paramgen_curve:prime256v1",
+    "-nodes",
+    "-keyout",
+    "ca.key",
+    "-out",
+    "ca.pem",
+    "-days",
+    "1",
+    "-subj",
+    "/CN=anar-test-push-ca",
+  );
+  await openssl(
+    "req",
+    "-new",
+    "-newkey",
+    "ec",
+    "-pkeyopt",
+    "ec_paramgen_curve:prime256v1",
+    "-nodes",
+    "-keyout",
+    "server.key",
+    "-out",
+    "server.csr",
+    "-subj",
+    "/CN=fcm.googleapis.com",
+    "-addext",
+    "subjectAltName=DNS:fcm.googleapis.com,DNS:web.push.apple.com",
+  );
+  await openssl(
+    "x509",
+    "-req",
+    "-in",
+    "server.csr",
+    "-CA",
+    "ca.pem",
+    "-CAkey",
+    "ca.key",
+    "-CAcreateserial",
+    "-out",
+    "server.pem",
+    "-days",
+    "1",
+    "-copy_extensions",
+    "copyall",
+  );
+  await copyFile(
+    fileURLToPath(new URL("./fake-push-server.mjs", import.meta.url)),
+    path.join(dir, "server.mjs"),
+  );
+  await run("chmod", ["-R", "a+rX", dir]);
+}
+
 async function waitFor(check: () => Promise<boolean>, label: string) {
   const deadline = Date.now() + 60000;
   while (Date.now() < deadline) {
@@ -54,6 +117,11 @@ async function startAuthStack(signal: AbortSignal) {
   const baseURL = `http://127.0.0.1:${port}`;
   const appPassword = randomBytes(18).toString("hex");
   const migrationPassword = randomBytes(18).toString("hex");
+  const vapid = createECDH("prime256v1");
+  const vapidPublicKey = vapid.generateKeys().toString("base64url");
+  const vapidPrivateKey = vapid.getPrivateKey().toString("base64url");
+  const pushDir = path.join(dir, "fake-push");
+  await fakePushFiles(pushDir);
   const values = {
     AUTH_TEST_PROJECT: project,
     AUTH_TEST_PORT: String(port),
@@ -74,6 +142,11 @@ async function startAuthStack(signal: AbortSignal) {
     EMAIL_FROM: "proof@browser.example.test",
     EMAIL_REPLY_TO: "support@browser.example.test",
     RESEND_API_KEY: "",
+    ANAR_PUSH_ENABLED: "true",
+    VAPID_PUBLIC_KEY: vapidPublicKey,
+    VAPID_PRIVATE_KEY: vapidPrivateKey,
+    VAPID_SUBJECT: "mailto:push@browser.example.test",
+    FAKE_PUSH_DIR: pushDir,
   };
   await writeFile(
     envFile,
@@ -128,6 +201,7 @@ async function startAuthStack(signal: AbortSignal) {
         migrationPassword,
         values.OTP_PEPPER,
         values.MAIL_ENCRYPTION_KEY,
+        vapidPrivateKey,
       ])
         detail = detail.replaceAll(secret, "[redacted]");
       throw new Error(
@@ -159,7 +233,7 @@ async function startAuthStack(signal: AbortSignal) {
   };
   try {
     await compose("build", "migrate", "api", "worker", "web");
-    await compose("up", "--detach", "--wait", "db", "mailpit");
+    await compose("up", "--detach", "--wait", "db", "mailpit", "fake-push");
     await compose("run", "--rm", "migrate");
     await compose("run", "--rm", "migrate");
     await sql(`INSERT INTO users (id,email,name,platform_role) VALUES
@@ -193,6 +267,7 @@ async function startAuthStack(signal: AbortSignal) {
       ('50000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001','40000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000003','Browser Manager','super_admin','active'),
       ('50000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000001','40000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000009','Entries Manager','super_admin','active');`);
     await compose("up", "--detach", "api", "worker", "web", "proxy");
+    const pushURL = `http://${await compose("port", "fake-push", "8080")}`;
     const published = await compose("port", "mailpit", "8025");
     const mailURL = `http://${published}`;
     const httpsPort = (await compose("port", "proxy", "443")).split(":").pop();
@@ -214,7 +289,7 @@ async function startAuthStack(signal: AbortSignal) {
       await response.body?.cancel();
       return response.ok;
     }, "web readiness");
-    return { baseURL, mailURL, httpsPort, project, close };
+    return { baseURL, mailURL, httpsPort, pushURL, project, close };
   } catch (error) {
     await close();
     throw error;
@@ -235,6 +310,7 @@ try {
         baseURL: stack.baseURL,
         mailURL: stack.mailURL,
         httpsPort: stack.httpsPort,
+        pushURL: stack.pushURL,
         project: stack.project,
       }),
     );

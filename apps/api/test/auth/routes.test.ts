@@ -1,6 +1,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildApp } from "../../src/app.js";
 import { originGuard } from "../../src/lib/http.js";
+import type { FollowUpService } from "../../src/modules/followups/index.js";
+import type { ImportService } from "../../src/modules/imports/index.js";
+import type {
+  LeadAssignService,
+  LeadDetailService,
+  LeadListService,
+  LeadStageService,
+  LeadSuggestionService,
+  LeadUpdateService,
+  TodayService,
+} from "../../src/modules/leads/index.js";
 
 function sessionFixture() {
   return {
@@ -87,6 +98,51 @@ function staffFixture() {
   };
 }
 
+function notificationFixture() {
+  return {
+    notify: vi.fn(async (): Promise<never> => {
+      throw new Error("Unexpected notify");
+    }),
+    requireContext: vi.fn(async (): Promise<never> => {
+      throw new Error("Unexpected notification context");
+    }),
+    listNotifications: vi.fn(async (): Promise<never> => {
+      throw new Error("Unexpected notification list");
+    }),
+    markRead: vi.fn(async (): Promise<never> => {
+      throw new Error("Unexpected mark read");
+    }),
+    getPushState: vi.fn(async (): Promise<never> => {
+      throw new Error("Unexpected push state");
+    }),
+    subscribePush: vi.fn(async (): Promise<never> => {
+      throw new Error("Unexpected push subscribe");
+    }),
+    unsubscribePush: vi.fn(async (): Promise<never> => {
+      throw new Error("Unexpected push unsubscribe");
+    }),
+  };
+}
+
+function importFixture() {
+  const unexpected = vi.fn(async (): Promise<never> => {
+    throw new Error("Unexpected imports call");
+  });
+  return new Proxy({} as ImportService, { get: () => unexpected });
+}
+
+function settingsFixture() {
+  const unexpected = vi.fn(async (): Promise<never> => {
+    throw new Error("Unexpected settings call");
+  });
+  return {
+    requireContext: unexpected,
+    loadSchema: unexpected,
+    getSettings: unexpected,
+    write: unexpected,
+  };
+}
+
 function memberFixture() {
   return {
     requireContext: vi.fn(async (): Promise<never> => {
@@ -159,6 +215,65 @@ describe("auth HTTP guards", () => {
       staff: staffFixture(),
       companies: companyFixture(),
       members: memberFixture(),
+      notifications: notificationFixture(),
+      settings: settingsFixture(),
+      imports: importFixture(),
+      leadAssign: new Proxy({} as LeadAssignService, {
+        get: () =>
+          vi.fn(async (): Promise<never> => {
+            throw new Error("Unexpected lead assign call");
+          }),
+      }),
+      today: new Proxy({} as TodayService, {
+        get: () =>
+          vi.fn(async (): Promise<never> => {
+            throw new Error("Unexpected today call");
+          }),
+      }),
+      followUps: new Proxy({} as FollowUpService, {
+        get: () =>
+          vi.fn(async (): Promise<never> => {
+            throw new Error("Unexpected follow-up call");
+          }),
+      }),
+      leadStage: new Proxy({} as LeadStageService, {
+        get: () =>
+          vi.fn(async (): Promise<never> => {
+            throw new Error("Unexpected lead stage call");
+          }),
+      }),
+      leadSuggestion: new Proxy({} as LeadSuggestionService, {
+        get: () =>
+          vi.fn(async (): Promise<never> => {
+            throw new Error("Unexpected lead suggestion call");
+          }),
+      }),
+      leadUpdate: new Proxy({} as LeadUpdateService, {
+        get: () =>
+          vi.fn(async (): Promise<never> => {
+            throw new Error("Unexpected lead update call");
+          }),
+      }),
+      leadDetail: new Proxy({} as LeadDetailService, {
+        get: () =>
+          vi.fn(async (): Promise<never> => {
+            throw new Error("Unexpected lead detail call");
+          }),
+      }),
+      leads: new Proxy({} as LeadListService, {
+        get: () =>
+          vi.fn(async (): Promise<never> => {
+            throw new Error("Unexpected leads call");
+          }),
+      }),
+      scoring: {
+        requireContext: vi.fn(async (): Promise<never> => {
+          throw new Error("Unexpected scoring context");
+        }),
+        getScoringDefaults: vi.fn(async (): Promise<never> => {
+          throw new Error("Unexpected scoring read");
+        }),
+      },
       invites: inviteFixture(),
       requireOrigin: originGuard("https://anar.example.test"),
       trustProxy: false,
@@ -204,6 +319,65 @@ describe("auth HTTP guards", () => {
       staff: staffFixture(),
       companies: companyFixture(),
       members: memberFixture(),
+      notifications: notificationFixture(),
+      settings: settingsFixture(),
+      imports: importFixture(),
+      leadAssign: new Proxy({} as LeadAssignService, {
+        get: () =>
+          vi.fn(async (): Promise<never> => {
+            throw new Error("Unexpected lead assign call");
+          }),
+      }),
+      today: new Proxy({} as TodayService, {
+        get: () =>
+          vi.fn(async (): Promise<never> => {
+            throw new Error("Unexpected today call");
+          }),
+      }),
+      followUps: new Proxy({} as FollowUpService, {
+        get: () =>
+          vi.fn(async (): Promise<never> => {
+            throw new Error("Unexpected follow-up call");
+          }),
+      }),
+      leadStage: new Proxy({} as LeadStageService, {
+        get: () =>
+          vi.fn(async (): Promise<never> => {
+            throw new Error("Unexpected lead stage call");
+          }),
+      }),
+      leadSuggestion: new Proxy({} as LeadSuggestionService, {
+        get: () =>
+          vi.fn(async (): Promise<never> => {
+            throw new Error("Unexpected lead suggestion call");
+          }),
+      }),
+      leadUpdate: new Proxy({} as LeadUpdateService, {
+        get: () =>
+          vi.fn(async (): Promise<never> => {
+            throw new Error("Unexpected lead update call");
+          }),
+      }),
+      leadDetail: new Proxy({} as LeadDetailService, {
+        get: () =>
+          vi.fn(async (): Promise<never> => {
+            throw new Error("Unexpected lead detail call");
+          }),
+      }),
+      leads: new Proxy({} as LeadListService, {
+        get: () =>
+          vi.fn(async (): Promise<never> => {
+            throw new Error("Unexpected leads call");
+          }),
+      }),
+      scoring: {
+        requireContext: vi.fn(async (): Promise<never> => {
+          throw new Error("Unexpected scoring context");
+        }),
+        getScoringDefaults: vi.fn(async (): Promise<never> => {
+          throw new Error("Unexpected scoring read");
+        }),
+      },
       invites: inviteFixture(),
       requireOrigin: originGuard("https://anar.example.test"),
       trustProxy: false,

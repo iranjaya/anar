@@ -1,0 +1,29 @@
+services:
+  api:
+    env_file:
+      - ./.env
+    environment: !override
+      HOST: 0.0.0.0
+      PORT: "3001"
+      UPLOADS_ROOT: /var/lib/anar/uploads
+      ANAR_LOCAL_HTTP: "false"
+
+  worker:
+    env_file:
+      - ./.env
+    environment: !override
+      UPLOADS_ROOT: /var/lib/anar/uploads
+
+  proxy:
+    environment: !override
+      ANAR_SITE_ADDRESS: ${ANAR_SITE_ADDRESS:?Set ANAR_SITE_ADDRESS in .env}
+    ports: !override
+      - "${ANAR_LAN_BIND_ADDRESS:?Set ANAR_LAN_BIND_ADDRESS in .env}:443:443"
+    volumes: !override
+      - ./ops/Caddyfile.local:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

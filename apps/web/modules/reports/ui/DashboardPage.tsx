@@ -15,7 +15,7 @@ import { AppError } from "@/lib/errors";
 import { AssignList } from "@/modules/leads/components";
 import { listLeads } from "@/modules/leads/server";
 import { listMembers } from "@/modules/members/server";
-import { can, homeFor, requireContext } from "@/modules/tenant/server";
+import { can, getCompanyShell, homeFor } from "@/modules/tenant/server";
 import { compareMembers, getMemberDashboard, getTeamOverview } from "../server";
 import { Compare } from "./Compare";
 import { Funnel } from "./Funnel";
@@ -32,11 +32,11 @@ export async function DashboardPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { slug } = await params;
-  const ctx = await requireContext(slug);
+  const { ctx, company } = await getCompanyShell(slug);
   if (!can(ctx, "reports.view_all")) redirect(homeFor(ctx));
   const query = await searchParams;
   const now = new Date();
-  const local = { in: tz("Asia/Kathmandu") };
+  const local = { in: tz(company.timezone) };
   let value = "week";
   let rangeLabel = "this week";
   let range = {
@@ -143,6 +143,7 @@ export async function DashboardPage({
             key={`${slug}/${ctx.user.id}`}
             compact
             items={queue.items}
+            timezone={company.timezone}
             members={members.filter((member) => member.status === "active")}
             total={queue.total}
             nextCursor={queue.nextCursor}

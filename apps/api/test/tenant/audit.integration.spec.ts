@@ -1,3 +1,4 @@
+import { createECDH, randomBytes } from "node:crypto";
 import {
   agencyMembers,
   invites,
@@ -5,7 +6,15 @@ import {
   withPlatformAgency,
   withPlatformTenant,
 } from "@anar/db/platform";
-import { companyMembers } from "@anar/db/tenant";
+import {
+  companyMembers,
+  importBatches,
+  importRuns,
+  leadEvents,
+  leads,
+  outcomes,
+  stages,
+} from "@anar/db/tenant";
 import { eq, sql } from "drizzle-orm";
 import { v7 } from "uuid";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -346,6 +355,57 @@ describe("audit records for every S1 and S2 mutation", () => {
         data: { inviteId: adminInvite },
       },
     );
+    const endpoint = `https://fcm.googleapis.com/fcm/send/${v7()}`;
+    const keys = {
+      p256dh: createECDH("prime256v1").generateKeys().toString("base64url"),
+      auth: randomBytes(16).toString("base64url"),
+    };
+    secrets.push(endpoint, keys.p256dh, keys.auth);
+    let subscriptionId = "";
+    await expectOne(
+      async () => {
+        ({ subscriptionId } = await ok(
+          `companies/${slug}/notifications/subscribePush`,
+          manager.cookie,
+          { endpoint, keys, expirationTime: null },
+        ));
+      },
+      {
+        actor_user_id: managerUser.id,
+        actor_role: "super_admin",
+        agency_id: agencyId,
+        company_id: companyId,
+        action: "notifications.subscribed",
+        target_type: "push_subscription",
+        target_id: anyId,
+        data: { subscriptionId: anyId },
+      },
+    );
+    await expectOne(
+      () =>
+        ok(`companies/${slug}/notifications/unsubscribePush`, manager.cookie, {
+          subscriptionId,
+        }),
+      {
+        actor_user_id: managerUser.id,
+        actor_role: "super_admin",
+        agency_id: agencyId,
+        company_id: companyId,
+        action: "notifications.unsubscribed",
+        target_type: "push_subscription",
+        target_id: subscriptionId,
+        data: { subscriptionId },
+      },
+    );
+    const beforeRepeat = await auditRows();
+    await ok(
+      `companies/${slug}/notifications/unsubscribePush`,
+      manager.cookie,
+      {
+        subscriptionId,
+      },
+    );
+    expect(await onlyNew(beforeRepeat)).toEqual([]);
     const seller = await accept(adminInvite);
     const sellerMember = await memberId(agencyId, companyId, seller.id);
     expect((await auditRows()).at(-1)).toMatchObject({
@@ -384,6 +444,278 @@ describe("audit records for every S1 and S2 mutation", () => {
         target_type: "company",
         target_id: companyId,
         data: { companyId, reason },
+      },
+    );
+    const fileName = `secret-leads-${v7()}.csv`;
+    const sampleName = `Sample Person ${v7()}`;
+    secrets.push(fileName, sampleName);
+    const boundary = `----anar${v7()}`;
+    let batchId = "";
+    await expectOne(
+      async () => {
+        const response = await fixture.apps[0].app.inject({
+          method: "POST",
+          url: `/api/imports?company=${slug}`,
+          remoteAddress: "198.51.100.120",
+          headers: {
+            origin: publicOrigin,
+            cookie: staff.cookie,
+            "content-type": `multipart/form-data; boundary=${boundary}`,
+          },
+          payload: [
+            `--${boundary}`,
+            `Content-Disposition: form-data; name="file"; filename="${fileName}"`,
+            "Content-Type: text/csv",
+            "",
+            `full_name,phone\n${sampleName},9800000000\n`,
+            `--${boundary}--`,
+            "",
+          ].join("\r\n"),
+        });
+        expect(response.statusCode).toBe(200);
+        batchId = response.json().data.batchId;
+      },
+      {
+        actor_user_id: staffUser.id,
+        actor_role: "agency_staff",
+        agency_id: agencyId,
+        company_id: companyId,
+        action: "imports.uploaded",
+        target_type: "import_batch",
+        target_id: anyId,
+        data: { batchId: anyId, rowCount: "1" },
+      },
+    );
+    const draft = {
+      batchId,
+      mapping: [
+        { header: "full_name", target: "system:full_name" },
+        { header: "phone", target: "system:phone" },
+      ],
+      newFields: [],
+      expectedRevision: 0,
+    };
+    const { previewRevision } = await ok(
+      `companies/${slug}/imports/dryRunImport`,
+      staff.cookie,
+      draft,
+    );
+    await expectOne(
+      () =>
+        ok(`companies/${slug}/imports/commitImport`, staff.cookie, {
+          ...draft,
+          expectedRevision: previewRevision,
+          previewRevision,
+        }),
+      {
+        actor_user_id: staffUser.id,
+        actor_role: "agency_staff",
+        agency_id: agencyId,
+        company_id: companyId,
+        action: "imports.committed",
+        target_type: "import_batch",
+        target_id: batchId,
+        data: { batchId, runId: anyId },
+      },
+    );
+    await fixture.db.transaction((tx) =>
+      withPlatformTenant(
+        tx,
+        { agencyId, companyId, userId: staffUser.id },
+        async (scoped) => {
+          const [batch] = await scoped
+            .select({ runId: importBatches.activeRunId })
+            .from(importBatches)
+            .where(eq(importBatches.id, batchId));
+          if (!batch.runId) throw new Error("Expected a committed run");
+          await scoped
+            .update(importRuns)
+            .set({ state: "stopped", stopCode: "processing_failed" })
+            .where(eq(importRuns.id, batch.runId));
+        },
+      ),
+    );
+    let resumed: { jobId: string } = { jobId: "" };
+    await expectOne(
+      async () => {
+        resumed = await ok(
+          `companies/${slug}/imports/resumeImport`,
+          staff.cookie,
+          { batchId },
+        );
+      },
+      {
+        actor_user_id: staffUser.id,
+        actor_role: "agency_staff",
+        agency_id: agencyId,
+        company_id: companyId,
+        action: "imports.resumed",
+        target_type: "import_batch",
+        target_id: batchId,
+        data: { batchId, runId: anyId },
+      },
+    );
+    expect(resumed).toEqual({ jobId: expect.any(String) });
+    const leadId = v7();
+    let nextStageId = "";
+    await fixture.db.transaction((tx) =>
+      withPlatformTenant(
+        tx,
+        { agencyId, companyId, userId: staffUser.id },
+        async (scoped) => {
+          const openStages = await scoped
+            .select({ id: stages.id, isDefault: stages.isDefault })
+            .from(stages)
+            .where(eq(stages.kind, "open"))
+            .orderBy(stages.position);
+          const open = openStages.find((row) => row.isDefault);
+          const next = openStages.find((row) => !row.isDefault);
+          if (!open || !next) throw new Error("Expected two open stages");
+          nextStageId = next.id;
+          await scoped.insert(leads).values({
+            id: leadId,
+            companyId,
+            fullName: "Before",
+            phoneValid: false,
+            sourceKind: "manual",
+            leadDate: fixture.now(),
+            stageId: open.id,
+            custom: {},
+            score: 1,
+            priority: "cold",
+            scoreBreakdown: { base: 1 },
+            scoredAt: fixture.now(),
+          });
+        },
+      ),
+    );
+    await expectOne(
+      () =>
+        ok(`companies/${slug}/leads/updateLeadFields`, staff.cookie, {
+          leadId,
+          fullName: "After",
+        }),
+      {
+        actor_user_id: staffUser.id,
+        actor_role: "agency_staff",
+        agency_id: agencyId,
+        company_id: companyId,
+        action: "leads.updated",
+        target_type: "lead",
+        target_id: leadId,
+        data: { count: "1" },
+      },
+    );
+    await expectOne(
+      () =>
+        ok(`companies/${slug}/leads/changeStage`, staff.cookie, {
+          leadId,
+          stageId: nextStageId,
+        }),
+      {
+        actor_user_id: staffUser.id,
+        actor_role: "agency_staff",
+        agency_id: agencyId,
+        company_id: companyId,
+        action: "leads.stage_changed",
+        target_type: "lead",
+        target_id: leadId,
+        data: { stageId: nextStageId },
+      },
+    );
+    const managerMember = await memberId(agencyId, companyId, managerUser.id);
+    await expectOne(
+      () =>
+        ok(`companies/${slug}/leads/assignLeads`, staff.cookie, {
+          leadIds: [leadId],
+          memberId: managerMember,
+        }),
+      {
+        actor_user_id: staffUser.id,
+        actor_role: "agency_staff",
+        agency_id: agencyId,
+        company_id: companyId,
+        action: "leads.assign",
+        target_type: "company",
+        target_id: companyId,
+        data: { count: "1", memberId: managerMember, assignmentId: anyId },
+      },
+    );
+    const outcomeId = await fixture.db.transaction((tx) =>
+      withPlatformTenant(
+        tx,
+        { agencyId, companyId, userId: staffUser.id },
+        async (scoped) => {
+          const [outcome] = await scoped
+            .select({ id: outcomes.id })
+            .from(outcomes)
+            .where(eq(outcomes.seedKey, "site_visit_done"));
+          return outcome.id;
+        },
+      ),
+    );
+    let loggedFollowUpId = "";
+    await expectOne(
+      async () => {
+        const result = await ok(
+          `companies/${slug}/followups/logFollowUp`,
+          staff.cookie,
+          {
+            requestId: v7(),
+            leadId,
+            outcomeId,
+          },
+        );
+        loggedFollowUpId = result.followUp.id;
+      },
+      {
+        actor_user_id: staffUser.id,
+        actor_role: "agency_staff",
+        agency_id: agencyId,
+        company_id: companyId,
+        action: "followups.logged",
+        target_type: "lead",
+        target_id: leadId,
+        data: { followUpId: anyId, outcomeId },
+      },
+    );
+    const suggestionEventId = v7();
+    await fixture.db.transaction((tx) =>
+      withPlatformTenant(
+        tx,
+        { agencyId, companyId, userId: staffUser.id },
+        async (scoped) => {
+          await scoped
+            .update(leads)
+            .set({ failedAttempts: 5, lostSuggestedAt: fixture.now() })
+            .where(eq(leads.id, leadId));
+          await scoped.insert(leadEvents).values({
+            id: suggestionEventId,
+            companyId,
+            leadId,
+            type: "lost_suggested",
+            actorUserId: staffUser.id,
+            actorMemberId: null,
+            data: { followUpId: loggedFollowUpId, failedAttempts: 5 },
+          });
+        },
+      ),
+    );
+    await expectOne(
+      () =>
+        ok(`companies/${slug}/leads/dismissLostSuggestion`, manager.cookie, {
+          leadId,
+          suggestionEventId,
+        }),
+      {
+        actor_user_id: managerUser.id,
+        actor_role: "super_admin",
+        agency_id: agencyId,
+        company_id: companyId,
+        action: "leads.suggestion_dismissed",
+        target_type: "lead",
+        target_id: leadId,
+        data: { suggestionEventId },
       },
     );
     await expectOne(() => ok("companies/leaveCompany", staff.cookie, {}), {

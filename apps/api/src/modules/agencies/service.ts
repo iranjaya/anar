@@ -214,6 +214,15 @@ const agencies = {
     return agency;
   },
 
+  async isActiveStaffInScope(
+    tx: PlatformTx,
+    agencyId: string,
+    userId: string,
+  ): Promise<boolean> {
+    const staff = await repository.readOwnStaff(tx, userId);
+    return staff?.agencyId === agencyId && staff.status === "active";
+  },
+
   async hasStaffMembership(tx: PlatformTx, userId: string): Promise<boolean> {
     return Boolean(await agencies.readStaffMembership(tx, userId));
   },

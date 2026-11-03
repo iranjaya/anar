@@ -25,6 +25,9 @@ test("company home loads from the API and demo access stays closed", async ({
   await expect(
     page.getByText("Browser Company · Browser Agency"),
   ).toBeVisible();
+  await expect(
+    nav.getByRole("link", { name: "Settings", exact: true }),
+  ).toHaveAttribute("href", "/browser-company/settings");
   await expect(nav.getByRole("link", { name: "Workspaces" })).toBeVisible();
   await expect(nav.getByRole("link", { name: "Your devices" })).toBeVisible();
   await expect(
@@ -66,13 +69,7 @@ test("company home loads from the API and demo access stays closed", async ({
   ).toHaveCount(0);
   await expect(page.getByText("Sundar Heights")).toHaveCount(0);
   expect((await page.goto("/sundar-heights"))?.status()).toBe(404);
-  for (const path of [
-    "/companies",
-    "/browser-company/today",
-    "/browser-company/leads",
-    "/browser-company/dashboard",
-    "/browser-company/imports/new",
-  ])
+  for (const path of ["/companies", "/browser-company/dashboard"])
     expect((await page.request.get(path)).status()).toBe(404);
   expect((await page.request.post("/api/imports", { data: {} })).status()).toBe(
     403,

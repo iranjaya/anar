@@ -1,5 +1,5 @@
 import { tz } from "@date-fns/tz";
-import { isSameDay } from "date-fns";
+import { differenceInCalendarDays, format, isSameDay } from "date-fns";
 import type { Stage } from "@/modules/settings/types";
 import type { Bucket, Lead } from "./types";
 
@@ -30,4 +30,19 @@ export function bucketOf(
     return "new";
   }
   return null;
+}
+
+// Day and clock both in the company's timezone, not the browser's.
+export function nextDueText(
+  nextDueAt: Date | null,
+  now: Date,
+  timezone: string,
+): string {
+  if (!nextDueAt) return "No calls scheduled next.";
+  const zone = { in: tz(timezone) };
+  const clock = format(nextDueAt, "HH:mm", zone);
+  const days = differenceInCalendarDays(nextDueAt, now, zone);
+  if (days === 1) return `Next one is due tomorrow at ${clock}`;
+  const day = days === 0 ? "Today" : format(nextDueAt, "d MMM yyyy", zone);
+  return `Next one is due ${day} ${clock}`;
 }

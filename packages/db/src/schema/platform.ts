@@ -69,6 +69,15 @@ export const companies = pgTable(
         to: "anar_app",
         using: scope,
       }),
+      pgPolicy("companies_scheduler_catalog_select", {
+        for: "select",
+        to: "anar_app",
+        using: sql`current_setting('app.scope_kind', true) = 'scheduler_catalog'
+          AND current_setting('app.actor_kind', true) = 'scheduler'
+          AND ${table.status} = 'active'
+          AND EXISTS (SELECT 1 FROM public.agencies AS agency
+            WHERE agency.id = ${table.agencyId} AND agency.status = 'active')`,
+      }),
       pgPolicy("companies_identity_select", {
         for: "select",
         to: "anar_app",

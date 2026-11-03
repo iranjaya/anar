@@ -12,6 +12,7 @@ export {
   sessions,
   users,
 } from "./schema/platform.js";
+export { pushEndpointBindings } from "./schema/pushBindings.js";
 export type { AgencyScope, TenantScope } from "./tenant.js";
 
 export type PlatformTx = TenantTx;

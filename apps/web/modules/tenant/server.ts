@@ -44,6 +44,11 @@ export const getCompanyContext = cache(
 );
 
 export { requireContext } from "./data/context";
+export {
+  type FeatureContext,
+  hasCapability,
+  requireFeatureContext,
+} from "./data/featureContext";
 export { resolveContext } from "./data/context";
 export { switchDemoUser } from "./data/context";
 export { resetDemo } from "./data/context";

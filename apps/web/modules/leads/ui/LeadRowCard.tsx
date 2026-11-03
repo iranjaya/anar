@@ -9,11 +9,13 @@ export function LeadRowCard({
   lead,
   slug,
   now,
+  timezone,
   selected = false,
 }: {
   lead: LeadRow;
   slug: string;
   now: Date;
+  timezone: string;
   selected?: boolean;
 }) {
   return (
@@ -52,7 +54,7 @@ export function LeadRowCard({
                   : "text-due"
               }
             >
-              {formatDue(lead.nextActionAt, now)}
+              {formatDue(lead.nextActionAt, timezone, now)}
             </p>
           )}
           {lead.failedAttempts > 0 && (

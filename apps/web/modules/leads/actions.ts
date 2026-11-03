@@ -2,8 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { dataMode } from "@/lib/api/mode";
 import { type ActionResult, AppError, actionFailure } from "@/lib/errors";
 import { can, requireContext } from "@/modules/tenant/server";
+import { dismissLostSuggestionReal } from "./data/dismissSuggestion";
 import {
   assignLeads,
   changeStage,
@@ -51,11 +53,20 @@ export async function changeStageAction(input: {
 export async function dismissLostSuggestionAction(input: {
   slug: string;
   leadId: string;
+  suggestionEventId?: string;
 }): Promise<ActionResult<{ ok: true }>> {
   const parsed = leadInput.safeParse(input);
   if (!parsed.success)
     return { ok: false, error: "validation", message: "Choose a lead." };
   try {
+    if (dataMode() === "real") {
+      const data = await dismissLostSuggestionReal(parsed.data.slug, {
+        leadId: parsed.data.leadId,
+        suggestionEventId: input.suggestionEventId ?? "",
+      });
+      revalidatePath(`/${parsed.data.slug}`, "layout");
+      return { ok: true, data };
+    }
     const ctx = await requireContext(parsed.data.slug);
     if (!can(ctx, "leads.assign"))
       throw new AppError("forbidden", "Only a manager can keep trying.");

@@ -1,12 +1,25 @@
 "use client";
 
-import { useActionState, useId, useState } from "react";
+import { useActionState, useEffect, useId, useRef, useState } from "react";
 import { freshCodeAction } from "../actions";
 
-export function FreshCodeForm({ enabled }: { enabled: boolean }) {
+export function FreshCodeForm({
+  enabled,
+  onVerified,
+}: {
+  enabled: boolean;
+  onVerified?: () => void;
+}) {
   const id = useId();
   const [code, setCode] = useState("");
   const [state, action, pending] = useActionState(freshCodeAction, null);
+  const notified = useRef<typeof state>(null);
+  useEffect(() => {
+    if (state?.ok && state.data.verified && notified.current !== state) {
+      notified.current = state;
+      onVerified?.();
+    }
+  }, [state, onVerified]);
   return (
     <section
       aria-busy={pending}

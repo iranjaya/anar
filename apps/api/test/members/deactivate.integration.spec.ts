@@ -1,4 +1,11 @@
-import { sql } from "drizzle-orm";
+import {
+  companyMembers,
+  createTenantDb,
+  leads,
+  stages,
+  type TenantDb,
+} from "@anar/db/tenant";
+import { eq, sql } from "drizzle-orm";
 import { v7 } from "uuid";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { publicOrigin } from "../auth/fixture.js";
@@ -9,15 +16,22 @@ import {
 
 describe("Super Admins remove Admins and their access ends at once", () => {
   let fixture: CompanyFixture;
+  let tenantDb: TenantDb;
   beforeAll(async () => {
     fixture = await startCompanyFixture();
+    tenantDb = await createTenantDb(fixture.postgres.appUrl);
   });
   beforeEach(async () => {
     await fixture.reset();
   });
   afterAll(async () => {
+    await tenantDb?.close();
     await fixture?.close();
   });
+  const scoped = <T>(
+    target: { agencyId: string; companyId: string },
+    fn: Parameters<TenantDb["withTenant"]>[1],
+  ) => tenantDb.withTenant({ ...target, userId: v7() }, fn) as Promise<T>;
 
   const remove = (slug: string, cookie: string, payload: object, index = 0) =>
     fixture.apps[index].app.inject({
@@ -139,13 +153,32 @@ describe("Super Admins remove Admins and their access ends at once", () => {
     expect(await audits()).toHaveLength(1);
   });
 
-  it("refuses lead reassignment until it exists", async () => {
-    const { manager, second, seller, slug } = await setup();
+  it("refuses reassignment to the member being removed", async () => {
+    const { manager, seller, slug } = await setup();
     const response = await remove(slug, manager.cookie, {
       memberId: seller.member.id,
-      reassignTo: second.member.id,
+      reassignTo: seller.member.id,
     });
     expect(response.statusCode).toBe(400);
+    expect(await status(seller.member.id)).toBe("active");
+  });
+
+  it("refuses an inactive or foreign destination", async () => {
+    const { a, manager, seller, foreign, slug } = await setup();
+    const inactive = await companyUser(a, "admin", "198.51.100.67");
+    await scoped(a, (tx) =>
+      tx
+        .update(companyMembers)
+        .set({ status: "deactivated", deactivatedAt: fixture.now() })
+        .where(eq(companyMembers.id, inactive.member.id)),
+    );
+    for (const reassignTo of [inactive.member.id, foreign.member.id]) {
+      const response = await remove(slug, manager.cookie, {
+        memberId: seller.member.id,
+        reassignTo,
+      });
+      expect(response.statusCode).toBe(400);
+    }
     expect(await status(seller.member.id)).toBe("active");
   });
 
@@ -170,7 +203,28 @@ describe("Super Admins remove Admins and their access ends at once", () => {
   it.each(["revocation", "audit"])(
     "rolls back the membership, revocation and audit when the %s fails",
     async (failing) => {
-      const { manager, seller, slug } = await setup();
+      const { a, manager, seller, slug } = await setup();
+      const leadId = v7();
+      await scoped(a, async (tx) => {
+        const [stage] = await tx
+          .select({ id: stages.id })
+          .from(stages)
+          .where(eq(stages.isDefault, true));
+        await tx.insert(leads).values({
+          id: leadId,
+          companyId: a.companyId,
+          phoneValid: false,
+          sourceKind: "manual",
+          leadDate: fixture.now(),
+          stageId: stage.id,
+          custom: {},
+          score: 0,
+          priority: "cold",
+          scoreBreakdown: {},
+          scoredAt: fixture.now(),
+          assignedTo: seller.member.id,
+        });
+      });
       const [break_, restore] =
         failing === "revocation"
           ? [
@@ -194,8 +248,43 @@ describe("Super Admins remove Admins and their access ends at once", () => {
       expect(await status(seller.member.id)).toBe("active");
       expect((await session(seller.cookie)).statusCode).toBe(200);
       expect(await audits()).toEqual([]);
+      expect(
+        await scoped(a, (tx) =>
+          tx
+            .select({ assignedTo: leads.assignedTo })
+            .from(leads)
+            .where(eq(leads.id, leadId)),
+        ),
+      ).toEqual([{ assignedTo: seller.member.id }]);
+      expect(
+        await scoped(
+          a,
+          async (tx) =>
+            (
+              await tx.execute(
+                sql`select id from lead_events where lead_id = ${leadId}::uuid`,
+              )
+            ).rows,
+        ),
+      ).toEqual([]);
     },
   );
+
+  it("revokes the removed member's sessions in other companies", async () => {
+    const { b, manager, seller, slug } = await setup();
+    await fixture.seedMember(b, seller.user.id, "active", "admin");
+    const response = await remove(slug, manager.cookie, {
+      memberId: seller.member.id,
+    });
+    expect(response.statusCode).toBe(200);
+    expect((await session(seller.cookie)).statusCode).toBe(401);
+    const otherCompany = await fixture.apps[0].app.inject({
+      method: "GET",
+      url: `/api/companies/${b.company.slug}/members/listMembers`,
+      headers: { cookie: seller.cookie },
+    });
+    expect(otherCompany.statusCode).toBe(401);
+  });
 
   const enterAs = async (cookie: string, companyId: string) => {
     const response = await fixture.companyRequest(
@@ -218,6 +307,28 @@ describe("Super Admins remove Admins and their access ends at once", () => {
     });
     expect(response.statusCode).toBe(409);
     expect(await status(manager.member.id)).toBe("active");
+  });
+
+  it("keeps one Super Admin when two removals race", async () => {
+    const { a, manager, second, slug } = await setup();
+    await enterAs(a.cookie, a.companyId);
+    const responses = await Promise.all([
+      remove(slug, a.cookie, { memberId: manager.member.id }, 0),
+      remove(slug, a.cookie, { memberId: second.member.id }, 1),
+    ]);
+    expect(responses.map((response) => response.statusCode).sort()).toEqual([
+      200, 409,
+    ]);
+    const states = await scoped<{ status: string }[]>(
+      a,
+      async (tx) =>
+        (
+          await tx.execute<{ status: string }>(
+            sql`select status from company_members where id in (${manager.member.id}::uuid, ${second.member.id}::uuid) order by status`,
+          )
+        ).rows,
+    );
+    expect(states.map((row) => row.status)).toEqual(["active", "deactivated"]);
   });
 
   it("revokes the pending invites of a removed Super Admin", async () => {

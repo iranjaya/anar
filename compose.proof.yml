@@ -1,0 +1,80 @@
+services:
+  db:
+    environment: !override
+      POSTGRES_DB: ${POSTGRES_DB:?proof database name is required}
+      POSTGRES_USER: ${POSTGRES_USER:?proof database user is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?proof database password is required}
+      APP_DATABASE_PASSWORD: ${APP_DATABASE_PASSWORD:?proof app password is required}
+      MIGRATION_DATABASE_PASSWORD: ${MIGRATION_DATABASE_PASSWORD:?proof migration password is required}
+      BOOTSTRAP_ROLES_SQL: /opt/anar-postgres/roles.sql
+
+  migrate:
+    image: ${ANAR_PROOF_IMAGE_PREFIX:?proof image prefix is required}:migrate
+    environment: !override
+      MIGRATION_DATABASE_URL: ${MIGRATION_DATABASE_URL:?proof migration URL is required}
+
+  api:
+    image: ${ANAR_PROOF_IMAGE_PREFIX:?proof image prefix is required}:api
+    env_file: !override []
+    environment: !override
+      HOST: 0.0.0.0
+      PORT: "3001"
+      DATABASE_URL: ${DATABASE_URL:?proof database URL is required}
+      OTP_PEPPER: ${OTP_PEPPER:?proof OTP pepper is required}
+      MAIL_ENCRYPTION_KEY: ${MAIL_ENCRYPTION_KEY:?proof mail key is required}
+      PUBLIC_ORIGIN: ${ANAR_RESTORE_PUBLIC_ORIGIN:-http://127.0.0.1}
+      ANAR_LOCAL_HTTP: "true"
+      TRUSTED_PROXY_CIDRS: uniquelocal
+      UPLOADS_ROOT: /var/lib/anar/uploads
+      ANAR_PUSH_ENABLED: "false"
+      VAPID_PUBLIC_KEY: ""
+
+  worker:
+    image: ${ANAR_PROOF_IMAGE_PREFIX:?proof image prefix is required}:worker
+    env_file: !override []
+    environment: !override
+      DATABASE_URL: ${DATABASE_URL:?proof database URL is required}
+      PUBLIC_ORIGIN: ${ANAR_RESTORE_PUBLIC_ORIGIN:-http://127.0.0.1}
+      EMAIL_TRANSPORT: mailpit
+      MAILPIT_URL: http://mailpit:8025
+      EMAIL_FROM: ${EMAIL_FROM:?proof sender is required}
+      EMAIL_REPLY_TO: ${EMAIL_FROM:?proof sender is required}
+      RESEND_API_KEY: ""
+      MAIL_ENCRYPTION_KEY: ${MAIL_ENCRYPTION_KEY:?proof mail key is required}
+      ANAR_PUSH_ENABLED: "false"
+      VAPID_PUBLIC_KEY: ""
+      VAPID_PRIVATE_KEY: ""
+      VAPID_SUBJECT: ""
+      UPLOADS_ROOT: /var/lib/anar/uploads
+
+  web:
+    image: ${ANAR_PROOF_IMAGE_PREFIX:?proof image prefix is required}:web
+    environment: !override
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+      API_INTERNAL_URL: http://api:3001
+      ANAR_DATA_MODE: real
+      ANAR_AUTH_ENABLED: "true"
+      ANAR_PUSH_ENABLED: "false"
+
+  proxy:
+    environment: !override
+      ANAR_SITE_ADDRESS: ":80"
+    ports: !override
+      - "127.0.0.1::80"
+    networks:
+      - default
+      - proof_edge
+
+  mailpit:
+    ports: !override
+      - "127.0.0.1::8025"
+    networks:
+      - default
+      - proof_edge
+
+networks:
+  default:
+    internal: true
+  proof_edge:
+    internal: false

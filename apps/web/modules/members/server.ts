@@ -11,6 +11,7 @@ import {
   agencyEntrySchema,
   deactivateMemberResultSchema,
   deactivateMemberSchema,
+  type DeactivateMemberInput,
   type InviteAdminInput,
   inviteAdminSchema,
   type MemberView,
@@ -105,9 +106,12 @@ function requireSlug(slug: string) {
   return parsed.data;
 }
 
-export async function deactivateMember(slug: string, memberId: string) {
+export async function deactivateMember(
+  slug: string,
+  input: DeactivateMemberInput,
+) {
   const company = requireSlug(slug);
-  const parsed = deactivateMemberSchema.safeParse({ memberId });
+  const parsed = deactivateMemberSchema.safeParse(input);
   if (!parsed.success)
     throw new AppError("validation", "Choose a member to remove.");
   return apiRequest(

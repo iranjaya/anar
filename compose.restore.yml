@@ -1,0 +1,53 @@
+services:
+  mailpit:
+    image: axllent/mailpit:v1.32.0
+    ports:
+      - "127.0.0.1::8025"
+
+  api:
+    env_file:
+      - ./.env
+    environment: !override
+      HOST: 0.0.0.0
+      PORT: "3001"
+      UPLOADS_ROOT: /var/lib/anar/uploads
+      PUBLIC_ORIGIN: ${ANAR_RESTORE_PUBLIC_ORIGIN:-http://127.0.0.1}
+      ANAR_LOCAL_HTTP: "true"
+      ANAR_PUSH_ENABLED: "false"
+      VAPID_PUBLIC_KEY: ""
+
+  worker:
+    env_file:
+      - ./.env
+    environment: !override
+      UPLOADS_ROOT: /var/lib/anar/uploads
+      PUBLIC_ORIGIN: ${ANAR_RESTORE_PUBLIC_ORIGIN:-http://127.0.0.1}
+      EMAIL_TRANSPORT: mailpit
+      MAILPIT_URL: http://mailpit:8025
+      EMAIL_FROM: restore@local.test
+      EMAIL_REPLY_TO: restore@local.test
+      RESEND_API_KEY: ""
+      ANAR_PUSH_ENABLED: "false"
+      VAPID_PUBLIC_KEY: ""
+      VAPID_PRIVATE_KEY: ""
+      VAPID_SUBJECT: ""
+    depends_on:
+      mailpit:
+        condition: service_started
+      db:
+        condition: service_healthy
+
+  web:
+    environment: !override
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+      API_INTERNAL_URL: http://api:3001
+      ANAR_DATA_MODE: real
+      ANAR_AUTH_ENABLED: "true"
+      ANAR_PUSH_ENABLED: "false"
+
+  proxy:
+    environment: !override
+      ANAR_SITE_ADDRESS: ":80"
+    ports: !override
+      - "127.0.0.1::80"

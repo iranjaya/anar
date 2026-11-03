@@ -1,6 +1,9 @@
 import { type ChildProcess, execFile, spawn } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { createECDH, randomBytes } from "node:crypto";
+import { mkdtempSync } from "node:fs";
 import { createServer } from "node:net";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import {
@@ -23,9 +26,11 @@ import { expect } from "vitest";
 import { startMailpit } from "../../../../test/support/mailpit.js";
 import { startPostgres } from "../../../../test/support/postgres.js";
 import { buildApp } from "../../src/app.js";
+import { pushHosts } from "../../src/lib/config.js";
 import { createMailCodec } from "../../src/lib/email/crypto.js";
 import stepUpCode from "../../src/lib/email/templates/stepUpCode.js";
 import { originGuard } from "../../src/lib/http.js";
+import { enqueue } from "../../src/lib/jobs/index.js";
 import agencyContext from "../../src/modules/agencies/context.js";
 import agencies from "../../src/modules/agencies/service.js";
 import staff from "../../src/modules/agencies/staff.js";
@@ -34,10 +39,52 @@ import type { CookieTransport } from "../../src/modules/auth/cookies.js";
 import inviteAcceptance from "../../src/modules/auth/inviteAcceptance.js";
 import invites from "../../src/modules/auth/invites.js";
 import otp from "../../src/modules/auth/otp.js";
+import profiles from "../../src/modules/auth/profiles.js";
+import pushBindings from "../../src/modules/auth/pushBindings.js";
+import rateLimits from "../../src/modules/auth/rateLimits.js";
 import type { SessionService } from "../../src/modules/auth/sessions.js";
 import companies from "../../src/modules/companies/service.js";
+import {
+  createFollowUpService,
+  readMemberDayCounts,
+} from "../../src/modules/followups/index.js";
+import { createImportService } from "../../src/modules/imports/index.js";
+import leadFollowUp from "../../src/modules/leads/followUp.js";
+import {
+  createLeadAssignService,
+  createLeadDetailService,
+  createLeadListService,
+  createLeadStageService,
+  createLeadSuggestionService,
+  createLeadUpdateService,
+  createTodayService,
+  findImportMatches,
+  getMemberLeadCounts,
+  getReferenceCounts,
+  reassignOpenLeads,
+} from "../../src/modules/leads/index.js";
+import nextLead from "../../src/modules/leads/nextLead.js";
 import members from "../../src/modules/members/service.js";
+import notifications from "../../src/modules/notifications/service.js";
+import { queueSummaryEmail } from "../../src/modules/notifications/summaryEmailQueue.js";
+import {
+  createScoringService,
+  loadActiveConfig,
+  scoreLead,
+  seedScoringDefaults,
+} from "../../src/modules/scoring/index.js";
+import {
+  createFields,
+  createSettingsService,
+  extendFieldOptions,
+  fieldKeys,
+  loadHistoricalReferences,
+  loadSchema,
+  readOutcomeFacts,
+  seedDefaults,
+} from "../../src/modules/settings/index.js";
 import tenantContext from "../../src/modules/tenant/index.js";
+import recipients from "../../src/modules/tenant/recipients.js";
 
 const run = promisify(execFile);
 export const publicOrigin = "http://anar.example.test";
@@ -68,6 +115,10 @@ export async function startAuthFixture() {
   let time = Date.now();
   const now = () => new Date(time);
   const pepper = randomBytes(32).toString("base64");
+  const uploadsRoot = mkdtempSync(path.join(tmpdir(), "anar-uploads-"));
+  const vapidPublicKey = createECDH("prime256v1")
+    .generateKeys()
+    .toString("base64url");
   const mailKey = randomBytes(32).toString("base64");
   const codec = createMailCodec(mailKey);
   const invitations = invites.create({
@@ -156,6 +207,22 @@ export async function startAuthFixture() {
         lockActiveCompany: companies.lockActiveCompany,
         readActiveMember: members.readActiveForUser,
       });
+      const notificationService = notifications.create({
+        context: tenant,
+        now,
+        ...recipients,
+        queueSummaryEmail,
+        pushEnabled: true,
+        pushHosts,
+        vapidPublicKey,
+        bindPushEndpoint: pushBindings.bindPushEndpoint,
+      });
+      const callWriter = leadFollowUp.create({
+        loadSchema,
+        loadHistoricalReferences,
+        loadActiveConfig,
+        scoreLead,
+      });
       const app = buildApp({
         context: tenant,
         discovery: tenant,
@@ -164,7 +231,26 @@ export async function startAuthFixture() {
           now,
           createCompanyInvite: invitations.createCompanyInvite,
           resendCompanyInvite: invitations.resendCompanyInvite,
+          getMemberLeadCounts,
+          reassignOpenLeads: (tx, current, from, to, meta) =>
+            reassignOpenLeads(
+              tx,
+              {
+                readMember: members.readMember,
+                notify: notificationService.notify,
+              },
+              current,
+              from,
+              to,
+              meta,
+            ),
         }),
+        settings: createSettingsService({
+          context: tenant,
+          now,
+          references: getReferenceCounts,
+        }),
+        notifications: notificationService,
         companies: companies.create({
           createCompanyInvite: invitations.createCompanyInvite,
           context: agencyContext.create({
@@ -172,6 +258,71 @@ export async function startAuthFixture() {
             sessions: verification.sessions,
           }),
           now,
+          async seedCompany(tx) {
+            await seedDefaults(tx);
+            await seedScoringDefaults(tx);
+          },
+        }),
+        scoring: createScoringService({ context: tenant }),
+        leads: createLeadListService({ context: tenant, loadSchema }),
+        leadAssign: createLeadAssignService({
+          context: tenant,
+          now,
+          readMember: members.readMember,
+          notify: notificationService.notify,
+        }),
+        today: createTodayService({
+          context: tenant,
+          loadSchema,
+          readMemberDayCounts,
+          now,
+        }),
+        followUps: createFollowUpService({
+          context: tenant,
+          now,
+          readVisibleLead: callWriter.readVisibleLeadForCall,
+          readOutcomeFacts,
+          readOriginalBucket: nextLead.readOriginalBucket,
+          applyFollowUp: callWriter.applyFollowUp,
+          nextLeadId: nextLead.nextLeadId,
+          canReceiveCompanyNotification:
+            recipients.canReceiveCompanyNotification,
+          notify: notificationService.notify,
+        }),
+        leadStage: createLeadStageService({
+          context: tenant,
+          now,
+          loadSchema,
+          loadHistoricalReferences,
+        }),
+        leadSuggestion: createLeadSuggestionService({
+          context: tenant,
+          now,
+        }),
+        leadUpdate: createLeadUpdateService({
+          context: tenant,
+          now,
+          loadSchema,
+          loadActiveConfig,
+          scoreLead,
+        }),
+        leadDetail: createLeadDetailService({
+          context: tenant,
+          loadHistoricalReferences,
+          loadActiveConfig,
+          readProfiles: profiles.read,
+        }),
+        imports: createImportService({
+          context: tenant,
+          uploadsRoot,
+          limitUpload: rateLimits.createUploadLimiter(pepper, now),
+          loadSchema,
+          findImportMatches,
+          now,
+          createFields,
+          extendFieldOptions,
+          fieldKeys,
+          enqueue,
         }),
         staff: staff.create({
           context: agencyContext.create({
@@ -353,6 +504,7 @@ export async function startAuthFixture() {
       codec,
       invitations,
       now,
+      uploadsRoot,
       rows,
       owner,
       jobs,
@@ -480,6 +632,8 @@ export async function startAuthFixture() {
             DATABASE_URL: postgres.appUrl,
             MIGRATION_DATABASE_URL: "",
             MAIL_ENCRYPTION_KEY: mailKey,
+            PUBLIC_ORIGIN: publicOrigin,
+            UPLOADS_ROOT: uploadsRoot,
             EMAIL_TRANSPORT: "mailpit",
             EMAIL_FROM: "proof@anar.example.test",
             MAILPIT_URL: url,
@@ -524,6 +678,7 @@ export async function startAuthFixture() {
           PUBLIC_ORIGIN: publicOrigin,
           ANAR_LOCAL_HTTP: "true",
           TRUSTED_PROXY_CIDRS: "",
+          UPLOADS_ROOT: path.join(tmpdir(), `anar-uploads-${v7()}`),
         });
         const url = `http://127.0.0.1:${port}`;
         await expect

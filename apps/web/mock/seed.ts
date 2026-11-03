@@ -545,6 +545,7 @@ export function buildSeed(now: Date): MockStore {
         companyId: lead.companyId,
         leadId: lead.id,
         byMemberId: member.id,
+        byUserId: member.userId,
         outcomeId: outcome.id,
         notes: "Asked to call again.",
         happenedAt,

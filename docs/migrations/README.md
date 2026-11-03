@@ -24,7 +24,7 @@ restricted grants remain in `queueSetup.ts`; this squash does not change them.
 Current schema checks, indexes and foreign keys come from Drizzle. The old
 legacy-role conversion preflight is unnecessary on a fresh empty database;
 the initial owner-only role check and singleton owner index enforce its invariants.
-The eight original tables remain explicit platform exceptions. `agency_members`
+The eight original tables and auth's `push_endpoint_bindings` remain explicit platform exceptions. `agency_members`
 and `companies` and `company_members` are tenant-scoped: their schemas generate scope policies and enable
 RLS; custom SQL forces RLS and limits runtime grants. Tenant-table coverage excludes only the
 explicit platform list and requires RLS and FORCE RLS on every remaining table.

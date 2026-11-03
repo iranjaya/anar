@@ -44,6 +44,7 @@ function MappingTarget({
             ["email", "Email"],
             ["lead_date", "Lead date"],
             ["campaign_name", "Campaign"],
+            ["form_name", "Form name"],
             ["source", "Source"],
           ].map(([key, label]) => (
             <option key={key} value={`system:${key}`}>
@@ -58,6 +59,13 @@ function MappingTarget({
             </option>
           ))}
         </optgroup>
+        {target.startsWith("field:") &&
+          !added &&
+          !fields.some((field) => `field:${field.key}` === target) && (
+            <option value={target} disabled>
+              Field no longer active
+            </option>
+          )}
         <option value="new">New field</option>
         <option value="skip">Skip column</option>
       </select>

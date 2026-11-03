@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { randomBytes, randomUUID } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
@@ -32,6 +33,79 @@ export function migrationDrift(
   return [...new Set([...expected.keys(), ...actual.keys()])]
     .sort()
     .filter((name) => expected.get(name) !== actual.get(name));
+}
+
+// Drizzle can write SQL that its own snapshot compare accepts but Postgres rejects,
+// so the committed migration is also applied to a throwaway database.
+export function applyInitialMigration(root: string): void {
+  const name = `anar-migration-check-${randomUUID()}`;
+  const docker = (args: string[], input?: string) =>
+    execFileSync("docker", args, {
+      encoding: "utf8",
+      input,
+      stdio: ["pipe", "pipe", "pipe"],
+      timeout: 60000,
+    });
+  const secret = () => randomBytes(18).toString("hex");
+  try {
+    docker([
+      "run",
+      "--detach",
+      "--name",
+      name,
+      "--mount",
+      `type=bind,source=${path.join(root, "ops/postgres")},target=/opt/anar-postgres,readonly`,
+      "--env",
+      "POSTGRES_DB=anar",
+      "--env",
+      `POSTGRES_PASSWORD=${secret()}`,
+      "--env",
+      `APP_DATABASE_PASSWORD=${secret()}`,
+      "--env",
+      `MIGRATION_DATABASE_PASSWORD=${secret()}`,
+      "postgres:17",
+    ]);
+    const deadline = Date.now() + 30000;
+    while (true) {
+      try {
+        docker(["exec", name, "pg_isready", "-h", "127.0.0.1", "-d", "anar"]);
+        break;
+      } catch (error) {
+        if (Date.now() >= deadline) throw error;
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200);
+      }
+    }
+    docker(["exec", name, "/opt/anar-postgres/bootstrap.sh"]);
+    try {
+      docker(
+        [
+          "exec",
+          "--interactive",
+          name,
+          "psql",
+          "-X",
+          "--set=ON_ERROR_STOP=1",
+          "--single-transaction",
+          "--username=anar_migrate",
+          "--dbname=anar",
+          "--file=-",
+        ],
+        readFileSync(
+          path.join(root, "packages/db/migrations/0000_initial.sql"),
+          "utf8",
+        ),
+      );
+    } catch (error) {
+      const stderr = String((error as { stderr?: unknown }).stderr ?? "");
+      throw new Error(
+        `Migration does not apply: ${stderr.trim().split("\n")[0] ?? "psql failed"}`,
+      );
+    }
+  } finally {
+    try {
+      docker(["rm", "--force", "--volumes", name]);
+    } catch {}
+  }
 }
 
 export function checkMigrations(root: string): void {
@@ -123,8 +197,9 @@ export function checkMigrations(root: string): void {
       JSON.stringify(snapshot(history)) !== JSON.stringify(snapshot(generated))
     )
       throw new Error("Migration drift: initial snapshot differs from schema");
+    applyInitialMigration(root);
     console.log(
-      "Migrations passed: one initial migration, no SQL or schema drift.",
+      "Migrations passed: one initial migration, no SQL or schema drift, applies to Postgres 17.",
     );
   } finally {
     rmSync(scratch, { recursive: true, force: true });

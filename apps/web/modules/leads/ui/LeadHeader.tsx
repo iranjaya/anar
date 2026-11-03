@@ -16,11 +16,13 @@ export function LeadHeader({
   lead,
   stage,
   now,
+  timezone,
   canLogCall,
 }: {
   lead: Lead;
   stage: Stage;
   now: Date;
+  timezone: string;
   canLogCall: boolean;
 }) {
   const { slug } = useParams<{ slug: string }>();
@@ -43,7 +45,7 @@ export function LeadHeader({
             <span
               className={`text-sm font-semibold ${lead.nextActionAt < now ? "text-overdue" : "text-due"}`}
             >
-              {formatDue(lead.nextActionAt, now)}
+              {formatDue(lead.nextActionAt, timezone, now)}
             </span>
           )}
         </div>
@@ -54,6 +56,7 @@ export function LeadHeader({
           phoneE164={lead.phoneE164}
           phoneValid={lead.phoneValid}
           slug={slug}
+          logOnDial={canLogCall}
         />
         {lead.phoneValid && lead.phoneE164 && (
           <a
@@ -73,7 +76,7 @@ export function LeadHeader({
         {canLogCall && (
           <Link
             href={`${pathname}?${query}`}
-            className={`${secondary} fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-30 shadow-lg lg:static lg:shadow-none`}
+            className={`${secondary} fixed inset-x-0 bottom-0 z-30 w-full rounded-none border-x-0 border-b-0 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-lg lg:static lg:w-auto lg:rounded-xl lg:border lg:pb-0 lg:shadow-none`}
           >
             Log a call
           </Link>

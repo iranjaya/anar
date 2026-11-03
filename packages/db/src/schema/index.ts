@@ -1,6 +1,18 @@
 export { agencies, agencyMembers } from "./agencies.js";
 export { auditLog } from "./audit.js";
 export { authRateLimits } from "./authLimits.js";
+export { followUps } from "./followups.js";
+export { importBatches, importRows, importRuns } from "./imports.js";
+export { companyJobPeriods } from "./jobPeriods.js";
+export { leadEvents } from "./leadEvents.js";
+export { leads } from "./leads.js";
+export { mappingTemplates } from "./mappingTemplates.js";
 export { companyMembers } from "./members.js";
+export { notificationDeliveries } from "./notificationDeliveries.js";
+export { notifications } from "./notifications.js";
 export { workerHeartbeats } from "./operations.js";
 export { companies, invites, otpCodes, sessions, users } from "./platform.js";
+export { pushEndpointBindings } from "./pushBindings.js";
+export { pushSubscriptions } from "./pushSubscriptions.js";
+export { scoringConfigs } from "./scoring.js";
+export { fields, lostReasons, outcomes, stages } from "./settings.js";

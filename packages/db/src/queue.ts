@@ -147,6 +147,7 @@ export async function publish(
   name: string,
   payload: object,
   key: string,
+  startAfter?: Date,
 ): Promise<string> {
   const boss = new PgBoss({
     db: fromDrizzle(tx, sql),
@@ -156,7 +157,10 @@ export async function publish(
     schedule: false,
     reindex: false,
   });
-  const id = await boss.send(name, payload, { singletonKey: key });
+  const id = await boss.send(name, payload, {
+    singletonKey: key,
+    ...(startAfter ? { startAfter } : {}),
+  });
   if (!id) throw new Error("Queue refused the job");
   return id;
 }

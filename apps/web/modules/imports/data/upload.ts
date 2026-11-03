@@ -1,5 +1,14 @@
 import { randomUUID } from "node:crypto";
+import { slugSchema } from "@anar/domain/agencies";
+import {
+  type DryRunResult,
+  type ImportDraft,
+  type ImportDraftInput,
+  importDraftInputSchema,
+  type UploadResultReal,
+} from "@anar/domain/imports";
 import { z } from "zod";
+import { apiRequest } from "@/lib/api/client";
 import { AppError } from "@/lib/errors";
 import { store } from "@/mock/access";
 import { buildMetaExport, metaFields } from "@/mock/metaExport";
@@ -7,6 +16,11 @@ import { can, verifyContext } from "@/modules/tenant/server";
 import type { Ctx } from "@/modules/tenant/types";
 import type { Mapping, UploadResult } from "../types";
 import { findTemplate } from "./templates";
+import {
+  dryRunResultSchema,
+  importDraftSchema,
+  uploadResultSchema,
+} from "./wire";
 
 export async function createImportBatch(
   ctx: Ctx,
@@ -105,4 +119,78 @@ export async function getUploadResult(
     newColumns: proposedFields.map((field) => field.header),
     missingColumns: [],
   };
+}
+
+export async function getRealUploadResult(
+  slug: string,
+  batchId: string,
+): Promise<UploadResultReal> {
+  const company = slugSchema.safeParse(slug);
+  const batch = z.uuid().safeParse(batchId);
+  if (!company.success || !batch.success)
+    throw new AppError("not_found", "Import not found.");
+  return apiRequest(
+    {
+      path: `/api/companies/${company.data}/imports/getUploadResult`,
+      query: { batchId: batch.data },
+    },
+    uploadResultSchema,
+  );
+}
+
+export async function getRealImportDraft(
+  slug: string,
+  batchId: string,
+): Promise<ImportDraft | null> {
+  const company = slugSchema.safeParse(slug);
+  const batch = z.uuid().safeParse(batchId);
+  if (!company.success || !batch.success)
+    throw new AppError("not_found", "Import not found.");
+  return apiRequest(
+    {
+      path: `/api/companies/${company.data}/imports/getImportDraft`,
+      query: { batchId: batch.data },
+    },
+    importDraftSchema.nullable(),
+  );
+}
+
+export async function saveRealImportDraft(
+  slug: string,
+  input: ImportDraftInput,
+): Promise<ImportDraft> {
+  const company = slugSchema.safeParse(slug);
+  if (!company.success) throw new AppError("not_found", "Company not found.");
+  const parsed = importDraftInputSchema.safeParse(input);
+  if (!parsed.success)
+    throw new AppError("validation", "Check the column choices.");
+  return apiRequest(
+    {
+      path: `/api/companies/${company.data}/imports/saveImportDraft`,
+      method: "POST",
+      body: parsed.data,
+    },
+    importDraftSchema,
+  );
+}
+
+// The whole file is read on the server, so this one call may take up to two minutes.
+export async function dryRunRealImport(
+  slug: string,
+  input: ImportDraftInput,
+): Promise<DryRunResult> {
+  const company = slugSchema.safeParse(slug);
+  if (!company.success) throw new AppError("not_found", "Company not found.");
+  const parsed = importDraftInputSchema.safeParse(input);
+  if (!parsed.success)
+    throw new AppError("validation", "Check the column choices.");
+  return apiRequest(
+    {
+      path: `/api/companies/${company.data}/imports/dryRunImport`,
+      method: "POST",
+      body: parsed.data,
+      timeoutMs: 120000,
+    },
+    dryRunResultSchema,
+  );
 }

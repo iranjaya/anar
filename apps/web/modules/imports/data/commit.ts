@@ -1,5 +1,13 @@
 import { randomUUID } from "node:crypto";
+import { slugSchema } from "@anar/domain/agencies";
+import {
+  type CommitImportInput,
+  type CommitImportResult,
+  commitImportInputSchema,
+  commitImportResultWireSchema,
+} from "@anar/domain/imports";
 import { z } from "zod";
+import { apiRequest } from "@/lib/api/client";
 import { AppError } from "@/lib/errors";
 import { store } from "@/mock/access";
 import { buildMetaExport } from "@/mock/metaExport";
@@ -25,6 +33,7 @@ export const dryRunInputSchema = z.object({
             "system:email",
             "system:lead_date",
             "system:campaign_name",
+            "system:form_name",
             "system:source",
             "skip",
           ]),
@@ -218,4 +227,42 @@ export async function commitImport(
     batch.status = "failed";
     throw error;
   }
+}
+
+export async function resumeRealImport(
+  slug: string,
+  batchId: string,
+): Promise<CommitImportResult> {
+  const company = slugSchema.safeParse(slug);
+  const batch = z.uuid().safeParse(batchId);
+  if (!company.success || !batch.success)
+    throw new AppError("not_found", "Import not found.");
+  return apiRequest(
+    {
+      path: `/api/companies/${company.data}/imports/resumeImport`,
+      method: "POST",
+      body: { batchId: batch.data },
+    },
+    commitImportResultWireSchema,
+  );
+}
+
+// One request per click; a lost response is safe to send again for the same check.
+export async function commitRealImport(
+  slug: string,
+  input: CommitImportInput,
+): Promise<CommitImportResult> {
+  const company = slugSchema.safeParse(slug);
+  if (!company.success) throw new AppError("not_found", "Company not found.");
+  const parsed = commitImportInputSchema.safeParse(input);
+  if (!parsed.success)
+    throw new AppError("validation", "Check the column choices.");
+  return apiRequest(
+    {
+      path: `/api/companies/${company.data}/imports/commitImport`,
+      method: "POST",
+      body: parsed.data,
+    },
+    commitImportResultWireSchema,
+  );
 }

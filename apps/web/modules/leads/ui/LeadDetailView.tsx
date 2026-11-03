@@ -11,10 +11,12 @@ export function LeadDetailView({
   detail,
   schema,
   ctx,
+  timezone,
 }: {
   detail: LeadDetail;
   schema: CompanySchema;
   ctx: Ctx;
+  timezone: string;
 }) {
   const stage = schema.stages.find((stage) => stage.id === detail.lead.stageId);
   if (!stage) throw new Error("Lead stage not found.");
@@ -30,6 +32,7 @@ export function LeadDetailView({
         lead={detail.lead}
         stage={stage}
         now={now}
+        timezone={timezone}
         canLogCall={ctx.role !== "dna"}
       />
       <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
@@ -39,7 +42,12 @@ export function LeadDetailView({
             fields={schema.fields}
             hotMin={detail.hotMin}
           />
-          <Facts lead={detail.lead} fields={detail.fields} now={now} />
+          <Facts
+            lead={detail.lead}
+            fields={detail.fields}
+            now={now}
+            timezone={timezone}
+          />
         </div>
         <div className="min-w-0 space-y-5">
           {showSuggestion && lostStage && (
@@ -56,6 +64,7 @@ export function LeadDetailView({
             followUps={detail.followUps}
             schema={schema}
             now={now}
+            timezone={timezone}
           />
         </div>
       </div>

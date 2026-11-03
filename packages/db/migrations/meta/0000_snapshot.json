@@ -1,5 +1,5 @@
 {
-  "id": "ed3386fe-3474-4e61-bf95-7c5e3d9ddaf8",
+  "id": "1ff1a1bf-cdc5-4a96-9e64-2238029ae47f",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -81,8 +81,12 @@
           "name": "agencies_created_by_users_id_fk",
           "tableFrom": "agencies",
           "tableTo": "users",
-          "columnsFrom": ["created_by"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -92,7 +96,9 @@
         "agencies_slug_unique": {
           "name": "agencies_slug_unique",
           "nullsNotDistinct": false,
-          "columns": ["slug"]
+          "columns": [
+            "slug"
+          ]
         }
       },
       "policies": {},
@@ -235,8 +241,12 @@
           "name": "agency_members_agency_id_agencies_id_fk",
           "tableFrom": "agency_members",
           "tableTo": "agencies",
-          "columnsFrom": ["agency_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "agency_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -244,8 +254,12 @@
           "name": "agency_members_user_id_users_id_fk",
           "tableFrom": "agency_members",
           "tableTo": "users",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -253,8 +267,12 @@
           "name": "agency_members_invited_by_users_id_fk",
           "tableFrom": "agency_members",
           "tableTo": "users",
-          "columnsFrom": ["invited_by"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "invited_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -264,7 +282,9 @@
         "agency_members_user_id_unique": {
           "name": "agency_members_user_id_unique",
           "nullsNotDistinct": false,
-          "columns": ["user_id"]
+          "columns": [
+            "user_id"
+          ]
         }
       },
       "policies": {
@@ -272,21 +292,27 @@
           "name": "agency_members_select",
           "as": "PERMISSIVE",
           "for": "SELECT",
-          "to": ["anar_app"],
+          "to": [
+            "anar_app"
+          ],
           "using": "(current_setting('app.scope_kind', true) IN ('agency', 'company') AND \"agency_members\".\"agency_id\" = NULLIF(current_setting('app.agency_id', true), '')::uuid) OR (current_setting('app.scope_kind', true) = 'identity' AND \"agency_members\".\"user_id\" = NULLIF(current_setting('app.user_id', true), '')::uuid)"
         },
         "agency_members_insert": {
           "name": "agency_members_insert",
           "as": "PERMISSIVE",
           "for": "INSERT",
-          "to": ["anar_app"],
+          "to": [
+            "anar_app"
+          ],
           "withCheck": "current_setting('app.scope_kind', true) IN ('agency', 'company') AND \"agency_members\".\"agency_id\" = NULLIF(current_setting('app.agency_id', true), '')::uuid"
         },
         "agency_members_update": {
           "name": "agency_members_update",
           "as": "PERMISSIVE",
           "for": "UPDATE",
-          "to": ["anar_app"],
+          "to": [
+            "anar_app"
+          ],
           "using": "current_setting('app.scope_kind', true) IN ('agency', 'company') AND \"agency_members\".\"agency_id\" = NULLIF(current_setting('app.agency_id', true), '')::uuid",
           "withCheck": "current_setting('app.scope_kind', true) IN ('agency', 'company') AND \"agency_members\".\"agency_id\" = NULLIF(current_setting('app.agency_id', true), '')::uuid"
         },
@@ -294,7 +320,9 @@
           "name": "agency_members_delete",
           "as": "PERMISSIVE",
           "for": "DELETE",
-          "to": ["anar_app"],
+          "to": [
+            "anar_app"
+          ],
           "using": "current_setting('app.scope_kind', true) IN ('agency', 'company') AND \"agency_members\".\"agency_id\" = NULLIF(current_setting('app.agency_id', true), '')::uuid"
         }
       },
@@ -466,8 +494,12 @@
           "name": "audit_log_agency_id_agencies_id_fk",
           "tableFrom": "audit_log",
           "tableTo": "agencies",
-          "columnsFrom": ["agency_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "agency_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -475,8 +507,12 @@
           "name": "audit_log_actor_user_id_users_id_fk",
           "tableFrom": "audit_log",
           "tableTo": "users",
-          "columnsFrom": ["actor_user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "actor_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -484,8 +520,14 @@
           "name": "audit_log_agency_id_company_id_companies_agency_id_id_fk",
           "tableFrom": "audit_log",
           "tableTo": "companies",
-          "columnsFrom": ["agency_id", "company_id"],
-          "columnsTo": ["agency_id", "id"],
+          "columnsFrom": [
+            "agency_id",
+            "company_id"
+          ],
+          "columnsTo": [
+            "agency_id",
+            "id"
+          ],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -649,8 +691,12 @@
           "name": "companies_agency_id_agencies_id_fk",
           "tableFrom": "companies",
           "tableTo": "agencies",
-          "columnsFrom": ["agency_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "agency_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -660,12 +706,17 @@
         "companies_slug_unique": {
           "name": "companies_slug_unique",
           "nullsNotDistinct": false,
-          "columns": ["slug"]
+          "columns": [
+            "slug"
+          ]
         },
         "companies_agency_id_idx": {
           "name": "companies_agency_id_idx",
           "nullsNotDistinct": false,
-          "columns": ["agency_id", "id"]
+          "columns": [
+            "agency_id",
+            "id"
+          ]
         }
       },
       "policies": {
@@ -673,28 +724,45 @@
           "name": "companies_select",
           "as": "PERMISSIVE",
           "for": "SELECT",
-          "to": ["anar_app"],
+          "to": [
+            "anar_app"
+          ],
           "using": "\"companies\".\"agency_id\" = NULLIF(current_setting('app.agency_id', true), '')::uuid AND (\n    current_setting('app.scope_kind', true) = 'agency' OR (\n      current_setting('app.scope_kind', true) = 'company' AND \"companies\".\"id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    ))"
+        },
+        "companies_scheduler_catalog_select": {
+          "name": "companies_scheduler_catalog_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "anar_app"
+          ],
+          "using": "current_setting('app.scope_kind', true) = 'scheduler_catalog'\n          AND current_setting('app.actor_kind', true) = 'scheduler'\n          AND \"companies\".\"status\" = 'active'\n          AND EXISTS (SELECT 1 FROM public.agencies AS agency\n            WHERE agency.id = \"companies\".\"agency_id\" AND agency.status = 'active')"
         },
         "companies_identity_select": {
           "name": "companies_identity_select",
           "as": "PERMISSIVE",
           "for": "SELECT",
-          "to": ["anar_app"],
+          "to": [
+            "anar_app"
+          ],
           "using": "current_setting('app.scope_kind', true) = 'identity' AND EXISTS (\n          SELECT 1 FROM public.company_members AS member\n          WHERE member.agency_id = \"companies\".\"agency_id\" AND member.company_id = \"companies\".\"id\"\n          AND member.user_id = NULLIF(current_setting('app.user_id', true), '')::uuid AND member.status = 'active'\n        )"
         },
         "companies_insert": {
           "name": "companies_insert",
           "as": "PERMISSIVE",
           "for": "INSERT",
-          "to": ["anar_app"],
+          "to": [
+            "anar_app"
+          ],
           "withCheck": "\"companies\".\"agency_id\" = NULLIF(current_setting('app.agency_id', true), '')::uuid AND (\n    current_setting('app.scope_kind', true) = 'agency' OR (\n      current_setting('app.scope_kind', true) = 'company' AND \"companies\".\"id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    ))"
         },
         "companies_update": {
           "name": "companies_update",
           "as": "PERMISSIVE",
           "for": "UPDATE",
-          "to": ["anar_app"],
+          "to": [
+            "anar_app"
+          ],
           "using": "\"companies\".\"agency_id\" = NULLIF(current_setting('app.agency_id', true), '')::uuid AND (\n    current_setting('app.scope_kind', true) = 'agency' OR (\n      current_setting('app.scope_kind', true) = 'company' AND \"companies\".\"id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    ))",
           "withCheck": "\"companies\".\"agency_id\" = NULLIF(current_setting('app.agency_id', true), '')::uuid AND (\n    current_setting('app.scope_kind', true) = 'agency' OR (\n      current_setting('app.scope_kind', true) = 'company' AND \"companies\".\"id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    ))"
         },
@@ -702,7 +770,9 @@
           "name": "companies_delete",
           "as": "PERMISSIVE",
           "for": "DELETE",
-          "to": ["anar_app"],
+          "to": [
+            "anar_app"
+          ],
           "using": "\"companies\".\"agency_id\" = NULLIF(current_setting('app.agency_id', true), '')::uuid AND (\n    current_setting('app.scope_kind', true) = 'agency' OR (\n      current_setting('app.scope_kind', true) = 'company' AND \"companies\".\"id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    ))"
         }
       },
@@ -721,6 +791,173 @@
         }
       },
       "isRLSEnabled": true
+    },
+    "public.company_job_periods": {
+      "name": "company_job_periods",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "company_id": {
+          "name": "company_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "job_name": {
+          "name": "job_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period_key": {
+          "name": "period_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "scheduled_at": {
+          "name": "scheduled_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "timezone": {
+          "name": "timezone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cursor": {
+          "name": "cursor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "snapshot": {
+          "name": "snapshot",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "company_job_periods_status_idx": {
+          "name": "company_job_periods_status_idx",
+          "columns": [
+            {
+              "expression": "company_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "job_name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "company_job_periods_company_id_companies_id_fk": {
+          "name": "company_job_periods_company_id_companies_id_fk",
+          "tableFrom": "company_job_periods",
+          "tableTo": "companies",
+          "columnsFrom": [
+            "company_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "company_job_periods_unique_key": {
+          "name": "company_job_periods_unique_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "company_id",
+            "job_name",
+            "period_key"
+          ]
+        }
+      },
+      "policies": {
+        "company_job_periods_select": {
+          "name": "company_job_periods_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "anar_app"
+          ],
+          "using": "current_setting('app.scope_kind', true) = 'company'\n    AND \"company_job_periods\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"company_job_periods\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        },
+        "company_job_periods_insert": {
+          "name": "company_job_periods_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "anar_app"
+          ],
+          "withCheck": "current_setting('app.scope_kind', true) = 'company'\n    AND \"company_job_periods\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"company_job_periods\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        },
+        "company_job_periods_update": {
+          "name": "company_job_periods_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "anar_app"
+          ],
+          "using": "current_setting('app.scope_kind', true) = 'company'\n    AND \"company_job_periods\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"company_job_periods\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )",
+          "withCheck": "current_setting('app.scope_kind', true) = 'company'\n    AND \"company_job_periods\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"company_job_periods\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        }
+      },
+      "checkConstraints": {
+        "company_job_periods_status_check": {
+          "name": "company_job_periods_status_check",
+          "value": "\"company_job_periods\".\"status\" IN ('pending', 'running', 'done')"
+        }
+      },
+      "isRLSEnabled": false
     },
     "public.company_members": {
       "name": "company_members",
@@ -811,8 +1048,12 @@
           "name": "company_members_user_id_users_id_fk",
           "tableFrom": "company_members",
           "tableTo": "users",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -820,8 +1061,14 @@
           "name": "company_members_agency_id_company_id_companies_agency_id_id_fk",
           "tableFrom": "company_members",
           "tableTo": "companies",
-          "columnsFrom": ["agency_id", "company_id"],
-          "columnsTo": ["agency_id", "id"],
+          "columnsFrom": [
+            "agency_id",
+            "company_id"
+          ],
+          "columnsTo": [
+            "agency_id",
+            "id"
+          ],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -831,12 +1078,18 @@
         "company_members_company_user_key": {
           "name": "company_members_company_user_key",
           "nullsNotDistinct": false,
-          "columns": ["company_id", "user_id"]
+          "columns": [
+            "company_id",
+            "user_id"
+          ]
         },
         "company_members_company_id_key": {
           "name": "company_members_company_id_key",
           "nullsNotDistinct": false,
-          "columns": ["company_id", "id"]
+          "columns": [
+            "company_id",
+            "id"
+          ]
         }
       },
       "policies": {
@@ -844,21 +1097,27 @@
           "name": "company_members_select",
           "as": "PERMISSIVE",
           "for": "SELECT",
-          "to": ["anar_app"],
+          "to": [
+            "anar_app"
+          ],
           "using": "(current_setting('app.scope_kind', true) = 'company' AND \"company_members\".\"agency_id\" = NULLIF(current_setting('app.agency_id', true), '')::uuid AND \"company_members\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid) OR (current_setting('app.scope_kind', true) = 'identity' AND \"company_members\".\"user_id\" = NULLIF(current_setting('app.user_id', true), '')::uuid)"
         },
         "company_members_insert": {
           "name": "company_members_insert",
           "as": "PERMISSIVE",
           "for": "INSERT",
-          "to": ["anar_app"],
+          "to": [
+            "anar_app"
+          ],
           "withCheck": "current_setting('app.scope_kind', true) = 'company' AND \"company_members\".\"agency_id\" = NULLIF(current_setting('app.agency_id', true), '')::uuid AND \"company_members\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid"
         },
         "company_members_update": {
           "name": "company_members_update",
           "as": "PERMISSIVE",
           "for": "UPDATE",
-          "to": ["anar_app"],
+          "to": [
+            "anar_app"
+          ],
           "using": "current_setting('app.scope_kind', true) = 'company' AND \"company_members\".\"agency_id\" = NULLIF(current_setting('app.agency_id', true), '')::uuid AND \"company_members\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid",
           "withCheck": "current_setting('app.scope_kind', true) = 'company' AND \"company_members\".\"agency_id\" = NULLIF(current_setting('app.agency_id', true), '')::uuid AND \"company_members\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid"
         },
@@ -866,7 +1125,9 @@
           "name": "company_members_delete",
           "as": "PERMISSIVE",
           "for": "DELETE",
-          "to": ["anar_app"],
+          "to": [
+            "anar_app"
+          ],
           "using": "current_setting('app.scope_kind', true) = 'company' AND \"company_members\".\"agency_id\" = NULLIF(current_setting('app.agency_id', true), '')::uuid AND \"company_members\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid"
         }
       },
@@ -878,6 +1139,1236 @@
         "company_members_status_check": {
           "name": "company_members_status_check",
           "value": "\"company_members\".\"status\" IN ('invited', 'active', 'deactivated')"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.fields": {
+      "name": "fields",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "company_id": {
+          "name": "company_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "options": {
+          "name": "options",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_system": {
+          "name": "is_system",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "archived_at": {
+          "name": "archived_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "fields_company_id_companies_id_fk": {
+          "name": "fields_company_id_companies_id_fk",
+          "tableFrom": "fields",
+          "tableTo": "companies",
+          "columnsFrom": [
+            "company_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "fields_company_key_key": {
+          "name": "fields_company_key_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "company_id",
+            "key"
+          ]
+        },
+        "fields_company_id_key": {
+          "name": "fields_company_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "company_id",
+            "id"
+          ]
+        }
+      },
+      "policies": {
+        "fields_select": {
+          "name": "fields_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "anar_app"
+          ],
+          "using": "current_setting('app.scope_kind', true) = 'company'\n    AND \"fields\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"fields\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        },
+        "fields_insert": {
+          "name": "fields_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "anar_app"
+          ],
+          "withCheck": "current_setting('app.scope_kind', true) = 'company'\n    AND \"fields\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"fields\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        },
+        "fields_update": {
+          "name": "fields_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "anar_app"
+          ],
+          "using": "current_setting('app.scope_kind', true) = 'company'\n    AND \"fields\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"fields\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )",
+          "withCheck": "current_setting('app.scope_kind', true) = 'company'\n    AND \"fields\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"fields\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        }
+      },
+      "checkConstraints": {
+        "fields_type_check": {
+          "name": "fields_type_check",
+          "value": "\"fields\".\"type\" IN ('text', 'number', 'date', 'dropdown')"
+        },
+        "fields_options_check": {
+          "name": "fields_options_check",
+          "value": "(\"fields\".\"type\" = 'dropdown') = (\"fields\".\"options\" IS NOT NULL)"
+        },
+        "fields_position_check": {
+          "name": "fields_position_check",
+          "value": "\"fields\".\"position\" >= 0"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.follow_ups": {
+      "name": "follow_ups",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "company_id": {
+          "name": "company_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "lead_id": {
+          "name": "lead_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "by_member_id": {
+          "name": "by_member_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "by_user_id": {
+          "name": "by_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "outcome_id": {
+          "name": "outcome_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "happened_at": {
+          "name": "happened_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "next_action_at": {
+          "name": "next_action_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "stage_before_id": {
+          "name": "stage_before_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "stage_after_id": {
+          "name": "stage_after_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "counts_as_failed": {
+          "name": "counts_as_failed",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_site_visit": {
+          "name": "is_site_visit",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "request_id": {
+          "name": "request_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "request_hash": {
+          "name": "request_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "response": {
+          "name": "response",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "follow_ups_lead_time_idx": {
+          "name": "follow_ups_lead_time_idx",
+          "columns": [
+            {
+              "expression": "company_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "lead_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "happened_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "follow_ups_member_time_idx": {
+          "name": "follow_ups_member_time_idx",
+          "columns": [
+            {
+              "expression": "company_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "by_member_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "happened_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "follow_ups_company_id_companies_id_fk": {
+          "name": "follow_ups_company_id_companies_id_fk",
+          "tableFrom": "follow_ups",
+          "tableTo": "companies",
+          "columnsFrom": [
+            "company_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "follow_ups_by_user_id_users_id_fk": {
+          "name": "follow_ups_by_user_id_users_id_fk",
+          "tableFrom": "follow_ups",
+          "tableTo": "users",
+          "columnsFrom": [
+            "by_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "follow_ups_company_id_lead_id_leads_company_id_id_fk": {
+          "name": "follow_ups_company_id_lead_id_leads_company_id_id_fk",
+          "tableFrom": "follow_ups",
+          "tableTo": "leads",
+          "columnsFrom": [
+            "company_id",
+            "lead_id"
+          ],
+          "columnsTo": [
+            "company_id",
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "follow_ups_company_id_by_member_id_company_members_company_id_id_fk": {
+          "name": "follow_ups_company_id_by_member_id_company_members_company_id_id_fk",
+          "tableFrom": "follow_ups",
+          "tableTo": "company_members",
+          "columnsFrom": [
+            "company_id",
+            "by_member_id"
+          ],
+          "columnsTo": [
+            "company_id",
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "follow_ups_company_id_outcome_id_outcomes_company_id_id_fk": {
+          "name": "follow_ups_company_id_outcome_id_outcomes_company_id_id_fk",
+          "tableFrom": "follow_ups",
+          "tableTo": "outcomes",
+          "columnsFrom": [
+            "company_id",
+            "outcome_id"
+          ],
+          "columnsTo": [
+            "company_id",
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "follow_ups_company_id_stage_before_id_stages_company_id_id_fk": {
+          "name": "follow_ups_company_id_stage_before_id_stages_company_id_id_fk",
+          "tableFrom": "follow_ups",
+          "tableTo": "stages",
+          "columnsFrom": [
+            "company_id",
+            "stage_before_id"
+          ],
+          "columnsTo": [
+            "company_id",
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "follow_ups_company_id_stage_after_id_stages_company_id_id_fk": {
+          "name": "follow_ups_company_id_stage_after_id_stages_company_id_id_fk",
+          "tableFrom": "follow_ups",
+          "tableTo": "stages",
+          "columnsFrom": [
+            "company_id",
+            "stage_after_id"
+          ],
+          "columnsTo": [
+            "company_id",
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "follow_ups_company_id_key": {
+          "name": "follow_ups_company_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "company_id",
+            "id"
+          ]
+        },
+        "follow_ups_request_key": {
+          "name": "follow_ups_request_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "company_id",
+            "by_user_id",
+            "request_id"
+          ]
+        }
+      },
+      "policies": {
+        "follow_ups_select": {
+          "name": "follow_ups_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "anar_app"
+          ],
+          "using": "current_setting('app.scope_kind', true) = 'company'\n    AND \"follow_ups\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"follow_ups\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        },
+        "follow_ups_insert": {
+          "name": "follow_ups_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "anar_app"
+          ],
+          "withCheck": "current_setting('app.scope_kind', true) = 'company'\n    AND \"follow_ups\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"follow_ups\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        },
+        "follow_ups_update": {
+          "name": "follow_ups_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "anar_app"
+          ],
+          "using": "current_setting('app.scope_kind', true) = 'company'\n    AND \"follow_ups\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"follow_ups\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )",
+          "withCheck": "current_setting('app.scope_kind', true) = 'company'\n    AND \"follow_ups\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"follow_ups\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        }
+      },
+      "checkConstraints": {
+        "follow_ups_notes_length_check": {
+          "name": "follow_ups_notes_length_check",
+          "value": "length(\"follow_ups\".\"notes\") <= 2000"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.import_batches": {
+      "name": "import_batches",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "company_id": {
+          "name": "company_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "uploaded_by": {
+          "name": "uploaded_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_kind": {
+          "name": "source_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "file_name": {
+          "name": "file_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "file_path": {
+          "name": "file_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "file_size": {
+          "name": "file_size",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "encoding": {
+          "name": "encoding",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "delimiter": {
+          "name": "delimiter",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "row_count": {
+          "name": "row_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mapping_template_id": {
+          "name": "mapping_template_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "mapping": {
+          "name": "mapping",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_row_no": {
+          "name": "last_row_no",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "summary": {
+          "name": "summary",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error": {
+          "name": "error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "profile": {
+          "name": "profile",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "draft": {
+          "name": "draft",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "preview_revision": {
+          "name": "preview_revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "active_run_id": {
+          "name": "active_run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "frozen": {
+          "name": "frozen",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "import_batches_created_idx": {
+          "name": "import_batches_created_idx",
+          "columns": [
+            {
+              "expression": "company_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "import_batches_company_id_companies_id_fk": {
+          "name": "import_batches_company_id_companies_id_fk",
+          "tableFrom": "import_batches",
+          "tableTo": "companies",
+          "columnsFrom": [
+            "company_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "import_batches_uploaded_by_users_id_fk": {
+          "name": "import_batches_uploaded_by_users_id_fk",
+          "tableFrom": "import_batches",
+          "tableTo": "users",
+          "columnsFrom": [
+            "uploaded_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "import_batches_company_id_active_run_id_import_runs_company_id_id_fk": {
+          "name": "import_batches_company_id_active_run_id_import_runs_company_id_id_fk",
+          "tableFrom": "import_batches",
+          "tableTo": "import_runs",
+          "columnsFrom": [
+            "company_id",
+            "active_run_id"
+          ],
+          "columnsTo": [
+            "company_id",
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "import_batches_company_id_mapping_template_id_mapping_templates_company_id_id_fk": {
+          "name": "import_batches_company_id_mapping_template_id_mapping_templates_company_id_id_fk",
+          "tableFrom": "import_batches",
+          "tableTo": "mapping_templates",
+          "columnsFrom": [
+            "company_id",
+            "mapping_template_id"
+          ],
+          "columnsTo": [
+            "company_id",
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "import_batches_company_id_key": {
+          "name": "import_batches_company_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "company_id",
+            "id"
+          ]
+        }
+      },
+      "policies": {
+        "import_batches_select": {
+          "name": "import_batches_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "anar_app"
+          ],
+          "using": "current_setting('app.scope_kind', true) = 'company'\n    AND \"import_batches\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"import_batches\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        },
+        "import_batches_insert": {
+          "name": "import_batches_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "anar_app"
+          ],
+          "withCheck": "current_setting('app.scope_kind', true) = 'company'\n    AND \"import_batches\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"import_batches\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        },
+        "import_batches_update": {
+          "name": "import_batches_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "anar_app"
+          ],
+          "using": "current_setting('app.scope_kind', true) = 'company'\n    AND \"import_batches\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"import_batches\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )",
+          "withCheck": "current_setting('app.scope_kind', true) = 'company'\n    AND \"import_batches\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"import_batches\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        }
+      },
+      "checkConstraints": {
+        "import_batches_source_kind_check": {
+          "name": "import_batches_source_kind_check",
+          "value": "\"import_batches\".\"source_kind\" = 'csv'"
+        },
+        "import_batches_encoding_check": {
+          "name": "import_batches_encoding_check",
+          "value": "\"import_batches\".\"encoding\" IN ('utf-8', 'utf-16le', 'utf-16be', 'windows-1252')"
+        },
+        "import_batches_delimiter_check": {
+          "name": "import_batches_delimiter_check",
+          "value": "\"import_batches\".\"delimiter\" IN (',', E'\\t', E'\\x3B', '|')"
+        },
+        "import_batches_status_check": {
+          "name": "import_batches_status_check",
+          "value": "\"import_batches\".\"status\" IN ('uploaded', 'mapped', 'running', 'done', 'failed')"
+        },
+        "import_batches_counts_check": {
+          "name": "import_batches_counts_check",
+          "value": "\"import_batches\".\"file_size\" >= 0 AND \"import_batches\".\"row_count\" >= 0 AND \"import_batches\".\"last_row_no\" >= 0 AND \"import_batches\".\"preview_revision\" >= 0"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.import_rows": {
+      "name": "import_rows",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "company_id": {
+          "name": "company_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "batch_id": {
+          "name": "batch_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "row_no": {
+          "name": "row_no",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "raw": {
+          "name": "raw",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "phone_e164": {
+          "name": "phone_e164",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "result": {
+          "name": "result",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "lead_id": {
+          "name": "lead_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "issues": {
+          "name": "issues",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "import_rows_lead_idx": {
+          "name": "import_rows_lead_idx",
+          "columns": [
+            {
+              "expression": "lead_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "import_rows_batch_phone_idx": {
+          "name": "import_rows_batch_phone_idx",
+          "columns": [
+            {
+              "expression": "batch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "phone_e164",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "import_rows_company_id_companies_id_fk": {
+          "name": "import_rows_company_id_companies_id_fk",
+          "tableFrom": "import_rows",
+          "tableTo": "companies",
+          "columnsFrom": [
+            "company_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "import_rows_company_id_batch_id_import_batches_company_id_id_fk": {
+          "name": "import_rows_company_id_batch_id_import_batches_company_id_id_fk",
+          "tableFrom": "import_rows",
+          "tableTo": "import_batches",
+          "columnsFrom": [
+            "company_id",
+            "batch_id"
+          ],
+          "columnsTo": [
+            "company_id",
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "import_rows_company_id_lead_id_leads_company_id_id_fk": {
+          "name": "import_rows_company_id_lead_id_leads_company_id_id_fk",
+          "tableFrom": "import_rows",
+          "tableTo": "leads",
+          "columnsFrom": [
+            "company_id",
+            "lead_id"
+          ],
+          "columnsTo": [
+            "company_id",
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "import_rows_batch_row_key": {
+          "name": "import_rows_batch_row_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "batch_id",
+            "row_no"
+          ]
+        }
+      },
+      "policies": {
+        "import_rows_select": {
+          "name": "import_rows_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "anar_app"
+          ],
+          "using": "current_setting('app.scope_kind', true) = 'company'\n    AND \"import_rows\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"import_rows\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        },
+        "import_rows_insert": {
+          "name": "import_rows_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "anar_app"
+          ],
+          "withCheck": "current_setting('app.scope_kind', true) = 'company'\n    AND \"import_rows\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"import_rows\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        },
+        "import_rows_update": {
+          "name": "import_rows_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "anar_app"
+          ],
+          "using": "current_setting('app.scope_kind', true) = 'company'\n    AND \"import_rows\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"import_rows\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )",
+          "withCheck": "current_setting('app.scope_kind', true) = 'company'\n    AND \"import_rows\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"import_rows\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        }
+      },
+      "checkConstraints": {
+        "import_rows_result_check": {
+          "name": "import_rows_result_check",
+          "value": "\"import_rows\".\"result\" IN ('imported', 'duplicate_db', 'duplicate_file', 'invalid', 'error')"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.import_runs": {
+      "name": "import_runs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "company_id": {
+          "name": "company_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "batch_id": {
+          "name": "batch_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "run_no": {
+          "name": "run_no",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor_user_id": {
+          "name": "actor_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "authorized_at": {
+          "name": "authorized_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mapping_revision": {
+          "name": "mapping_revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "failure_count": {
+          "name": "failure_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "job_id": {
+          "name": "job_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "stop_code": {
+          "name": "stop_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "import_runs_company_id_companies_id_fk": {
+          "name": "import_runs_company_id_companies_id_fk",
+          "tableFrom": "import_runs",
+          "tableTo": "companies",
+          "columnsFrom": [
+            "company_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "import_runs_actor_user_id_users_id_fk": {
+          "name": "import_runs_actor_user_id_users_id_fk",
+          "tableFrom": "import_runs",
+          "tableTo": "users",
+          "columnsFrom": [
+            "actor_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "import_runs_company_id_batch_id_import_batches_company_id_id_fk": {
+          "name": "import_runs_company_id_batch_id_import_batches_company_id_id_fk",
+          "tableFrom": "import_runs",
+          "tableTo": "import_batches",
+          "columnsFrom": [
+            "company_id",
+            "batch_id"
+          ],
+          "columnsTo": [
+            "company_id",
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "import_runs_company_id_key": {
+          "name": "import_runs_company_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "company_id",
+            "id"
+          ]
+        },
+        "import_runs_batch_run_key": {
+          "name": "import_runs_batch_run_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "company_id",
+            "batch_id",
+            "run_no"
+          ]
+        }
+      },
+      "policies": {
+        "import_runs_select": {
+          "name": "import_runs_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "anar_app"
+          ],
+          "using": "current_setting('app.scope_kind', true) = 'company'\n    AND \"import_runs\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"import_runs\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        },
+        "import_runs_insert": {
+          "name": "import_runs_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "anar_app"
+          ],
+          "withCheck": "current_setting('app.scope_kind', true) = 'company'\n    AND \"import_runs\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"import_runs\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        },
+        "import_runs_update": {
+          "name": "import_runs_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "anar_app"
+          ],
+          "using": "current_setting('app.scope_kind', true) = 'company'\n    AND \"import_runs\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"import_runs\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )",
+          "withCheck": "current_setting('app.scope_kind', true) = 'company'\n    AND \"import_runs\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"import_runs\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        }
+      },
+      "checkConstraints": {
+        "import_runs_run_no_check": {
+          "name": "import_runs_run_no_check",
+          "value": "\"import_runs\".\"run_no\" > 0"
+        },
+        "import_runs_role_check": {
+          "name": "import_runs_role_check",
+          "value": "\"import_runs\".\"role\" IN ('agency_staff', 'super_admin')"
+        },
+        "import_runs_state_check": {
+          "name": "import_runs_state_check",
+          "value": "\"import_runs\".\"state\" IN ('queued', 'running', 'retrying', 'stopped', 'done')"
+        },
+        "import_runs_failure_count_check": {
+          "name": "import_runs_failure_count_check",
+          "value": "\"import_runs\".\"failure_count\" BETWEEN 0 AND 3"
+        },
+        "import_runs_stop_code_check": {
+          "name": "import_runs_stop_code_check",
+          "value": "\"import_runs\".\"stop_code\" IN ('file_missing', 'file_changed', 'schema_changed', 'access_removed', 'processing_failed')"
         }
       },
       "isRLSEnabled": true
@@ -1038,8 +2529,12 @@
           "name": "invites_agency_id_agencies_id_fk",
           "tableFrom": "invites",
           "tableTo": "agencies",
-          "columnsFrom": ["agency_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "agency_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -1047,8 +2542,12 @@
           "name": "invites_created_by_users_id_fk",
           "tableFrom": "invites",
           "tableTo": "users",
-          "columnsFrom": ["created_by"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -1056,8 +2555,14 @@
           "name": "invites_agency_id_company_id_companies_agency_id_id_fk",
           "tableFrom": "invites",
           "tableTo": "companies",
-          "columnsFrom": ["agency_id", "company_id"],
-          "columnsTo": ["agency_id", "id"],
+          "columnsFrom": [
+            "agency_id",
+            "company_id"
+          ],
+          "columnsTo": [
+            "agency_id",
+            "id"
+          ],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -1067,7 +2572,9 @@
         "invites_token_hash_unique": {
           "name": "invites_token_hash_unique",
           "nullsNotDistinct": false,
-          "columns": ["token_hash"]
+          "columns": [
+            "token_hash"
+          ]
         }
       },
       "policies": {},
@@ -1075,6 +2582,1507 @@
         "invites_target_check": {
           "name": "invites_target_check",
           "value": "(\"invites\".\"role\" = 'agency_staff' AND \"invites\".\"company_id\" IS NULL) OR (\"invites\".\"role\" IN ('super_admin', 'admin') AND \"invites\".\"company_id\" IS NOT NULL)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.lead_events": {
+      "name": "lead_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "company_id": {
+          "name": "company_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "lead_id": {
+          "name": "lead_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor_member_id": {
+          "name": "actor_member_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "actor_user_id": {
+          "name": "actor_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "data": {
+          "name": "data",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "lead_events_lead_idx": {
+          "name": "lead_events_lead_idx",
+          "columns": [
+            {
+              "expression": "lead_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "lead_events_company_created_idx": {
+          "name": "lead_events_company_created_idx",
+          "columns": [
+            {
+              "expression": "company_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "lead_events_company_id_companies_id_fk": {
+          "name": "lead_events_company_id_companies_id_fk",
+          "tableFrom": "lead_events",
+          "tableTo": "companies",
+          "columnsFrom": [
+            "company_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "lead_events_actor_user_id_users_id_fk": {
+          "name": "lead_events_actor_user_id_users_id_fk",
+          "tableFrom": "lead_events",
+          "tableTo": "users",
+          "columnsFrom": [
+            "actor_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "lead_events_company_id_lead_id_leads_company_id_id_fk": {
+          "name": "lead_events_company_id_lead_id_leads_company_id_id_fk",
+          "tableFrom": "lead_events",
+          "tableTo": "leads",
+          "columnsFrom": [
+            "company_id",
+            "lead_id"
+          ],
+          "columnsTo": [
+            "company_id",
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "lead_events_company_id_actor_member_id_company_members_company_id_id_fk": {
+          "name": "lead_events_company_id_actor_member_id_company_members_company_id_id_fk",
+          "tableFrom": "lead_events",
+          "tableTo": "company_members",
+          "columnsFrom": [
+            "company_id",
+            "actor_member_id"
+          ],
+          "columnsTo": [
+            "company_id",
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "lead_events_select": {
+          "name": "lead_events_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "anar_app"
+          ],
+          "using": "current_setting('app.scope_kind', true) = 'company'\n    AND \"lead_events\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"lead_events\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        },
+        "lead_events_insert": {
+          "name": "lead_events_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "anar_app"
+          ],
+          "withCheck": "current_setting('app.scope_kind', true) = 'company'\n    AND \"lead_events\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"lead_events\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        },
+        "lead_events_update": {
+          "name": "lead_events_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "anar_app"
+          ],
+          "using": "current_setting('app.scope_kind', true) = 'company'\n    AND \"lead_events\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"lead_events\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )",
+          "withCheck": "current_setting('app.scope_kind', true) = 'company'\n    AND \"lead_events\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"lead_events\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        }
+      },
+      "checkConstraints": {
+        "lead_events_type_check": {
+          "name": "lead_events_type_check",
+          "value": "\"lead_events\".\"type\" IN ('imported', 'duplicate_import', 'fields_updated', 'score_changed', 'stage_changed', 'assigned', 'unassigned', 'follow_up_logged', 'lost_suggested', 'lost_suggestion_dismissed')"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.leads": {
+      "name": "leads",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "company_id": {
+          "name": "company_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "full_name": {
+          "name": "full_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "phone_e164": {
+          "name": "phone_e164",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "phone_raw": {
+          "name": "phone_raw",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "phone_valid": {
+          "name": "phone_valid",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_kind": {
+          "name": "source_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "external_id": {
+          "name": "external_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lead_date": {
+          "name": "lead_date",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "campaign_name": {
+          "name": "campaign_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "form_name": {
+          "name": "form_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "assigned_to": {
+          "name": "assigned_to",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "stage_id": {
+          "name": "stage_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "lost_reason_id": {
+          "name": "lost_reason_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "custom": {
+          "name": "custom",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "score": {
+          "name": "score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "priority": {
+          "name": "priority",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "score_breakdown": {
+          "name": "score_breakdown",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "scored_at": {
+          "name": "scored_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "next_action_at": {
+          "name": "next_action_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_contacted_at": {
+          "name": "last_contacted_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "failed_attempts": {
+          "name": "failed_attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "lost_suggested_at": {
+          "name": "lost_suggested_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "import_batch_id": {
+          "name": "import_batch_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "merged_into_id": {
+          "name": "merged_into_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "leads_live_phone_idx": {
+          "name": "leads_live_phone_idx",
+          "columns": [
+            {
+              "expression": "company_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "phone_e164",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"leads\".\"phone_e164\" IS NOT NULL AND \"leads\".\"merged_into_id\" IS NULL AND \"leads\".\"deleted_at\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "leads_external_id_idx": {
+          "name": "leads_external_id_idx",
+          "columns": [
+            {
+              "expression": "company_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "external_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"leads\".\"external_id\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "leads_assignee_next_action_idx": {
+          "name": "leads_assignee_next_action_idx",
+          "columns": [
+            {
+              "expression": "company_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "assigned_to",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "next_action_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "leads_stage_idx": {
+          "name": "leads_stage_idx",
+          "columns": [
+            {
+              "expression": "company_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "stage_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "leads_lead_date_idx": {
+          "name": "leads_lead_date_idx",
+          "columns": [
+            {
+              "expression": "company_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "lead_date",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "leads_priority_idx": {
+          "name": "leads_priority_idx",
+          "columns": [
+            {
+              "expression": "company_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "priority",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "leads_custom_idx": {
+          "name": "leads_custom_idx",
+          "columns": [
+            {
+              "expression": "custom",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last",
+              "opclass": "jsonb_path_ops"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "gin",
+          "with": {}
+        },
+        "leads_name_trgm_idx": {
+          "name": "leads_name_trgm_idx",
+          "columns": [
+            {
+              "expression": "full_name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last",
+              "opclass": "gin_trgm_ops"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "gin",
+          "with": {}
+        },
+        "leads_phone_prefix_idx": {
+          "name": "leads_phone_prefix_idx",
+          "columns": [
+            {
+              "expression": "company_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "phone_e164",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last",
+              "opclass": "text_pattern_ops"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "leads_company_id_companies_id_fk": {
+          "name": "leads_company_id_companies_id_fk",
+          "tableFrom": "leads",
+          "tableTo": "companies",
+          "columnsFrom": [
+            "company_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "leads_company_id_stage_id_stages_company_id_id_fk": {
+          "name": "leads_company_id_stage_id_stages_company_id_id_fk",
+          "tableFrom": "leads",
+          "tableTo": "stages",
+          "columnsFrom": [
+            "company_id",
+            "stage_id"
+          ],
+          "columnsTo": [
+            "company_id",
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "leads_company_id_lost_reason_id_lost_reasons_company_id_id_fk": {
+          "name": "leads_company_id_lost_reason_id_lost_reasons_company_id_id_fk",
+          "tableFrom": "leads",
+          "tableTo": "lost_reasons",
+          "columnsFrom": [
+            "company_id",
+            "lost_reason_id"
+          ],
+          "columnsTo": [
+            "company_id",
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "leads_company_id_assigned_to_company_members_company_id_id_fk": {
+          "name": "leads_company_id_assigned_to_company_members_company_id_id_fk",
+          "tableFrom": "leads",
+          "tableTo": "company_members",
+          "columnsFrom": [
+            "company_id",
+            "assigned_to"
+          ],
+          "columnsTo": [
+            "company_id",
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "leads_company_id_merged_into_id_leads_company_id_id_fk": {
+          "name": "leads_company_id_merged_into_id_leads_company_id_id_fk",
+          "tableFrom": "leads",
+          "tableTo": "leads",
+          "columnsFrom": [
+            "company_id",
+            "merged_into_id"
+          ],
+          "columnsTo": [
+            "company_id",
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "leads_company_id_key": {
+          "name": "leads_company_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "company_id",
+            "id"
+          ]
+        }
+      },
+      "policies": {
+        "leads_select": {
+          "name": "leads_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "anar_app"
+          ],
+          "using": "current_setting('app.scope_kind', true) = 'company'\n    AND \"leads\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"leads\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        },
+        "leads_insert": {
+          "name": "leads_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "anar_app"
+          ],
+          "withCheck": "current_setting('app.scope_kind', true) = 'company'\n    AND \"leads\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"leads\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        },
+        "leads_update": {
+          "name": "leads_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "anar_app"
+          ],
+          "using": "current_setting('app.scope_kind', true) = 'company'\n    AND \"leads\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"leads\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )",
+          "withCheck": "current_setting('app.scope_kind', true) = 'company'\n    AND \"leads\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"leads\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        }
+      },
+      "checkConstraints": {
+        "leads_source_check": {
+          "name": "leads_source_check",
+          "value": "\"leads\".\"source\" IN ('facebook', 'instagram', 'event', 'web', 'other')"
+        },
+        "leads_source_kind_check": {
+          "name": "leads_source_kind_check",
+          "value": "\"leads\".\"source_kind\" IN ('import', 'manual', 'api')"
+        },
+        "leads_priority_check": {
+          "name": "leads_priority_check",
+          "value": "\"leads\".\"priority\" IN ('hot', 'warm', 'cold')"
+        },
+        "leads_failed_attempts_check": {
+          "name": "leads_failed_attempts_check",
+          "value": "\"leads\".\"failed_attempts\" >= 0"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.lost_reasons": {
+      "name": "lost_reasons",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "company_id": {
+          "name": "company_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "seed_key": {
+          "name": "seed_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "archived_at": {
+          "name": "archived_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "lost_reasons_company_id_companies_id_fk": {
+          "name": "lost_reasons_company_id_companies_id_fk",
+          "tableFrom": "lost_reasons",
+          "tableTo": "companies",
+          "columnsFrom": [
+            "company_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "lost_reasons_company_name_key": {
+          "name": "lost_reasons_company_name_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "company_id",
+            "name"
+          ]
+        },
+        "lost_reasons_company_seed_key": {
+          "name": "lost_reasons_company_seed_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "company_id",
+            "seed_key"
+          ]
+        },
+        "lost_reasons_company_id_key": {
+          "name": "lost_reasons_company_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "company_id",
+            "id"
+          ]
+        }
+      },
+      "policies": {
+        "lost_reasons_select": {
+          "name": "lost_reasons_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "anar_app"
+          ],
+          "using": "current_setting('app.scope_kind', true) = 'company'\n    AND \"lost_reasons\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"lost_reasons\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        },
+        "lost_reasons_insert": {
+          "name": "lost_reasons_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "anar_app"
+          ],
+          "withCheck": "current_setting('app.scope_kind', true) = 'company'\n    AND \"lost_reasons\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"lost_reasons\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        },
+        "lost_reasons_update": {
+          "name": "lost_reasons_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "anar_app"
+          ],
+          "using": "current_setting('app.scope_kind', true) = 'company'\n    AND \"lost_reasons\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"lost_reasons\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )",
+          "withCheck": "current_setting('app.scope_kind', true) = 'company'\n    AND \"lost_reasons\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"lost_reasons\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        }
+      },
+      "checkConstraints": {
+        "lost_reasons_position_check": {
+          "name": "lost_reasons_position_check",
+          "value": "\"lost_reasons\".\"position\" >= 0"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.mapping_templates": {
+      "name": "mapping_templates",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "company_id": {
+          "name": "company_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "header_fingerprint": {
+          "name": "header_fingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "headers": {
+          "name": "headers",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mapping": {
+          "name": "mapping",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "form_name": {
+          "name": "form_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "campaign_name": {
+          "name": "campaign_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_used_at": {
+          "name": "last_used_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "mapping_templates_form_idx": {
+          "name": "mapping_templates_form_idx",
+          "columns": [
+            {
+              "expression": "company_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "form_name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "mapping_templates_company_id_companies_id_fk": {
+          "name": "mapping_templates_company_id_companies_id_fk",
+          "tableFrom": "mapping_templates",
+          "tableTo": "companies",
+          "columnsFrom": [
+            "company_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "mapping_templates_created_by_users_id_fk": {
+          "name": "mapping_templates_created_by_users_id_fk",
+          "tableFrom": "mapping_templates",
+          "tableTo": "users",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "mapping_templates_company_id_key": {
+          "name": "mapping_templates_company_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "company_id",
+            "id"
+          ]
+        },
+        "mapping_templates_fingerprint_key": {
+          "name": "mapping_templates_fingerprint_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "company_id",
+            "header_fingerprint"
+          ]
+        }
+      },
+      "policies": {
+        "mapping_templates_select": {
+          "name": "mapping_templates_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "anar_app"
+          ],
+          "using": "current_setting('app.scope_kind', true) = 'company'\n    AND \"mapping_templates\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"mapping_templates\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        },
+        "mapping_templates_insert": {
+          "name": "mapping_templates_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "anar_app"
+          ],
+          "withCheck": "current_setting('app.scope_kind', true) = 'company'\n    AND \"mapping_templates\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"mapping_templates\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        },
+        "mapping_templates_update": {
+          "name": "mapping_templates_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "anar_app"
+          ],
+          "using": "current_setting('app.scope_kind', true) = 'company'\n    AND \"mapping_templates\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"mapping_templates\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )",
+          "withCheck": "current_setting('app.scope_kind', true) = 'company'\n    AND \"mapping_templates\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"mapping_templates\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.notification_deliveries": {
+      "name": "notification_deliveries",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "company_id": {
+          "name": "company_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "notification_id": {
+          "name": "notification_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "channel": {
+          "name": "channel",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_key": {
+          "name": "target_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "subscription_id": {
+          "name": "subscription_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "attempts": {
+          "name": "attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "lease_until": {
+          "name": "lease_until",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "first_attempt_at": {
+          "name": "first_attempt_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "delivered_at": {
+          "name": "delivered_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "encrypted_message": {
+          "name": "encrypted_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "message_hash": {
+          "name": "message_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "notification_deliveries_open_idx": {
+          "name": "notification_deliveries_open_idx",
+          "columns": [
+            {
+              "expression": "company_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "notification_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "notification_deliveries_company_id_companies_id_fk": {
+          "name": "notification_deliveries_company_id_companies_id_fk",
+          "tableFrom": "notification_deliveries",
+          "tableTo": "companies",
+          "columnsFrom": [
+            "company_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "notification_deliveries_company_id_notification_id_notifications_company_id_id_fk": {
+          "name": "notification_deliveries_company_id_notification_id_notifications_company_id_id_fk",
+          "tableFrom": "notification_deliveries",
+          "tableTo": "notifications",
+          "columnsFrom": [
+            "company_id",
+            "notification_id"
+          ],
+          "columnsTo": [
+            "company_id",
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "notification_deliveries_company_id_subscription_id_push_subscriptions_company_id_id_fk": {
+          "name": "notification_deliveries_company_id_subscription_id_push_subscriptions_company_id_id_fk",
+          "tableFrom": "notification_deliveries",
+          "tableTo": "push_subscriptions",
+          "columnsFrom": [
+            "company_id",
+            "subscription_id"
+          ],
+          "columnsTo": [
+            "company_id",
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "notification_deliveries_target_key": {
+          "name": "notification_deliveries_target_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "company_id",
+            "notification_id",
+            "channel",
+            "target_key"
+          ]
+        }
+      },
+      "policies": {
+        "notification_deliveries_select": {
+          "name": "notification_deliveries_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "anar_app"
+          ],
+          "using": "current_setting('app.scope_kind', true) = 'company'\n    AND \"notification_deliveries\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"notification_deliveries\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        },
+        "notification_deliveries_insert": {
+          "name": "notification_deliveries_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "anar_app"
+          ],
+          "withCheck": "current_setting('app.scope_kind', true) = 'company'\n    AND \"notification_deliveries\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"notification_deliveries\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        },
+        "notification_deliveries_update": {
+          "name": "notification_deliveries_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "anar_app"
+          ],
+          "using": "current_setting('app.scope_kind', true) = 'company'\n    AND \"notification_deliveries\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"notification_deliveries\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )",
+          "withCheck": "current_setting('app.scope_kind', true) = 'company'\n    AND \"notification_deliveries\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"notification_deliveries\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        }
+      },
+      "checkConstraints": {
+        "notification_deliveries_state_check": {
+          "name": "notification_deliveries_state_check",
+          "value": "\"notification_deliveries\".\"channel\" IN ('push', 'email') AND \"notification_deliveries\".\"state\" IN ('pending', 'sending', 'sent', 'skipped', 'failed', 'indeterminate') AND \"notification_deliveries\".\"attempts\" BETWEEN 0 AND 4"
+        },
+        "notification_deliveries_target_check": {
+          "name": "notification_deliveries_target_check",
+          "value": "(\"notification_deliveries\".\"channel\" = 'push' AND (\"notification_deliveries\".\"target_key\" = 'none' OR \"notification_deliveries\".\"target_key\" = \"notification_deliveries\".\"subscription_id\"::text)) OR (\"notification_deliveries\".\"channel\" = 'email' AND \"notification_deliveries\".\"target_key\" = 'email' AND \"notification_deliveries\".\"subscription_id\" IS NULL)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.notifications": {
+      "name": "notifications",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "company_id": {
+          "name": "company_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "url": {
+          "name": "url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "data": {
+          "name": "data",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "dedupe_key": {
+          "name": "dedupe_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "read_at": {
+          "name": "read_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pushed_at": {
+          "name": "pushed_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "emailed_at": {
+          "name": "emailed_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "notifications_inbox_idx": {
+          "name": "notifications_inbox_idx",
+          "columns": [
+            {
+              "expression": "company_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "read_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "notifications_company_id_companies_id_fk": {
+          "name": "notifications_company_id_companies_id_fk",
+          "tableFrom": "notifications",
+          "tableTo": "companies",
+          "columnsFrom": [
+            "company_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "notifications_user_id_users_id_fk": {
+          "name": "notifications_user_id_users_id_fk",
+          "tableFrom": "notifications",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "notifications_user_key": {
+          "name": "notifications_user_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "user_id",
+            "dedupe_key"
+          ]
+        },
+        "notifications_company_id_key": {
+          "name": "notifications_company_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "company_id",
+            "id"
+          ]
+        }
+      },
+      "policies": {
+        "notifications_select": {
+          "name": "notifications_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "anar_app"
+          ],
+          "using": "current_setting('app.scope_kind', true) = 'company'\n    AND \"notifications\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"notifications\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        },
+        "notifications_insert": {
+          "name": "notifications_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "anar_app"
+          ],
+          "withCheck": "current_setting('app.scope_kind', true) = 'company'\n    AND \"notifications\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"notifications\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        },
+        "notifications_update": {
+          "name": "notifications_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "anar_app"
+          ],
+          "using": "current_setting('app.scope_kind', true) = 'company'\n    AND \"notifications\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"notifications\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )",
+          "withCheck": "current_setting('app.scope_kind', true) = 'company'\n    AND \"notifications\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"notifications\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        }
+      },
+      "checkConstraints": {
+        "notifications_type_check": {
+          "name": "notifications_type_check",
+          "value": "\"notifications\".\"type\" IN ('import_complete', 'assigned', 'lost_suggested', 'overdue', 'daily', 'weekly') AND \"notifications\".\"data\"->>'type' = \"notifications\".\"type\""
+        },
+        "notifications_text_check": {
+          "name": "notifications_text_check",
+          "value": "char_length(\"notifications\".\"title\") BETWEEN 1 AND 160 AND char_length(\"notifications\".\"body\") BETWEEN 1 AND 500 AND char_length(\"notifications\".\"dedupe_key\") BETWEEN 1 AND 240"
         }
       },
       "isRLSEnabled": false
@@ -1169,8 +4177,12 @@
           "name": "otp_codes_user_id_users_id_fk",
           "tableFrom": "otp_codes",
           "tableTo": "users",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -1178,8 +4190,12 @@
           "name": "otp_codes_session_id_sessions_id_fk",
           "tableFrom": "otp_codes",
           "tableTo": "sessions",
-          "columnsFrom": ["session_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "session_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -1195,6 +4211,612 @@
         "otp_codes_purpose_session_check": {
           "name": "otp_codes_purpose_session_check",
           "value": "(\"otp_codes\".\"purpose\" = 'login' AND \"otp_codes\".\"session_id\" IS NULL) OR (\"otp_codes\".\"purpose\" = 'step_up' AND \"otp_codes\".\"session_id\" IS NOT NULL)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.outcomes": {
+      "name": "outcomes",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "company_id": {
+          "name": "company_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "counts_as_failed": {
+          "name": "counts_as_failed",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "seed_key": {
+          "name": "seed_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "archived_at": {
+          "name": "archived_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "outcomes_company_id_companies_id_fk": {
+          "name": "outcomes_company_id_companies_id_fk",
+          "tableFrom": "outcomes",
+          "tableTo": "companies",
+          "columnsFrom": [
+            "company_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "outcomes_company_name_key": {
+          "name": "outcomes_company_name_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "company_id",
+            "name"
+          ]
+        },
+        "outcomes_company_seed_key": {
+          "name": "outcomes_company_seed_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "company_id",
+            "seed_key"
+          ]
+        },
+        "outcomes_company_id_key": {
+          "name": "outcomes_company_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "company_id",
+            "id"
+          ]
+        }
+      },
+      "policies": {
+        "outcomes_select": {
+          "name": "outcomes_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "anar_app"
+          ],
+          "using": "current_setting('app.scope_kind', true) = 'company'\n    AND \"outcomes\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"outcomes\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        },
+        "outcomes_insert": {
+          "name": "outcomes_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "anar_app"
+          ],
+          "withCheck": "current_setting('app.scope_kind', true) = 'company'\n    AND \"outcomes\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"outcomes\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        },
+        "outcomes_update": {
+          "name": "outcomes_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "anar_app"
+          ],
+          "using": "current_setting('app.scope_kind', true) = 'company'\n    AND \"outcomes\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"outcomes\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )",
+          "withCheck": "current_setting('app.scope_kind', true) = 'company'\n    AND \"outcomes\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"outcomes\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        }
+      },
+      "checkConstraints": {
+        "outcomes_position_check": {
+          "name": "outcomes_position_check",
+          "value": "\"outcomes\".\"position\" >= 0"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.push_endpoint_bindings": {
+      "name": "push_endpoint_bindings",
+      "schema": "",
+      "columns": {
+        "endpoint_hash": {
+          "name": "endpoint_hash",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bound_at": {
+          "name": "bound_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "released_at": {
+          "name": "released_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "push_endpoint_bindings_session_idx": {
+          "name": "push_endpoint_bindings_session_idx",
+          "columns": [
+            {
+              "expression": "session_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "push_endpoint_bindings_user_id_users_id_fk": {
+          "name": "push_endpoint_bindings_user_id_users_id_fk",
+          "tableFrom": "push_endpoint_bindings",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "push_endpoint_bindings_session_id_sessions_id_fk": {
+          "name": "push_endpoint_bindings_session_id_sessions_id_fk",
+          "tableFrom": "push_endpoint_bindings",
+          "tableTo": "sessions",
+          "columnsFrom": [
+            "session_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "push_endpoint_bindings_hash_check": {
+          "name": "push_endpoint_bindings_hash_check",
+          "value": "\"push_endpoint_bindings\".\"endpoint_hash\" ~ '^[0-9a-f]{64}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.push_subscriptions": {
+      "name": "push_subscriptions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "company_id": {
+          "name": "company_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "endpoint": {
+          "name": "endpoint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "endpoint_hash": {
+          "name": "endpoint_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "p256dh": {
+          "name": "p256dh",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "auth": {
+          "name": "auth",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "disabled_at": {
+          "name": "disabled_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "push_subscriptions_user_idx": {
+          "name": "push_subscriptions_user_idx",
+          "columns": [
+            {
+              "expression": "company_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "push_subscriptions_company_id_companies_id_fk": {
+          "name": "push_subscriptions_company_id_companies_id_fk",
+          "tableFrom": "push_subscriptions",
+          "tableTo": "companies",
+          "columnsFrom": [
+            "company_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "push_subscriptions_user_id_users_id_fk": {
+          "name": "push_subscriptions_user_id_users_id_fk",
+          "tableFrom": "push_subscriptions",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "push_subscriptions_session_id_sessions_id_fk": {
+          "name": "push_subscriptions_session_id_sessions_id_fk",
+          "tableFrom": "push_subscriptions",
+          "tableTo": "sessions",
+          "columnsFrom": [
+            "session_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "push_subscriptions_company_id_key": {
+          "name": "push_subscriptions_company_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "company_id",
+            "id"
+          ]
+        },
+        "push_subscriptions_session_endpoint_key": {
+          "name": "push_subscriptions_session_endpoint_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "company_id",
+            "session_id",
+            "endpoint_hash"
+          ]
+        }
+      },
+      "policies": {
+        "push_subscriptions_select": {
+          "name": "push_subscriptions_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "anar_app"
+          ],
+          "using": "current_setting('app.scope_kind', true) = 'company'\n    AND \"push_subscriptions\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"push_subscriptions\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        },
+        "push_subscriptions_insert": {
+          "name": "push_subscriptions_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "anar_app"
+          ],
+          "withCheck": "current_setting('app.scope_kind', true) = 'company'\n    AND \"push_subscriptions\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"push_subscriptions\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        },
+        "push_subscriptions_update": {
+          "name": "push_subscriptions_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "anar_app"
+          ],
+          "using": "current_setting('app.scope_kind', true) = 'company'\n    AND \"push_subscriptions\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"push_subscriptions\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )",
+          "withCheck": "current_setting('app.scope_kind', true) = 'company'\n    AND \"push_subscriptions\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"push_subscriptions\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        }
+      },
+      "checkConstraints": {
+        "push_subscriptions_text_check": {
+          "name": "push_subscriptions_text_check",
+          "value": "char_length(\"push_subscriptions\".\"endpoint\") BETWEEN 1 AND 1024 AND \"push_subscriptions\".\"endpoint_hash\" ~ '^[0-9a-f]{64}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.scoring_configs": {
+      "name": "scoring_configs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "company_id": {
+          "name": "company_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "base_points": {
+          "name": "base_points",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "hot_min": {
+          "name": "hot_min",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "warm_min": {
+          "name": "warm_min",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "rules": {
+          "name": "rules",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "active": {
+          "name": "active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "scoring_configs_active_idx": {
+          "name": "scoring_configs_active_idx",
+          "columns": [
+            {
+              "expression": "company_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"scoring_configs\".\"active\"",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "scoring_configs_company_id_companies_id_fk": {
+          "name": "scoring_configs_company_id_companies_id_fk",
+          "tableFrom": "scoring_configs",
+          "tableTo": "companies",
+          "columnsFrom": [
+            "company_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "scoring_configs_created_by_users_id_fk": {
+          "name": "scoring_configs_created_by_users_id_fk",
+          "tableFrom": "scoring_configs",
+          "tableTo": "users",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "scoring_configs_company_version_key": {
+          "name": "scoring_configs_company_version_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "company_id",
+            "version"
+          ]
+        }
+      },
+      "policies": {
+        "scoring_configs_select": {
+          "name": "scoring_configs_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "anar_app"
+          ],
+          "using": "current_setting('app.scope_kind', true) = 'company'\n    AND \"scoring_configs\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"scoring_configs\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        },
+        "scoring_configs_insert": {
+          "name": "scoring_configs_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "anar_app"
+          ],
+          "withCheck": "current_setting('app.scope_kind', true) = 'company'\n    AND \"scoring_configs\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"scoring_configs\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        },
+        "scoring_configs_update": {
+          "name": "scoring_configs_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "anar_app"
+          ],
+          "using": "current_setting('app.scope_kind', true) = 'company'\n    AND \"scoring_configs\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"scoring_configs\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )",
+          "withCheck": "current_setting('app.scope_kind', true) = 'company'\n    AND \"scoring_configs\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"scoring_configs\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        }
+      },
+      "checkConstraints": {
+        "scoring_configs_numbers_check": {
+          "name": "scoring_configs_numbers_check",
+          "value": "\"scoring_configs\".\"version\" >= 1 AND \"scoring_configs\".\"base_points\" >= 0 AND \"scoring_configs\".\"warm_min\" >= 0 AND \"scoring_configs\".\"warm_min\" < \"scoring_configs\".\"hot_min\""
+        },
+        "scoring_configs_rules_check": {
+          "name": "scoring_configs_rules_check",
+          "value": "jsonb_typeof(\"scoring_configs\".\"rules\") = 'array'"
         }
       },
       "isRLSEnabled": false
@@ -1326,8 +4948,12 @@
           "name": "sessions_user_id_users_id_fk",
           "tableFrom": "sessions",
           "tableTo": "users",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -1335,8 +4961,12 @@
           "name": "sessions_acting_company_id_companies_id_fk",
           "tableFrom": "sessions",
           "tableTo": "companies",
-          "columnsFrom": ["acting_company_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "acting_company_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -1346,7 +4976,9 @@
         "sessions_token_hash_unique": {
           "name": "sessions_token_hash_unique",
           "nullsNotDistinct": false,
-          "columns": ["token_hash"]
+          "columns": [
+            "token_hash"
+          ]
         }
       },
       "policies": {},
@@ -1357,6 +4989,179 @@
         }
       },
       "isRLSEnabled": false
+    },
+    "public.stages": {
+      "name": "stages",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "company_id": {
+          "name": "company_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_default": {
+          "name": "is_default",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "seed_key": {
+          "name": "seed_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "archived_at": {
+          "name": "archived_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "stages_one_default_idx": {
+          "name": "stages_one_default_idx",
+          "columns": [
+            {
+              "expression": "company_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"stages\".\"is_default\"",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "stages_company_id_companies_id_fk": {
+          "name": "stages_company_id_companies_id_fk",
+          "tableFrom": "stages",
+          "tableTo": "companies",
+          "columnsFrom": [
+            "company_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "stages_company_name_key": {
+          "name": "stages_company_name_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "company_id",
+            "name"
+          ]
+        },
+        "stages_company_seed_key": {
+          "name": "stages_company_seed_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "company_id",
+            "seed_key"
+          ]
+        },
+        "stages_company_id_key": {
+          "name": "stages_company_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "company_id",
+            "id"
+          ]
+        }
+      },
+      "policies": {
+        "stages_select": {
+          "name": "stages_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "anar_app"
+          ],
+          "using": "current_setting('app.scope_kind', true) = 'company'\n    AND \"stages\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"stages\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        },
+        "stages_insert": {
+          "name": "stages_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "anar_app"
+          ],
+          "withCheck": "current_setting('app.scope_kind', true) = 'company'\n    AND \"stages\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"stages\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        },
+        "stages_update": {
+          "name": "stages_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "anar_app"
+          ],
+          "using": "current_setting('app.scope_kind', true) = 'company'\n    AND \"stages\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"stages\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )",
+          "withCheck": "current_setting('app.scope_kind', true) = 'company'\n    AND \"stages\".\"company_id\" = NULLIF(current_setting('app.company_id', true), '')::uuid\n    AND EXISTS (\n      SELECT 1 FROM public.companies AS company\n      WHERE company.id = \"stages\".\"company_id\"\n      AND company.agency_id = NULLIF(current_setting('app.agency_id', true), '')::uuid\n    )"
+        }
+      },
+      "checkConstraints": {
+        "stages_kind_check": {
+          "name": "stages_kind_check",
+          "value": "\"stages\".\"kind\" IN ('open', 'won', 'lost')"
+        },
+        "stages_position_check": {
+          "name": "stages_position_check",
+          "value": "\"stages\".\"position\" >= 0"
+        },
+        "stages_default_check": {
+          "name": "stages_default_check",
+          "value": "NOT \"stages\".\"is_default\" OR (\"stages\".\"archived_at\" IS NULL AND \"stages\".\"kind\" = 'open')"
+        }
+      },
+      "isRLSEnabled": true
     },
     "public.users": {
       "name": "users",
@@ -1424,7 +5229,9 @@
         "users_email_unique": {
           "name": "users_email_unique",
           "nullsNotDistinct": false,
-          "columns": ["email"]
+          "columns": [
+            "email"
+          ]
         }
       },
       "policies": {},

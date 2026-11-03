@@ -1,5 +1,14 @@
+import { slugSchema } from "@anar/domain/agencies";
+import {
+  type BucketPage,
+  type BucketQuery,
+  bucketQuerySchema,
+  type TodayResult,
+  todayResultWireSchema,
+} from "@anar/domain/leads";
 import { tz } from "@date-fns/tz";
 import { isSameDay } from "date-fns";
+import { apiDateSchema, apiRequest } from "@/lib/api/client";
 import { AppError } from "@/lib/errors";
 import { store } from "@/mock/access";
 import { loadSchema } from "@/modules/settings/server";
@@ -7,8 +16,49 @@ import { can, verifyContext } from "@/modules/tenant/server";
 import type { Ctx } from "@/modules/tenant/types";
 import { bucketOf } from "../buckets";
 import type { LeadRow, TodayCounts } from "../types";
+import { leadPageSchema } from "./queue";
+
+const rows = leadPageSchema.shape.items;
+const todaySchema = todayResultWireSchema.extend({
+  overdue: rows,
+  dueToday: rows,
+  newLeads: rows,
+  counts: todayResultWireSchema.shape.counts.extend({
+    nextDueAt: apiDateSchema.nullable(),
+  }),
+});
+
+export async function getRealToday(slug: string): Promise<TodayResult> {
+  const company = slugSchema.safeParse(slug);
+  if (!company.success) throw new AppError("not_found", "Company not found.");
+  return apiRequest(
+    { path: `/api/companies/${company.data}/leads/getMyToday` },
+    todaySchema,
+  );
+}
+
+export async function listRealTodayBucket(
+  slug: string,
+  query: BucketQuery,
+): Promise<BucketPage> {
+  const company = slugSchema.safeParse(slug);
+  const parsed = bucketQuerySchema.safeParse(query);
+  if (!company.success || !parsed.success)
+    throw new AppError("not_found", "Leads not found.");
+  return apiRequest(
+    {
+      path: `/api/companies/${company.data}/leads/listTodayBucket`,
+      query: {
+        bucket: parsed.data.bucket,
+        ...(parsed.data.cursor ? { cursor: parsed.data.cursor } : {}),
+      },
+    },
+    leadPageSchema,
+  );
+}
 
 type TodayData = {
+  timezone: string;
   hasAssignedLeads: boolean;
   overdue: LeadRow[];
   dueToday: LeadRow[];
@@ -148,6 +198,7 @@ async function readToday(ctx: Ctx, memberId: string): Promise<TodayData> {
       (target.endsOn === null || target.endsOn >= now),
   );
   return {
+    timezone: company.timezone,
     hasAssignedLeads: leads.length > 0,
     overdue,
     dueToday,

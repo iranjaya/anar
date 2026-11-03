@@ -156,10 +156,12 @@ async function mailsTo(email: string): Promise<number> {
     signal: AbortSignal.timeout(5000),
   });
   const body = (await response.json()) as {
-    messages: { To: { Address: string }[] }[];
+    messages: { To: { Address: string }[]; Subject: string }[];
   };
-  return body.messages.filter((message) =>
-    message.To.some((to) => to.Address === email),
+  return body.messages.filter(
+    (message) =>
+      message.To.some((to) => to.Address === email) &&
+      /^\d{6} is your Anar sign-in code$/.test(message.Subject),
   ).length;
 }
 
@@ -184,13 +186,25 @@ try {
   assert.ok(
     !["3000", "3001", "3100", "8080"].includes(new URL(stack.baseURL).port),
   );
+  // Only the uploads volume, read-only for the worker; the worker also gets the
+  // test-only fake push CA. Web has no mounts.
+  const mounts: Record<string, { Destination: string; RW: boolean }[]> = {
+    api: [{ Destination: "/var/lib/anar/uploads", RW: true }],
+    worker: [
+      { Destination: "/fake", RW: false },
+      { Destination: "/var/lib/anar/uploads", RW: false },
+    ],
+    web: [],
+  };
   for (const service of ["api", "worker", "web"]) {
     const [inspected] = JSON.parse(docker("inspect", container(service)));
     assert.equal(inspected.Config.Image, `${stack.project}-${service}`);
     assert.deepEqual(
-      inspected.Mounts,
-      [],
-      `${service} must run without mounts`,
+      (inspected.Mounts as { Destination: string; RW: boolean }[])
+        .map(({ Destination, RW }) => ({ Destination, RW }))
+        .sort((a, b) => a.Destination.localeCompare(b.Destination)),
+      mounts[service],
+      `${service} has only its expected mounts`,
     );
     if (service === "web") {
       for (const variable of inspected.Config.Env)
@@ -207,7 +221,9 @@ try {
       );
     }
   }
-  step("built images run without mounts and web has no database access");
+  step(
+    "built images have only their expected mounts and web has no database access",
+  );
 
   const first = await healthy();
   assert.equal(first.body?.db, "ok");

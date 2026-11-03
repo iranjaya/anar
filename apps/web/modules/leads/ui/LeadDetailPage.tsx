@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { PageShell } from "@/components/PageShell";
 import { AppError } from "@/lib/errors";
 import { loadSchema } from "@/modules/settings/server";
-import { requireContext } from "@/modules/tenant/server";
+import { getCompanyShell } from "@/modules/tenant/server";
 import { getLead } from "../server";
 import { LeadDetailView } from "./LeadDetailView";
 
@@ -15,7 +15,7 @@ export async function LeadDetailPage({
   callSheet?: ReactNode;
 }) {
   const { slug, id } = await params;
-  const ctx = await requireContext(slug);
+  const { ctx, company } = await getCompanyShell(slug);
   try {
     const [detail, schema] = await Promise.all([
       getLead(ctx, id),
@@ -23,7 +23,13 @@ export async function LeadDetailPage({
     ]);
     return (
       <PageShell wide className="lg:pb-10">
-        <LeadDetailView key={id} detail={detail} schema={schema} ctx={ctx} />
+        <LeadDetailView
+          key={id}
+          detail={detail}
+          schema={schema}
+          ctx={ctx}
+          timezone={company.timezone}
+        />
         {callSheet}
       </PageShell>
     );

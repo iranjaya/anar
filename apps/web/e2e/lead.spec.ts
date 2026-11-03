@@ -291,6 +291,17 @@ test.describe("lead detail", () => {
     if (factsBox && timelineBox && mainBox) {
       if (isMobile) {
         expect(position).toBe("fixed");
+        const logBox = await log.boundingBox();
+        const reserve = await page
+          .getByRole("main")
+          .evaluate((element) =>
+            Number.parseFloat(getComputedStyle(element).paddingBottom),
+          );
+        expect(logBox).not.toBeNull();
+        if (logBox) {
+          expect(logBox.y + logBox.height).toBeCloseTo(844, 0);
+          expect(reserve).toBeGreaterThan(logBox.height);
+        }
         expect(timelineBox.y).toBeGreaterThan(factsBox.y + factsBox.height);
       } else {
         expect(position).toBe("static");

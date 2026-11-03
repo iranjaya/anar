@@ -64,6 +64,90 @@ type AuditEvents = {
     target: { type: "agency_member"; id: string };
     data: { userId: string };
   };
+  "settings.field_created": {
+    target: { type: "field"; id: string };
+    data: { fieldId: string };
+  };
+  "settings.field_updated": {
+    target: { type: "field"; id: string };
+    data: { fieldId: string };
+  };
+  "settings.field_archived": {
+    target: { type: "field"; id: string };
+    data: { fieldId: string };
+  };
+  "settings.stage_saved": {
+    target: { type: "stage"; id: string };
+    data: { stageId: string };
+  };
+  "settings.stages_reordered": {
+    target: { type: "company"; id: string };
+    data: { count: string };
+  };
+  "settings.stage_archived": {
+    target: { type: "stage"; id: string };
+    data: { stageId: string };
+  };
+  "settings.outcome_saved": {
+    target: { type: "outcome"; id: string };
+    data: { outcomeId: string };
+  };
+  "settings.outcome_archived": {
+    target: { type: "outcome"; id: string };
+    data: { outcomeId: string };
+  };
+  "settings.reason_saved": {
+    target: { type: "lost_reason"; id: string };
+    data: { lostReasonId: string };
+  };
+  "settings.reason_archived": {
+    target: { type: "lost_reason"; id: string };
+    data: { lostReasonId: string };
+  };
+  "leads.assign": {
+    target: { type: "company"; id: string };
+    data: { count: string; memberId: string; assignmentId: string };
+  };
+  "leads.stage_changed": {
+    target: { type: "lead"; id: string };
+    data: { stageId: string };
+  };
+  "leads.updated": {
+    target: { type: "lead"; id: string };
+    data: { count: string };
+  };
+  "followups.logged": {
+    target: { type: "lead"; id: string };
+    data: { followUpId: string; outcomeId: string };
+  };
+  "leads.suggestion_dismissed": {
+    target: { type: "lead"; id: string };
+    data: { suggestionEventId: string };
+  };
+  "imports.resumed": {
+    target: { type: "import_batch"; id: string };
+    data: { batchId: string; runId: string };
+  };
+  "imports.committed": {
+    target: { type: "import_batch"; id: string };
+    data: { batchId: string; runId: string };
+  };
+  "imports.uploaded": {
+    target: { type: "import_batch"; id: string };
+    data: { batchId: string; rowCount: string };
+  };
+  "notifications.subscribed": {
+    target: { type: "push_subscription"; id: string };
+    data: { subscriptionId: string };
+  };
+  "notifications.unsubscribed": {
+    target: { type: "push_subscription"; id: string };
+    data: { subscriptionId: string };
+  };
+  "notifications.read": {
+    target: { type: "company"; id: string };
+    data: { count: string };
+  };
 };
 export type AuditAction = keyof AuditEvents;
 export type AuditData = AuditEvents[AuditAction]["data"];
@@ -89,6 +173,28 @@ const audit = {
       payload = { companyId: data.companyId, reason: data.reason };
     else if ("companyId" in data) payload = { companyId: data.companyId };
     else if ("userId" in data) payload = { userId: data.userId };
+    else if ("assignmentId" in data)
+      payload = {
+        count: data.count,
+        memberId: data.memberId,
+        assignmentId: data.assignmentId,
+      };
+    else if ("count" in data) payload = { count: data.count };
+    else if ("subscriptionId" in data)
+      payload = { subscriptionId: data.subscriptionId };
+    else if ("runId" in data)
+      payload = { batchId: data.batchId, runId: data.runId };
+    else if ("batchId" in data)
+      payload = { batchId: data.batchId, rowCount: data.rowCount };
+    else if ("fieldId" in data) payload = { fieldId: data.fieldId };
+    else if ("stageId" in data) payload = { stageId: data.stageId };
+    else if ("followUpId" in data)
+      payload = { followUpId: data.followUpId, outcomeId: data.outcomeId };
+    else if ("suggestionEventId" in data)
+      payload = { suggestionEventId: data.suggestionEventId };
+    else if ("outcomeId" in data) payload = { outcomeId: data.outcomeId };
+    else if ("lostReasonId" in data)
+      payload = { lostReasonId: data.lostReasonId };
     else if ("inviterId" in data)
       payload = { inviteId: data.inviteId, inviterId: data.inviterId };
     else payload = { inviteId: data.inviteId };

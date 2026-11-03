@@ -159,7 +159,7 @@ test.describe("call logging", () => {
     }
   });
 
-  test("requires a lost reason and fits all seven choices", async ({
+  test("requires a lost reason, keeps the note and fits seven choices", async ({
     page,
   }) => {
     await page.goto("/sundar-heights/leads/sundar-lead-001?log=1");
@@ -174,9 +174,8 @@ test.describe("call logging", () => {
     await expect(
       sheet.getByText("Pick why it was lost", { exact: true }),
     ).toBeVisible();
-    await expect(
-      sheet.getByRole("textbox", { name: "Note", exact: true }),
-    ).toHaveCount(0);
+    const note = sheet.getByRole("textbox", { name: "Note", exact: true });
+    await note.fill("Asked us to stop calling");
     await expect(
       sheet.getByRole("group", { name: "Next follow-up", exact: true }),
     ).toHaveCount(0);
@@ -206,6 +205,11 @@ test.describe("call logging", () => {
       page
         .getByRole("region", { name: "Timeline", exact: true })
         .getByText("Too Expensive", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page
+        .getByRole("region", { name: "Timeline", exact: true })
+        .getByText("Asked us to stop calling", { exact: true }),
     ).toBeVisible();
   });
 
@@ -274,7 +278,7 @@ test.describe("call logging", () => {
     await outcome.click();
     await note.fill("Call after lunch.");
     await sheet.getByRole("button", { name: "Pick date", exact: true }).click();
-    const date = sheet.getByLabel("Follow-up date, 10:00 Kathmandu", {
+    const date = sheet.getByLabel("Follow-up date, 10:00", {
       exact: true,
     });
     await date.fill("2026-11-15");

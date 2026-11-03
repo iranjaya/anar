@@ -30,6 +30,7 @@ export type CompanyDeps = {
   context: ReturnType<typeof context.create>;
   now(): Date;
   createCompanyInvite: InviteService["createCompanyInvite"];
+  seedCompany(tx: PlatformTx): Promise<void>;
 };
 export type CompanyService = {
   inviteSuperAdmin(
@@ -148,6 +149,15 @@ const companies = {
           });
           if (!company)
             throw new AppError("conflict", "Company slug is unavailable");
+          await withPlatformTenant(
+            tx,
+            {
+              agencyId: current.agencyId,
+              companyId: company.companyId,
+              userId: current.user.id,
+            },
+            deps.seedCompany,
+          );
           await audit.audit(
             tx,
             {

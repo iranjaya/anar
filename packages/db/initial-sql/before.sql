@@ -1,1 +1,3 @@
 CREATE EXTENSION IF NOT EXISTS citext WITH SCHEMA public;
+--> statement-breakpoint
+CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;

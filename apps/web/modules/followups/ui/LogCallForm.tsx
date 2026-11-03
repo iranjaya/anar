@@ -1,14 +1,12 @@
 "use client";
 
-import { TZDate } from "@date-fns/tz";
-import { addDays, format } from "date-fns";
 import {
   useParams,
   usePathname,
   useRouter,
   useSearchParams,
 } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { Chip } from "@/components/Chip";
 import {
   Sheet,
@@ -17,20 +15,22 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { localDateAfterDays, localDateAtTen } from "@/lib/dates";
 import { ReasonChips } from "@/modules/leads/components";
 import type { Lead } from "@/modules/leads/types";
 import type { CompanySchema } from "@/modules/settings/types";
-import type { Ctx } from "@/modules/tenant/types";
 import { logFollowUpAction } from "../actions";
 
 export function LogCallForm({
   lead,
   schema,
-  role,
+  admin,
+  timezone,
 }: {
   lead: Lead;
   schema: CompanySchema;
-  role: Ctx["role"];
+  admin: boolean;
+  timezone: string;
 }) {
   const { slug } = useParams<{ slug: string }>();
   const router = useRouter();
@@ -44,9 +44,10 @@ export function LogCallForm({
   const [reason, setReason] = useState(lead.lostReasonId ?? "");
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
+  const requestId = useRef<string | null>(null);
   const lost =
     schema.stages.find((stage) => stage.id === stageId)?.kind === "lost";
-  const advance = role === "admin" || pathname === `/${slug}/today`;
+  const advance = admin || pathname === `/${slug}/today`;
   let disabledReason = "";
   if (!outcomeId) disabledReason = "Pick an outcome";
   else if (lost && !reason) disabledReason = "Pick why it was lost";
@@ -62,20 +63,23 @@ export function LogCallForm({
 
   function save() {
     setError("");
+    requestId.current ??= crypto.randomUUID();
+    const id = requestId.current;
     startTransition(async () => {
       try {
         const result = await logFollowUpAction({
           slug,
+          requestId: id,
           leadId: lead.id,
           outcomeId,
-          notes: lost ? undefined : notes,
-          nextActionAt:
-            !lost && date ? new Date(`${date}T10:00:00+05:45`) : null,
+          notes,
+          nextActionAt: !lost && date ? localDateAtTen(date, timezone) : null,
           stageId,
           lostReasonId: lost ? reason : undefined,
         });
         if (!result.ok) {
           setError(result.message);
+          if (result.error === "validation") requestId.current = null;
           return;
         }
         if (advance) {
@@ -124,69 +128,69 @@ export function LogCallForm({
               ))}
             </div>
           </fieldset>
+          <label className="block space-y-2">
+            <span className="text-sm font-semibold">Note</span>
+            <textarea
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+              disabled={pending}
+              maxLength={2000}
+              rows={2}
+              className="w-full rounded-xl border border-line-strong bg-surface p-3 focus-visible:outline-2 focus-visible:outline-brand"
+            />
+          </label>
           {!lost && (
-            <>
-              <label className="block space-y-2">
-                <span className="text-sm font-semibold">Note</span>
-                <textarea
-                  value={notes}
-                  onChange={(event) => setNotes(event.target.value)}
-                  disabled={pending}
-                  rows={2}
-                  className="w-full rounded-xl border border-line-strong bg-surface p-3 focus-visible:outline-2 focus-visible:outline-brand"
-                />
-              </label>
-              <fieldset disabled={pending}>
-                <legend className="mb-3 text-sm font-semibold">
-                  Next follow-up
-                </legend>
-                <div className="flex flex-wrap gap-2 lg:flex-nowrap">
-                  {[
-                    { label: "Tomorrow", days: 1 },
-                    { label: "3 days", days: 3 },
-                    { label: "1 week", days: 7 },
-                  ].map(({ label, days }) => {
-                    const nextDate = format(
-                      addDays(TZDate.tz("Asia/Kathmandu"), days),
-                      "yyyy-MM-dd",
-                    );
-                    return (
-                      <Chip
-                        key={label}
-                        className="px-3"
-                        selected={!pickingDate && date === nextDate}
-                        onClick={() => {
-                          setDate(nextDate);
-                          setPickingDate(false);
-                        }}
-                      >
-                        {label}
-                      </Chip>
-                    );
-                  })}
-                  <Chip
-                    className="px-3"
-                    selected={pickingDate}
-                    onClick={() => setPickingDate(true)}
-                  >
-                    Pick date
-                  </Chip>
-                </div>
-                {pickingDate && (
-                  <label className="mt-3 block space-y-2">
-                    <span className="text-sm text-muted">
-                      Follow-up date, 10:00 Kathmandu
-                    </span>
-                    <input
-                      type="date"
-                      value={date}
-                      onChange={(event) => setDate(event.target.value)}
-                      className="min-h-11 w-full rounded-xl border border-line-strong bg-surface px-3"
-                    />
-                  </label>
-                )}
-              </fieldset>
-            </>
+            <fieldset disabled={pending}>
+              <legend className="mb-3 text-sm font-semibold">
+                Next follow-up
+              </legend>
+              <div className="flex flex-wrap gap-2 lg:flex-nowrap">
+                {[
+                  { label: "Tomorrow", days: 1 },
+                  { label: "3 days", days: 3 },
+                  { label: "1 week", days: 7 },
+                ].map(({ label, days }) => {
+                  const nextDate = localDateAfterDays(
+                    new Date(),
+                    days,
+                    timezone,
+                  );
+                  return (
+                    <Chip
+                      key={label}
+                      className="px-3"
+                      selected={!pickingDate && date === nextDate}
+                      onClick={() => {
+                        setDate(nextDate);
+                        setPickingDate(false);
+                      }}
+                    >
+                      {label}
+                    </Chip>
+                  );
+                })}
+                <Chip
+                  className="px-3"
+                  selected={pickingDate}
+                  onClick={() => setPickingDate(true)}
+                >
+                  Pick date
+                </Chip>
+              </div>
+              {pickingDate && (
+                <label className="mt-3 block space-y-2">
+                  <span className="text-sm text-muted">
+                    Follow-up date, 10:00
+                  </span>
+                  <input
+                    type="date"
+                    value={date}
+                    onChange={(event) => setDate(event.target.value)}
+                    className="min-h-11 w-full rounded-xl border border-line-strong bg-surface px-3"
+                  />
+                </label>
+              )}
+            </fieldset>
           )}
           <fieldset disabled={pending}>
             <legend className="mb-3 text-sm font-semibold">Stage</legend>

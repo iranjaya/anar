@@ -4,6 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import type { LostReason } from "@/modules/settings/types";
 import { changeStageAction, dismissLostSuggestionAction } from "../actions";
+import { changeStageAction as changeStageRealAction } from "../editActions";
 import { ReasonChips } from "./ReasonChips";
 
 export function LostSuggestion({
@@ -11,11 +12,15 @@ export function LostSuggestion({
   failedAttempts,
   lostStageId,
   reasons,
+  suggestionEventId,
+  real = false,
 }: {
   leadId: string;
   failedAttempts: number;
-  lostStageId: string;
+  lostStageId: string | null;
   reasons: LostReason[];
+  suggestionEventId?: string;
+  real?: boolean;
 }) {
   const { slug } = useParams<{ slug: string }>();
   const router = useRouter();
@@ -27,15 +32,29 @@ export function LostSuggestion({
     setError("");
     startTransition(async () => {
       try {
-        const result =
-          kind === "lost"
-            ? await changeStageAction({
+        let result: { ok: true } | { ok: false; message: string };
+        if (kind === "lost") {
+          if (!lostStageId) throw new Error("No active Lost stage");
+          result = real
+            ? await changeStageRealAction(slug, {
+                leadId,
+                stageId: lostStageId,
+                lostReasonId: reason,
+                suggestionEventId,
+              })
+            : await changeStageAction({
                 slug,
                 leadId,
                 stageId: lostStageId,
                 lostReasonId: reason,
-              })
-            : await dismissLostSuggestionAction({ slug, leadId });
+              });
+        } else {
+          result = await dismissLostSuggestionAction({
+            slug,
+            leadId,
+            suggestionEventId,
+          });
+        }
         if (!result.ok) {
           setError(result.message);
           return;
@@ -76,14 +95,16 @@ export function LostSuggestion({
         <p className="text-sm text-muted">Pick why it was lost</p>
       )}
       <div className="flex flex-wrap gap-3">
-        <button
-          type="button"
-          disabled={pending || (picking && !reason)}
-          onClick={() => (picking ? save("lost") : setPicking(true))}
-          className="min-h-14 rounded-xl bg-overdue px-4 font-semibold text-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-overdue disabled:opacity-50"
-        >
-          Mark as Lost
-        </button>
+        {lostStageId && (
+          <button
+            type="button"
+            disabled={pending || (picking && !reason)}
+            onClick={() => (picking ? save("lost") : setPicking(true))}
+            className="min-h-14 rounded-xl bg-overdue px-4 font-semibold text-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-overdue disabled:opacity-50"
+          >
+            Mark as Lost
+          </button>
+        )}
         <button
           type="button"
           disabled={pending}

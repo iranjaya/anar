@@ -1,19 +1,80 @@
+import { AppError } from "@anar/domain/errors";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "./app.js";
 import { loadApiConfig } from "./lib/config.js";
 import { createMailCodec } from "./lib/email/crypto.js";
 import stepUpCode from "./lib/email/templates/stepUpCode.js";
 import { originGuard } from "./lib/http.js";
-import { createHealthProbe } from "./lib/jobs/index.js";
+import { createHealthProbe, enqueue } from "./lib/jobs/index.js";
 import agencyContext from "./modules/agencies/context.js";
 import agencies from "./modules/agencies/service.js";
 import staff from "./modules/agencies/staff.js";
 import inviteAcceptance from "./modules/auth/inviteAcceptance.js";
 import invites from "./modules/auth/invites.js";
 import otp from "./modules/auth/otp.js";
+import profiles from "./modules/auth/profiles.js";
+import pushBindings from "./modules/auth/pushBindings.js";
+import rateLimits from "./modules/auth/rateLimits.js";
 import companies from "./modules/companies/service.js";
+import {
+  createFollowUpService,
+  readMemberDayCounts,
+} from "./modules/followups/index.js";
+import { createImportService } from "./modules/imports/index.js";
+import leadFollowUp from "./modules/leads/followUp.js";
+import {
+  createLeadAssignService,
+  createLeadDetailService,
+  createLeadListService,
+  createLeadStageService,
+  createLeadSuggestionService,
+  createLeadUpdateService,
+  createTodayService,
+  findImportMatches,
+  getMemberLeadCounts,
+  getReferenceCounts,
+  reassignOpenLeads,
+} from "./modules/leads/index.js";
+import nextLead from "./modules/leads/nextLead.js";
 import members from "./modules/members/service.js";
+import notifications, {
+  type NotificationService,
+} from "./modules/notifications/service.js";
+import { queueSummaryEmail } from "./modules/notifications/summaryEmailQueue.js";
+import {
+  createScoringService,
+  loadActiveConfig,
+  scoreLead,
+  seedScoringDefaults,
+} from "./modules/scoring/index.js";
+import {
+  createFields,
+  createSettingsService,
+  extendFieldOptions,
+  fieldKeys,
+  loadHistoricalReferences,
+  loadSchema,
+  readOutcomeFacts,
+  seedDefaults,
+} from "./modules/settings/index.js";
 import tenantContext from "./modules/tenant/index.js";
+import recipients from "./modules/tenant/recipients.js";
+
+function withPushSwitch(
+  enabled: boolean,
+  service: NotificationService,
+): NotificationService {
+  if (enabled) return service;
+  const off = async (): Promise<never> => {
+    throw new AppError("unavailable", "Push notifications are off");
+  };
+  return {
+    ...service,
+    getPushState: off,
+    subscribePush: off,
+    unsubscribePush: off,
+  };
+}
 
 export async function startApi(): Promise<void> {
   const host = process.env.HOST ?? "0.0.0.0";
@@ -95,6 +156,22 @@ export async function startApi(): Promise<void> {
       activateInvitedStaff: agencies.activateInvitedStaff,
     });
     const inviteRuntime = acceptance;
+    const notificationService = notifications.create({
+      context: tenant.service,
+      now,
+      ...recipients,
+      queueSummaryEmail,
+      pushEnabled: config.pushEnabled,
+      pushHosts: config.pushHosts,
+      vapidPublicKey: config.vapidPublicKey,
+      bindPushEndpoint: pushBindings.bindPushEndpoint,
+    });
+    const callWriter = leadFollowUp.create({
+      loadSchema,
+      loadHistoricalReferences,
+      loadActiveConfig,
+      scoreLead,
+    });
     app = buildApp({
       context: tenant.service,
       discovery: tenant.service,
@@ -110,13 +187,96 @@ export async function startApi(): Promise<void> {
         context: contextRuntime.service,
         now,
         createCompanyInvite: invitations.createCompanyInvite,
+        async seedCompany(tx) {
+          await seedDefaults(tx);
+          await seedScoringDefaults(tx);
+        },
+      }),
+      scoring: createScoringService({ context: tenant.service }),
+      leads: createLeadListService({ context: tenant.service, loadSchema }),
+      leadAssign: createLeadAssignService({
+        context: tenant.service,
+        now,
+        readMember: members.readMember,
+        notify: notificationService.notify,
+      }),
+      today: createTodayService({
+        context: tenant.service,
+        loadSchema,
+        readMemberDayCounts,
+        now,
+      }),
+      followUps: createFollowUpService({
+        context: tenant.service,
+        now,
+        readVisibleLead: callWriter.readVisibleLeadForCall,
+        readOutcomeFacts,
+        readOriginalBucket: nextLead.readOriginalBucket,
+        applyFollowUp: callWriter.applyFollowUp,
+        nextLeadId: nextLead.nextLeadId,
+        canReceiveCompanyNotification: recipients.canReceiveCompanyNotification,
+        notify: notificationService.notify,
+      }),
+      leadStage: createLeadStageService({
+        context: tenant.service,
+        now,
+        loadSchema,
+        loadHistoricalReferences,
+      }),
+      leadSuggestion: createLeadSuggestionService({
+        context: tenant.service,
+        now,
+      }),
+      leadUpdate: createLeadUpdateService({
+        context: tenant.service,
+        now,
+        loadSchema,
+        loadActiveConfig,
+        scoreLead,
+      }),
+      leadDetail: createLeadDetailService({
+        context: tenant.service,
+        loadHistoricalReferences,
+        loadActiveConfig,
+        readProfiles: profiles.read,
+      }),
+      imports: createImportService({
+        context: tenant.service,
+        uploadsRoot: config.uploadsRoot,
+        limitUpload: rateLimits.createUploadLimiter(config.otpPepper, now),
+        loadSchema,
+        findImportMatches,
+        now,
+        createFields,
+        extendFieldOptions,
+        fieldKeys,
+        enqueue,
       }),
       members: members.create({
         context: tenant.service,
         now,
         createCompanyInvite: invitations.createCompanyInvite,
         resendCompanyInvite: invitations.resendCompanyInvite,
+        getMemberLeadCounts,
+        reassignOpenLeads: (tx, current, from, to, meta) =>
+          reassignOpenLeads(
+            tx,
+            {
+              readMember: members.readMember,
+              notify: notificationService.notify,
+            },
+            current,
+            from,
+            to,
+            meta,
+          ),
       }),
+      settings: createSettingsService({
+        context: tenant.service,
+        now,
+        references: getReferenceCounts,
+      }),
+      notifications: withPushSwitch(config.pushEnabled, notificationService),
       invites: inviteRuntime.service,
       agencies: agencies.create({
         sessions: verification.sessions,

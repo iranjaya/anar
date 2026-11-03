@@ -1,12 +1,61 @@
+import type { ContextView } from "@anar/domain/context";
+import { companySchemaSchema } from "@anar/domain/settings";
 import { z } from "zod";
+import { apiRequest } from "@/lib/api/client";
+import { dataMode } from "@/lib/api/mode";
 import { AppError } from "@/lib/errors";
 import { store } from "@/mock/access";
 import type { NewField } from "@/modules/imports/types";
-import { can, verifyContext } from "@/modules/tenant/server";
+import {
+  can,
+  type FeatureContext,
+  verifyContext,
+} from "@/modules/tenant/server";
 import type { Ctx } from "@/modules/tenant/types";
 import type { CompanySchema, Field } from "../types";
 
-export async function loadSchema(ctx: Ctx): Promise<CompanySchema> {
+const realSchema = companySchemaSchema.transform(
+  (schema): CompanySchema => ({
+    ...schema,
+    fields: schema.fields.map((field) => ({
+      ...field,
+      archivedAt: field.archivedAt === null ? null : new Date(field.archivedAt),
+    })),
+  }),
+);
+
+export async function loadSchema(view: FeatureContext): Promise<CompanySchema> {
+  if (dataMode() === "demo") return demoLoadSchema(demoContext(view));
+  return apiRequest(
+    {
+      path: `/api/companies/${realContext(view).company.slug}/settings/loadSchema`,
+    },
+    realSchema,
+  );
+}
+
+export async function createFields(
+  view: FeatureContext,
+  fields: NewField[],
+): Promise<Field[]> {
+  if (dataMode() === "demo") return demoCreateFields(demoContext(view), fields);
+  realContext(view);
+  throw new AppError("unavailable", "Creating fields is not available yet.");
+}
+
+function demoContext(view: FeatureContext): Ctx {
+  if ("capabilities" in view)
+    throw new AppError("forbidden", "This is not available in the demo.");
+  return view;
+}
+
+function realContext(view: FeatureContext): ContextView {
+  if (!("capabilities" in view))
+    throw new AppError("forbidden", "Sign in to use this company.");
+  return view;
+}
+
+async function demoLoadSchema(ctx: Ctx): Promise<CompanySchema> {
   const current = await verifyContext(ctx);
   const data = await store();
   return {
@@ -26,7 +75,7 @@ export async function loadSchema(ctx: Ctx): Promise<CompanySchema> {
   };
 }
 
-export async function createFields(
+async function demoCreateFields(
   ctx: Ctx,
   fields: NewField[],
 ): Promise<Field[]> {

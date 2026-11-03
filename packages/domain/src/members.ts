@@ -38,7 +38,7 @@ export type InviteAdminInput = z.infer<typeof inviteAdminSchema>;
 
 export const deactivateMemberSchema = z.strictObject({
   memberId: z.uuid(),
-  reassignTo: z.uuid().optional(),
+  reassignTo: z.uuid().nullable().optional(),
 });
 export type DeactivateMemberInput = z.infer<typeof deactivateMemberSchema>;
 export const deactivateMemberResultSchema = z.strictObject({

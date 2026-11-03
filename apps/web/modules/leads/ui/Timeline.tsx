@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { formatDay } from "@/lib/dates";
 import type { CompanySchema } from "@/modules/settings/types";
 import type { FollowUp, LeadEvent } from "../types";
@@ -23,11 +24,15 @@ export function Timeline({
   followUps,
   schema,
   now,
+  timezone,
+  olderHref,
 }: {
   events: LeadEvent[];
   followUps: FollowUp[];
   schema: CompanySchema;
   now: Date;
+  timezone: string;
+  olderHref?: string;
 }) {
   return (
     <section
@@ -64,7 +69,7 @@ export function Timeline({
                 dateTime={event.createdAt.toISOString()}
                 className="text-sm text-muted"
               >
-                {formatDay(event.createdAt, now)}
+                {formatDay(event.createdAt, timezone, now)}
               </time>
               <h3 className="mt-1 font-semibold text-ink-2">{title}</h3>
               {call?.notes && (
@@ -74,7 +79,7 @@ export function Timeline({
               )}
               {call?.nextActionAt && (
                 <p className="mt-1 text-sm text-muted">
-                  Next: {formatDay(call.nextActionAt, now)}
+                  Next: {formatDay(call.nextActionAt, timezone, now)}
                 </p>
               )}
               {reason && (
@@ -84,6 +89,14 @@ export function Timeline({
           );
         })}
       </ol>
+      {olderHref && (
+        <Link
+          href={olderHref}
+          className="mt-5 inline-flex min-h-11 items-center font-semibold text-brand underline"
+        >
+          Older activity
+        </Link>
+      )}
     </section>
   );
 }

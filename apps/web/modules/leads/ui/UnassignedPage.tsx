@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { PageShell } from "@/components/PageShell";
 import { listMembers } from "@/modules/members/server";
-import { can, homeFor, requireContext } from "@/modules/tenant/server";
+import { can, getCompanyShell, homeFor } from "@/modules/tenant/server";
 import { listLeads } from "../server";
 import { AssignList } from "./AssignList";
 
@@ -17,7 +17,7 @@ export async function UnassignedPage({
   }>;
 }) {
   const { slug } = await params;
-  const ctx = await requireContext(slug);
+  const { ctx, company } = await getCompanyShell(slug);
   if (!can(ctx, "leads.assign")) redirect(homeFor(ctx));
   const query = await searchParams;
   const q = typeof query.q === "string" ? query.q : undefined;
@@ -44,6 +44,7 @@ export async function UnassignedPage({
       <AssignList
         key={`${slug}/${ctx.user.id}`}
         items={filtered.items}
+        timezone={company.timezone}
         members={members.filter((member) => member.status === "active")}
         total={queue.total}
         nextCursor={filtered.nextCursor}

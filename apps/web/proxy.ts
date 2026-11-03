@@ -2,13 +2,27 @@ import { slugSchema } from "@anar/domain/agencies";
 import { type NextRequest, NextResponse } from "next/server";
 import { dataMode } from "./lib/api/mode";
 
+const uuid = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+
 export function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const real = dataMode() === "real";
   const [, slug, ...rest] = path.split("/");
   const companyRoute =
     slugSchema.safeParse(slug).success &&
-    (rest.length === 0 || rest.join("/") === "settings/team");
+    (rest.length === 0 ||
+      [
+        "settings",
+        "settings/team",
+        "settings/scoring",
+        "notifications",
+        "imports/new",
+        "leads",
+        "today",
+      ].includes(rest.join("/")) ||
+      new RegExp(`^(imports/${uuid}(/map)?|leads/${uuid})$`).test(
+        rest.join("/"),
+      ));
   const realRoute =
     [
       "/",
@@ -24,6 +38,11 @@ export function proxy(request: NextRequest) {
       "/agency/invites",
       "/agency/companies",
     ].includes(path) || companyRoute;
+  const pwaAsset =
+    request.method === "GET" &&
+    (["/sw.js", "/manifest.webmanifest", "/apple-icon.png"].includes(path) ||
+      /^\/icons\/[a-z0-9-]+\.png$/.test(path));
+  if (pwaAsset) return NextResponse.next();
   if (real && !realRoute) return new NextResponse(null, { status: 404 });
   const authScreen =
     real ||
