@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "revision": null,
+  "platform": "linux/amd64",
+  "images": {
+    "web": null,
+    "api": null,
+    "worker": null,
+    "migrate": null,
+    "postgres": null,
+    "recovery": null
+  }
+}

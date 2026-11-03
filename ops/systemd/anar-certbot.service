@@ -1,0 +1,11 @@
+[Unit]
+Description=Renew only the Anar webroot certificate
+Requires=docker.service
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/certbot renew --config /home/sishir/anar/current/ops/certbot/anar.ini --cert-name anar.visitshankhuwasabha.com --no-directory-hooks
+TimeoutStartSec=15min
+UMask=0077

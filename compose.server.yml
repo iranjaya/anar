@@ -1,0 +1,169 @@
+name: anar-server
+
+x-app: &app
+  platform: linux/amd64
+  build: !reset null
+  ports: !reset []
+  env_file: !reset []
+  restart: unless-stopped
+  stop_grace_period: 150s
+  logging: &logs
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  proxy: !reset null
+
+  db:
+    <<: *app
+    image: ${ANAR_IMAGE_POSTGRES:?Use scripts/server-compose.ts}
+    mem_limit: 512m
+    memswap_limit: 512m
+    command: ["postgres", "-c", "shared_buffers=128MB", "-c", "work_mem=2MB"]
+    environment: !override
+      POSTGRES_DB: anar
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      APP_DATABASE_PASSWORD: ${APP_DATABASE_PASSWORD:?APP_DATABASE_PASSWORD is required}
+      MIGRATION_DATABASE_PASSWORD: ${MIGRATION_DATABASE_PASSWORD:?MIGRATION_DATABASE_PASSWORD is required}
+      BOOTSTRAP_ROLES_SQL: /opt/anar-postgres/roles.sql
+    networks: [default]
+
+  migrate:
+    <<: *app
+    image: ${ANAR_IMAGE_MIGRATE:?Use scripts/server-compose.ts}
+    mem_limit: 256m
+    memswap_limit: 256m
+    restart: "no"
+    environment: !override
+      ANAR_ENV: production
+      NODE_OPTIONS: --max-old-space-size=160
+      MIGRATION_DATABASE_URL: ${MIGRATION_DATABASE_URL:?MIGRATION_DATABASE_URL is required}
+    networks: [default]
+
+  api:
+    <<: *app
+    image: ${ANAR_IMAGE_API:?Use scripts/server-compose.ts}
+    mem_limit: 384m
+    memswap_limit: 384m
+    environment: !override
+      ANAR_ENV: production
+      NODE_OPTIONS: --max-old-space-size=256
+      HOST: 0.0.0.0
+      PORT: "3001"
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      OTP_PEPPER: ${OTP_PEPPER:?OTP_PEPPER is required}
+      MAIL_ENCRYPTION_KEY: ${MAIL_ENCRYPTION_KEY:?MAIL_ENCRYPTION_KEY is required}
+      PUBLIC_ORIGIN: https://anar.visitshankhuwasabha.com
+      ANAR_LOCAL_HTTP: "false"
+      TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:?Set the verified nginx IPv4 /32}
+      UPLOADS_ROOT: /var/lib/anar/uploads
+      ANAR_PUSH_ENABLED: "false"
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:?VAPID_PUBLIC_KEY is required}
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      worker:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3001/api/health',{signal:AbortSignal.timeout(4000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+    networks:
+      default: {}
+      ingress:
+        aliases: [anar-api]
+
+  worker:
+    <<: *app
+    image: ${ANAR_IMAGE_WORKER:?Use scripts/server-compose.ts}
+    mem_limit: 256m
+    memswap_limit: 256m
+    environment: !override
+      ANAR_ENV: production
+      NODE_OPTIONS: --max-old-space-size=160
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      PUBLIC_ORIGIN: https://anar.visitshankhuwasabha.com
+      EMAIL_TRANSPORT: resend
+      EMAIL_FROM: info@visitshankhuwasabha.com
+      EMAIL_REPLY_TO: info@visitshankhuwasabha.com
+      RESEND_API_KEY: ${RESEND_API_KEY:?RESEND_API_KEY is required}
+      MAIL_ENCRYPTION_KEY: ${MAIL_ENCRYPTION_KEY:?MAIL_ENCRYPTION_KEY is required}
+      ANAR_PUSH_ENABLED: "false"
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:?VAPID_PUBLIC_KEY is required}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:?VAPID_PRIVATE_KEY is required}
+      VAPID_SUBJECT: mailto:info@visitshankhuwasabha.com
+      UPLOADS_ROOT: /var/lib/anar/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "--input-type=module",
+          "-e",
+          "import {createHealthProbe} from '@anar/db/queue'; const p=createHealthProbe(process.env.DATABASE_URL); try {const s=await p.read(); process.exitCode=s.db==='ok'&&s.workerHealthy&&s.queue!==null?0:1} finally {await p.close()}",
+        ]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+    networks: [default]
+
+  web:
+    <<: *app
+    image: ${ANAR_IMAGE_WEB:?Use scripts/server-compose.ts}
+    mem_limit: 256m
+    memswap_limit: 256m
+    environment: !override
+      ANAR_ENV: production
+      NODE_OPTIONS: --max-old-space-size=160
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+      API_INTERNAL_URL: http://anar-api:3001
+      ANAR_DATA_MODE: real
+      ANAR_AUTH_ENABLED: "true"
+      ANAR_PUSH_ENABLED: "false"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/login',{signal:AbortSignal.timeout(4000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+    networks:
+      default: {}
+      ingress:
+        aliases: [anar-web]
+
+networks:
+  default:
+    # Worker needs outbound delivery; this bridge has no published ports.
+    internal: false
+  ingress:
+    external: true
+    name: docker_investment-network
