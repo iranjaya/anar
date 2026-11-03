@@ -301,6 +301,7 @@ describe("database roles and tenant transactions", () => {
       "push_endpoint_bindings",
       "notification_deliveries",
       "import_runs",
+      "company_job_periods",
     ]) {
       const grants = await runtime.pool.query(
         `SELECT

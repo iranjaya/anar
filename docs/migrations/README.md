@@ -1,37 +1,43 @@
-# Before the first real deployment
+# Append-only migrations
 
-Sishir's 2026-10-29 rule replaces earlier follow-up/immutable migration instructions:
-there are no deployed databases or real data. Keep exactly one `0000_initial.sql`
-and its snapshot/journal. Writers edit schema files; the integrator regenerates
-the initial migration after each accepted schema change. Do not add numbered
-follow-up migrations or hand-merge snapshots.
+`0000_initial.sql`, its snapshot and its journal entry are frozen at
+`f6a6723117f1275349ad96cbb033862e3013b5fe`. SHA-256 checksums and the original
+journal are recorded in `frozen.json`. The journal checksum records the original
+file; future migrations append entries while preserving its header and existing
+entries. Never squash, regenerate, rename, reorder, remove or edit an applied
+migration, its snapshot or its journal entry. Correct mistakes with another migration.
 
-Delete the migration files and empty metadata directory, then run:
+For every schema change, edit `packages/db/src/schema/`, then generate a new
+numbered migration:
 
 ```sh
-MIGRATION_DATABASE_URL=postgresql://unused:unused@127.0.0.1:1/unused pnpm --filter @anar/db generate --name=initial
+MIGRATION_DATABASE_URL=postgresql://unused:unused@127.0.0.1:1/unused pnpm --filter @anar/db generate --name=describe_change
 ```
 
-Generation does not connect to Postgres. Prepend `packages/db/initial-sql/before.sql`
-and append `packages/db/initial-sql/after.sql`, separated from generated DDL by
-`--> statement-breakpoint`. These files hold reviewed custom SQL: create `citext`
-before its tables; grant users, OTP, limits, sessions,
-agencies, invites, agency members, companies and company members only SELECT/INSERT/UPDATE; grant audit only SELECT/INSERT.
-Revoke PUBLIC access. Preserve any future reviewed RLS policies and grants too.
-`roles.sql` must keep restrictions after repeated bootstrap. Queue setup and its
-restricted grants remain in `queueSetup.ts`; this squash does not change them.
+Generation does not connect to Postgres. Keep the generated snapshot and appended
+journal entry. Put reviewed custom SQL (grants, revokes, RLS and FORCE RLS) in that
+new migration, separated with `--> statement-breakpoint`. Do not hand-edit snapshots.
+`packages/db/initial-sql/` records the original extensions, custom foreign key and
+permissions for fresh-schema comparison. It is no longer a squash template.
 
-Current schema checks, indexes and foreign keys come from Drizzle. The old
-legacy-role conversion preflight is unnecessary on a fresh empty database;
-the initial owner-only role check and singleton owner index enforce its invariants.
-The eight original tables and auth's `push_endpoint_bindings` remain explicit platform exceptions. `agency_members`
-and `companies` and `company_members` are tenant-scoped: their schemas generate scope policies and enable
-RLS; custom SQL forces RLS and limits runtime grants. Tenant-table coverage excludes only the
-explicit platform list and requires RLS and FORCE RLS on every remaining table.
+Every tenant table needs RLS, FORCE RLS and scoped SELECT/INSERT/UPDATE policies.
+Company tables must check both company and agency scope. Revoke PUBLIC access and
+limit `anar_app` to SELECT/INSERT/UPDATE; audit and follow-ups are append-only.
+Platform `worker_heartbeats` keeps its existing DELETE grant.
+Only the explicit platform list is exempt from tenant RLS. Repeated role bootstrap
+must preserve these restrictions; update `ops/postgres/roles.sql` in the same change
+when a new table needs restricted grants. Queue grants remain in `queueSetup.ts`.
 
-`pnpm check:migrations` checks the working tree, accepts a regenerated initial
-migration before commit, rejects additional migrations and compares fresh generated
-DDL plus custom SQL and the snapshot. SQL-only changes cannot bypass this check.
-Prove each accepted regeneration on an empty disposable Postgres, repeat migration
-and role bootstrap, then run DB/auth proofs. Do not reset the shared Compose stack.
-Before the first real deploy, replace this workflow with append-only migrations.
+Run `pnpm check:migrations`. It protects the frozen baseline and all migrations
+already committed since the freeze, checks numbering, timestamp order and snapshot links,
+and compares the latest snapshot with fresh Drizzle output. It applies the entire
+history to an empty disposable Postgres 17 and compares its actual DDL with the
+fresh schema, including checks, indexes, foreign keys and policies. It checks
+tenant RLS and runtime grants before and after repeated role bootstrap.
+Git checkouts need history back to the frozen revision so committed edits are
+checked too. Source exports without Git retain the checksummed initial freeze.
+
+Before accepting a migration, also prove fresh migration, repeated migration as a
+no-op, and upgrade from the previous migration on a disposable database. Run the
+DB and scripts suites, typecheck and lint serially. Use a unique container/project
+name and unused ports; never reset the shared Compose stack or its volumes.

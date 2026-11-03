@@ -1,0 +1,21 @@
+{
+  "revision": "f6a6723117f1275349ad96cbb033862e3013b5fe",
+  "files": {
+    "0000_initial.sql": "dc83caec9762c32f2c8928abe6e4a338e920e27ba6517750a174c03116896eae",
+    "meta/0000_snapshot.json": "9269f028702dc6ca7091963e3535ad7fea54b145c1cba5418b344e2480ed5a95"
+  },
+  "journalSha256": "d37e89821d7ed81a52a9ee47d04754bf639c64592a24f4ea58ceec56709d2a29",
+  "journal": {
+    "version": "7",
+    "dialect": "postgresql",
+    "entries": [
+      {
+        "idx": 0,
+        "version": "7",
+        "when": 1793593274245,
+        "tag": "0000_initial",
+        "breakpoints": true
+      }
+    ]
+  }
+}

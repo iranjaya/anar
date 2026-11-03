@@ -37,7 +37,7 @@ SELECT 'REVOKE DELETE, TRUNCATE ON TABLE public.users FROM anar_app'
 WHERE to_regclass('public.users') IS NOT NULL
 \gexec
 SELECT format('REVOKE DELETE, TRUNCATE ON TABLE public.%I FROM anar_app', tablename)
-FROM pg_tables WHERE schemaname = 'public' AND tablename IN ('otp_codes', 'auth_rate_limits', 'sessions', 'agencies', 'invites', 'agency_members', 'companies', 'company_members', 'notifications', 'fields', 'stages', 'outcomes', 'lost_reasons', 'leads', 'scoring_configs', 'lead_events', 'import_batches', 'import_rows', 'mapping_templates', 'push_subscriptions', 'push_endpoint_bindings', 'notification_deliveries', 'import_runs', 'follow_ups')
+FROM pg_tables WHERE schemaname = 'public' AND tablename IN ('otp_codes', 'auth_rate_limits', 'sessions', 'agencies', 'invites', 'agency_members', 'companies', 'company_members', 'notifications', 'fields', 'stages', 'outcomes', 'lost_reasons', 'leads', 'scoring_configs', 'lead_events', 'import_batches', 'import_rows', 'mapping_templates', 'push_subscriptions', 'push_endpoint_bindings', 'notification_deliveries', 'import_runs', 'follow_ups', 'company_job_periods')
 \gexec
 SELECT 'REVOKE UPDATE ON TABLE public.follow_ups FROM anar_app'
 WHERE to_regclass('public.follow_ups') IS NOT NULL
