@@ -1,6 +1,14 @@
 import { execFile, spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { createWriteStream } from "node:fs";
-import { mkdir, rmdir } from "node:fs/promises";
+import {
+  mkdir,
+  readdir,
+  readFile,
+  rmdir,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
@@ -9,6 +17,16 @@ import { listTar } from "./backup/tar.ts";
 import type { BackupRunner } from "./local-backup.ts";
 
 const exec = promisify(execFile);
+async function processStart(pid: number): Promise<string> {
+  try {
+    return (
+      await exec("ps", ["-o", "lstart=", "-p", String(pid)])
+    ).stdout.trim();
+  } catch (error) {
+    if ((error as { code?: number }).code === 1) return "";
+    throw error;
+  }
+}
 export const snapshotTables = [
   "agencies",
   "companies",
@@ -138,14 +156,50 @@ export function createBackupRunner(
   return {
     async withSourceLock(project, operation) {
       const lock = path.join(lockDirectory, `anar-backup-${project}.lock`);
-      try {
-        await mkdir(lock, { mode: 0o700 });
-      } catch {
-        throw new Error("Source backup is already locked");
+      const owner = `owner-${process.pid}-${randomUUID()}.json`;
+      const startedAt = await processStart(process.pid);
+      for (;;) {
+        try {
+          await mkdir(lock, { mode: 0o700 });
+          break;
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+        }
+        const owners = await readdir(lock);
+        if (
+          owners.length !== 1 ||
+          !/^owner-\d+-[a-f0-9-]+\.json$/.test(owners[0])
+        )
+          throw new Error("Source backup is already locked");
+        const previous = path.join(lock, owners[0]);
+        const held = JSON.parse(await readFile(previous, "utf8")) as {
+          pid: number;
+          startedAt: string;
+        };
+        if (
+          !Number.isInteger(held.pid) ||
+          held.pid <= 0 ||
+          !held.startedAt ||
+          (await processStart(held.pid)) === held.startedAt
+        )
+          throw new Error("Source backup is already locked");
+        try {
+          await unlink(previous);
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
+          throw error;
+        }
+        await rmdir(lock);
       }
+      await writeFile(
+        path.join(lock, owner),
+        JSON.stringify({ pid: process.pid, startedAt }),
+        { flag: "wx", mode: 0o600 },
+      );
       try {
         return await operation();
       } finally {
+        await unlink(path.join(lock, owner));
         await rmdir(lock);
       }
     },

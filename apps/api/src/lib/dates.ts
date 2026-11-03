@@ -35,8 +35,10 @@ const dates = {
     const zone = match[8];
     const sign = zone.startsWith("-") ? -1 : 1;
     const digits = zone === "Z" ? "0000" : zone.slice(1).replace(":", "");
-    const offset =
-      sign * (Number(digits.slice(0, 2)) * 60 + Number(digits.slice(2)));
+    const hours = Number(digits.slice(0, 2));
+    const minutes = Number(digits.slice(2));
+    if (hours > 14 || minutes > 59) return null;
+    const offset = sign * (hours * 60 + minutes);
     return new Date(Date.UTC(...parts) - offset * 60_000);
   },
   // Midnight that starts the local day `days` after a YYYY-MM-DD date.

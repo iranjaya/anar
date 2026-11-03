@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
+import { once } from "node:events";
 import {
   appendFile,
   mkdir,
@@ -16,6 +17,40 @@ import { listTar } from "./backup/tar.ts";
 import { type BackupIO, createBackupRunner } from "./local-backup-runner.ts";
 
 const exec = promisify(execFile);
+
+test("takes over a project lock after its owner is killed", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "anar-killed-lock-"));
+  const child = spawn(
+    process.execPath,
+    [
+      "--input-type=module",
+      "-e",
+      `
+    import { createBackupRunner } from ${JSON.stringify(new URL("./local-backup-runner.ts", import.meta.url).href)};
+    await createBackupRunner(${JSON.stringify(directory)}, undefined, ${JSON.stringify(directory)})
+      .withSourceLock("anar-source", async () => {
+        process.stdout.write("ready");
+        await new Promise(() => setInterval(() => {}, 1000));
+      });
+  `,
+    ],
+    { stdio: ["ignore", "pipe", "inherit"] },
+  );
+  try {
+    await once(child.stdout, "data");
+    const stopped = once(child, "exit");
+    child.kill("SIGKILL");
+    await stopped;
+    const runner = createBackupRunner(directory, undefined, directory);
+    let ran = false;
+    await runner.withSourceLock("anar-source", async () => {
+      ran = true;
+    });
+    assert.equal(ran, true);
+  } finally {
+    child.kill("SIGKILL");
+  }
+});
 
 test("runner coordinates only the named project and preserves its running state", async () => {
   const calls: string[][] = [];
@@ -98,6 +133,23 @@ test("runner coordinates only the named project and preserves its running state"
   );
   assert.ok(
     !calls.some((args) => args.includes("down") || args.includes("--volumes")),
+  );
+});
+
+test("takes over when the recorded PID belongs to a different process start", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "anar-reused-pid-"));
+  const lock = path.join(directory, "anar-backup-anar-source.lock");
+  await mkdir(lock);
+  await writeFile(
+    path.join(lock, `owner-${process.pid}-abc.json`),
+    JSON.stringify({
+      pid: process.pid,
+      startedAt: "previous process start",
+    }),
+  );
+  await createBackupRunner(directory, undefined, directory).withSourceLock(
+    "anar-source",
+    async () => {},
   );
 });
 

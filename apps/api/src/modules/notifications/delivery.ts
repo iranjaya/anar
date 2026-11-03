@@ -4,6 +4,7 @@ import type { NotificationDeliveryJob } from "@anar/domain/jobs";
 import type { NotificationData } from "@anar/domain/notifications";
 import dates from "../../lib/dates.js";
 import { enqueue, type JobControl } from "../../lib/jobs/index.js";
+import { isOverdueForUser } from "../leads/index.js";
 import tenant from "../tenant/index.js";
 import push, { type PushResponse, type SendPush } from "./push.js";
 import repository, { type ClaimedPush } from "./repository.js";
@@ -219,9 +220,12 @@ const delivery = {
     due: Due,
     at: Date,
   ): Promise<boolean> {
+    const data = due.data as NotificationData;
     if (
       at < due.expiresAt &&
-      (await deps.canReceiveCompanyNotification(tx, due.userId))
+      (await deps.canReceiveCompanyNotification(tx, due.userId)) &&
+      (data.type !== "overdue" ||
+        (await isOverdueForUser(tx, data.leadId, due.userId, at)))
     )
       return true;
     await repository.skipOpenPush(tx, due.id, at);

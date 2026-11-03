@@ -40,7 +40,7 @@ const parse = {
       (counts.get(d) ?? 0) > (counts.get(best) ?? 0) ? d : best,
     );
   },
-  // One read of the file: the first 64 KiB pick the encoding and delimiter, then the rows follow.
+  // UTF-8 is checked across the file before any rows can use a fallback encoding.
   async open(
     path: string,
     control: ReadControl,
@@ -58,7 +58,16 @@ const parse = {
       size += next.value.length;
     }
     const head = Buffer.concat(parts);
-    const detected = encoding.detectEncoding(head);
+    let detected = encoding.detectEncoding(head);
+    if (
+      detected.encoding === "utf-8" &&
+      !(await parse._validUtf8(path, control))
+    )
+      detected = {
+        encoding: "windows-1252",
+        bomLength: detected.bomLength,
+        warning: "encoding_fallback",
+      };
     const headText = new TextDecoder(detected.encoding).decode(
       head.subarray(detected.bomLength, headSize),
       { stream: true },
@@ -197,7 +206,7 @@ const parse = {
     rest: AsyncIterator<Buffer>,
     detected: EncodingResult,
   ): AsyncGenerator<string> {
-    const decoder = new TextDecoder(detected.encoding);
+    const decoder = new TextDecoder(detected.encoding, { fatal: true });
     const decode = (bytes: Uint8Array) => {
       const text = decoder.decode(bytes, { stream: true });
       if (text.includes("\0"))
@@ -208,6 +217,24 @@ const parse = {
     for await (const chunk of { [Symbol.asyncIterator]: () => rest })
       yield decode(chunk);
     yield decoder.decode();
+  },
+  async _validUtf8(path: string, control: ReadControl): Promise<boolean> {
+    const decoder = new TextDecoder("utf-8", { fatal: true });
+    for await (const chunk of createReadStream(path, {
+      signal: control.signal,
+    })) {
+      try {
+        decoder.decode(chunk, { stream: true });
+      } catch {
+        return false;
+      }
+    }
+    try {
+      decoder.decode();
+      return true;
+    } catch {
+      return false;
+    }
   },
 };
 export default parse;

@@ -63,11 +63,22 @@ describe("company-local bounds", () => {
 });
 
 describe("lead date parsing", () => {
+  it.each(["+05:99", "-0599", "+15:00", "-1500"])(
+    "marks an invalid offset %s as bad_date",
+    (offset) => {
+      expect(parse(`2026-09-12T10:11:12${offset}`)).toEqual({
+        value: importedAt,
+        issue: "bad_date",
+      });
+    },
+  );
   it.each([
     ["2026-09-12T10:11:12+05:45", "2026-09-12T04:26:12.000Z"],
     ["2026-09-12T10:11:12+0545", "2026-09-12T04:26:12.000Z"],
     ["2026-09-12T10:11:12.5Z", "2026-09-12T10:11:12.500Z"],
     ["2026-09-12T10:11:12-04:00", "2026-09-12T14:11:12.000Z"],
+    ["2026-09-12T10:11:12+14:00", "2026-09-11T20:11:12.000Z"],
+    ["2026-09-12T10:11:12-00:59", "2026-09-12T11:10:12.000Z"],
   ])("lets the offset in %j win", (raw, iso) => {
     expect(parse(raw)).toEqual({ value: new Date(iso), issue: null });
   });

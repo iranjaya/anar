@@ -33,6 +33,7 @@
 					response_header_timeout 125s
 				}
 			}
+		}
 		handle {
 			reverse_proxy web:3000
 		}

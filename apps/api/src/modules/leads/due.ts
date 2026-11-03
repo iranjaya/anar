@@ -11,6 +11,20 @@ export type DueFollowUp = {
 
 // Internal readers for the overdue and summary jobs; no route calls these.
 const due = {
+  async isOverdueForUser(
+    tx: TenantTx,
+    leadId: string,
+    userId: string,
+    at: Date,
+  ): Promise<boolean> {
+    const { rows } = await tx.execute(sql`SELECT l.id FROM leads l
+      JOIN stages s ON s.company_id = l.company_id AND s.id = l.stage_id AND s.kind = 'open'
+      JOIN company_members m ON m.company_id = l.company_id AND m.id = l.assigned_to
+        AND m.status = 'active' AND m.user_id = ${userId}
+      WHERE l.id = ${leadId}::uuid AND l.next_action_at < ${at}
+        AND l.merged_into_id IS NULL AND l.deleted_at IS NULL`);
+    return rows.length === 1;
+  },
   // Every lead overdue at `at` in the scoped company, paged by lead ID.
   async listDueFollowUps(
     tx: TenantTx,

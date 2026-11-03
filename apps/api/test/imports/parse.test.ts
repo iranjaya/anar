@@ -95,6 +95,25 @@ describe("csv profile", () => {
     expect(profile.sample).toEqual([["Café Test", "Zürich"]]);
   });
 
+  it.each([Buffer.from([0xe9]), Buffer.from([0xe2, 0x82])])(
+    "warns and preserves non-UTF-8 text after the sample",
+    async (tail) => {
+      const path = await file(
+        Buffer.concat([
+          Buffer.from(`name,city\n${"a".repeat(70 * 1024)},Caf`),
+          tail,
+          Buffer.from("\n"),
+        ]),
+      );
+      const profile = await profileCsv(path, control);
+      expect(profile.encoding).toBe("windows-1252");
+      expect(profile.warning).toBe("encoding_fallback");
+      expect(profile.sample[0][1]).toBe(
+        `Caf${new TextDecoder("windows-1252").decode(tail)}`,
+      );
+    },
+  );
+
   it("reads UTF-8 without a BOM when the first read splits a character", async () => {
     const header = "full_name,phone\n";
     const name = `${"a".repeat(64 * 1024 - Buffer.byteLength(header) - 1)}राम`;

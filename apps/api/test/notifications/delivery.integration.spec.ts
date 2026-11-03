@@ -12,6 +12,7 @@ import { sql } from "drizzle-orm";
 import { v7 } from "uuid";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import pushBindings from "../../src/modules/auth/pushBindings.js";
+import { isOverdueForUser } from "../../src/modules/leads/index.js";
 import delivery from "../../src/modules/notifications/delivery.js";
 import notify from "../../src/modules/notifications/index.js";
 import type { PushTarget } from "../../src/modules/notifications/push.js";
@@ -140,6 +141,80 @@ describe("each new notification is pushed to the person's live devices", () => {
     };
   }
   const control = () => ({ signal: new AbortController().signal });
+
+  it.each(["reassigned", "closed", "rescheduled"])(
+    "skips a queued overdue push after the lead is %s",
+    async (change) => {
+      const { a, seller } = await setup();
+      const other = await fixture.seedUser();
+      await fixture.seedMember(a, other.id, "active", "admin");
+      await device(a, seller.cookie);
+      const leadId = v7();
+      const openStage = v7();
+      const closedStage = v7();
+      await scoped(a, (tx) =>
+        tx.execute(
+          sql.raw(`
+        INSERT INTO stages (id, company_id, name, position, kind, is_default)
+        VALUES ('${openStage}', '${a.companyId}', 'Queued open', 90, 'open', false),
+          ('${closedStage}', '${a.companyId}', 'Queued lost', 91, 'lost', false);
+        INSERT INTO leads (id, company_id, assigned_to, stage_id, phone_valid,
+          source_kind, lead_date, custom, score, priority, score_breakdown, scored_at, next_action_at)
+        SELECT '${leadId}', '${a.companyId}', id, '${openStage}', false,
+          'manual', now(), '{}', 0, 'cold', '{}', now(), now() - interval '1 day'
+        FROM company_members WHERE company_id = '${a.companyId}' AND user_id = '${seller.user.id}';
+      `),
+        ),
+      );
+      expect(
+        await scoped(a, (tx) =>
+          isOverdueForUser(tx, leadId, seller.user.id, fixture.now()),
+        ),
+      ).toBe(true);
+      const { id } = await scoped(a, (tx) =>
+        service(true).notify(tx, {
+          companyId: a.companyId,
+          userId: seller.user.id,
+          title: "Overdue",
+          body: "A follow-up is overdue.",
+          url: `/${a.company.slug}/leads/${leadId}`,
+          dedupeKey: `overdue:${a.companyId}:${leadId}:test`,
+          data: {
+            type: "overdue",
+            leadId,
+            localDate: new Intl.DateTimeFormat("en-CA", {
+              timeZone: "Asia/Kathmandu",
+              year: "numeric",
+              month: "2-digit",
+              day: "2-digit",
+            }).format(fixture.now()),
+          },
+        }),
+      );
+      const update = {
+        reassigned: `assigned_to = (SELECT id FROM company_members WHERE company_id = '${a.companyId}' AND user_id = '${other.id}' LIMIT 1)`,
+        closed: `stage_id = '${closedStage}'`,
+        rescheduled: "next_action_at = now() + interval '1 day'",
+      }[change];
+      await scoped(a, (tx) =>
+        tx.execute(
+          sql.raw(`UPDATE leads SET ${update} WHERE id = '${leadId}'`),
+        ),
+      );
+      await worker().deliverPush(
+        {
+          agencyId: a.agencyId,
+          companyId: a.companyId,
+          notificationId: id,
+        },
+        control(),
+      );
+      expect(sent).toEqual([]);
+      expect(
+        (await scoped(a, (tx) => tx.select().from(notifications)))[0].pushedAt,
+      ).toBeNull();
+    },
+  );
 
   it("queues one push job with a new notification, and a rollback drops both", async () => {
     const { a, seller } = await setup();
